@@ -28,11 +28,13 @@ describe('native PDF font encoding', () => {
         const decoded = decodePDFRawStream(cidMap).decode();
         for (const text of ['ffi', '\uFB03', '\u{1F600}']) {
             const code = font.code(6631, text);
+            expect(font.hexCode(6631, text)).toBe(code.toString(16).padStart(4, '0'));
             expect((decoded[code * 2] << 8) | decoded[code * 2 + 1]).toBe(6631);
         }
         const widths = descendant.lookup(PDFName.of('W'), PDFArray).asArray();
         expect(widths).toHaveLength(8);
         expect(() => font.code(6631, 'missing')).toThrow('not registered');
+        expect(() => font.hexCode(6631, 'missing')).toThrow('not registered');
         expect((await pdf.save()).length).toBeGreaterThan(1000);
     });
 });

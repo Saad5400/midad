@@ -14,7 +14,7 @@ import {
 
 export class NativePdfFont extends CustomFontEmbedder {
     private readonly entries = new Map<number, { glyph: number; text: string }>();
-    private readonly codes = new Map<number, Map<string, number>>();
+    private readonly codes = new Map<number, Map<string, { value: number; hex: string }>>();
     private nextCode = 65535;
     private readonly paths = new Map<string, PDFOperator[]>();
 
@@ -77,7 +77,7 @@ export class NativePdfFont extends CustomFontEmbedder {
                 if (result.nextCode < 1) throw new Error('The document exceeds the font encoding capacity');
                 code = result.nextCode--;
             }
-            variants.set(entry.text, code);
+            variants.set(entry.text, { value: code, hex: code.toString(16).padStart(4, '0') });
             result.entries.set(code, entry);
         }
         return result;
@@ -86,7 +86,13 @@ export class NativePdfFont extends CustomFontEmbedder {
     code(glyph: number, text: string): number {
         const code = this.codes.get(glyph)?.get(text);
         if (code === undefined) throw new Error('The PDF glyph was not registered');
-        return code;
+        return code.value;
+    }
+
+    hexCode(glyph: number, text: string): string {
+        const code = this.codes.get(glyph)?.get(text);
+        if (!code) throw new Error('The PDF glyph was not registered');
+        return code.hex;
     }
 
     protected computeWidths(): (number | number[])[] {

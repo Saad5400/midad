@@ -7,6 +7,7 @@ export class PdfReadingTree {
     private readonly kids: PDFRef[] = [];
     private readonly parents: Array<number | PDFRef[]> = [];
     private pages = 0;
+    private readonly texts = new Map<string, PDFHexString>();
 
     constructor(private readonly pdf: PDFDocument) {
         this.root = pdf.context.nextRef();
@@ -24,6 +25,11 @@ export class PdfReadingTree {
                     groups.set(part.group, group);
                     this.kids.push(group.ref);
                 }
+                let actualText = this.texts.get(part.text);
+                if (!actualText) {
+                    actualText = PDFHexString.fromText(part.text);
+                    if (this.texts.size < 4096) this.texts.set(part.text, actualText);
+                }
                 const id = owners.length;
                 const { x, y, width, height: lineHeight } = part.box;
                 const ref = this.pdf.context.register(
@@ -33,13 +39,13 @@ export class PdfReadingTree {
                         P: group.ref,
                         Pg: page.ref,
                         K: id,
-                        ActualText: PDFHexString.fromText(part.text),
+                        ActualText: actualText,
                         A: { O: 'Layout', BBox: [x, height - y - lineHeight, x + width, height - y] },
                     }),
                 );
                 owners.push(ref);
                 group.spans.push({ ref, order: part.order });
-                return `/Span << /MCID ${id} /ActualText ${PDFHexString.fromText(part.text)} >> BDC`;
+                return `/Span << /MCID ${id} /ActualText ${actualText} >> BDC`;
             },
             finish: () => {
                 if (!owners.length) return;

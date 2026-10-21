@@ -91,10 +91,15 @@ export async function writeScenePdf(
     pdf.setTitle(options.title ?? scene.documentId);
     pdf.setCreator('Midad');
     pdf.setSubject(`Document ${scene.documentId}, revision ${scene.revision}, font manifest SHA-256 ${scene.fontHash}`);
+    const scalars = new Map<number, string>();
     const scalar = (value: number): string => {
+        const cached = scalars.get(value);
+        if (cached !== undefined) return cached;
         if (!Number.isFinite(value)) throw new Error('The PDF contains an invalid coordinate');
-        const result = String(value);
-        return result.includes('e') ? PDFNumber.of(value).toString() : result;
+        const raw = String(value);
+        const result = raw.includes('e') ? PDFNumber.of(value).toString() : raw;
+        if (scalars.size < 65536) scalars.set(value, result);
+        return result;
     };
     const opacityStates = new Map<number, PDFRef>();
     const reading = new PdfReadingTree(pdf);
@@ -266,7 +271,7 @@ export async function writeScenePdf(
                     if (command.reading?.some((part) => part.to === index + 1 && part.text)) content.push('EMC');
                     continue;
                 }
-                const code = font.code(command.glyphs[index], command.text[index]).toString(16).padStart(4, '0');
+                const code = font.hexCode(command.glyphs[index], command.text[index]);
                 content.push(`1 0 ${command.fauxItalic ? 0.25 : 0} 1 ${x} ${y} Tm <${code}> Tj`);
                 if (command.reading?.some((part) => part.to === index + 1 && part.text)) content.push('EMC');
             }

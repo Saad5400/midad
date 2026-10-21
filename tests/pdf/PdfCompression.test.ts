@@ -8,7 +8,16 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { deflateSync } from 'node:zlib';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import {
+    PDFArray,
+    PDFDict,
+    PDFDocument,
+    PDFHexString,
+    PDFName,
+    PDFNumber,
+    PDFRawStream,
+    decodePDFRawStream,
+} from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { makeNestedRichFixture } from '../fixtures/nativeDocument';
 
@@ -88,5 +97,50 @@ describe('native PDF compression adapters', () => {
         ).rejects.toThrow('Compression failed');
         expect(JSON.stringify(document)).toBe(before);
         expect(scene.revision).toBe(document.revision);
+    });
+    it('keeps separate reading owners and bounds when multiple spans share the same text', async () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                attrs: { dir: 'ltr' },
+                content: ['one', 'two'].map((id) => ({
+                    type: 'paragraph',
+                    attrs: { id },
+                    content: [{ type: 'text', text: 'Repeated text' }],
+                })),
+            },
+            'reading-owners',
+        );
+        await kernel.prepare(document);
+        const scene = layoutDocument(document, kernel);
+        const pdf = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
+        const page = scene.pages[0];
+        const expected = page.commands.flatMap((command) =>
+            'glyphs' in command ? (command.reading ?? []).filter((part) => part.text) : [],
+        );
+        const spans = pdf.context
+            .enumerateIndirectObjects()
+            .filter(([, value]) => value instanceof PDFDict && value.get(PDFName.of('S'))?.toString() === '/Span')
+            .map(([ref, value]) => ({ ref, value: value as PDFDict }))
+            .sort(
+                (a, b) =>
+                    a.value.lookup(PDFName.of('K'), PDFNumber).asNumber() -
+                    b.value.lookup(PDFName.of('K'), PDFNumber).asNumber(),
+            );
+        expect(spans).toHaveLength(expected.length);
+        expect(new Set(spans.map((span) => span.ref.toString())).size).toBe(expected.length);
+        expect(expected.filter((part) => part.text === 'Repeated text')).toHaveLength(2);
+        spans.forEach(({ value }, index) => {
+            const part = expected[index],
+                box = part.box;
+            expect(value.lookup(PDFName.of('ActualText'), PDFHexString).decodeText()).toBe(part.text);
+            const bounds = value.lookup(PDFName.of('A'), PDFDict).lookup(PDFName.of('BBox'), PDFArray);
+            expect(bounds.asArray().map((value) => (value as PDFNumber).asNumber())).toEqual([
+                box.x,
+                page.height - box.y - box.height,
+                box.x + box.width,
+                page.height - box.y,
+            ]);
+        });
     });
 });
