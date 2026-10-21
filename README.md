@@ -39,6 +39,23 @@ const savedContent = exportDocument(session.document);
 
 `PagePointerController` in `@saad5400/midad/browser/page-pointer` owns mouse, pen and touch gesture state without a UI framework. Hosts supply element, scale and selection callbacks. Renderer fingerprints are derived from source and bundled font bytes during every build; no application build definition is required.
 
+`PageView` in `@saad5400/midad/browser/page-view` owns a browser page's canvas, sizing, viewport observation, virtualization and repaint lifecycle. It can be mounted directly into an ordinary HTML element; no Vue or CLM component is needed. `ViewportReadiness` waits for current painted content in the actual visible viewport, including a restored scroll position on a later page.
+
+```ts
+import { PageView } from '@saad5400/midad/browser/page-view';
+
+const view = new PageView(hostElement, {
+    kernel, page: scene.pages[0], revision: scene.revision, scale: 1, label: 'Page 1',
+}, {
+    state: (state) => { /* update host controls if needed */ },
+    painted: () => {},
+    error: (error) => console.error(error),
+});
+// Pass a new frame after document changes; dispose when the host unmounts.
+view.update({ kernel, page: scene.pages[0], revision: scene.revision, scale: 1 });
+view.dispose();
+```
+
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
 ## Independence
