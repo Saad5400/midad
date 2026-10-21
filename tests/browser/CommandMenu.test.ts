@@ -1,4 +1,9 @@
-import { CommandMenuController, documentCommandMenu, searchCommandMenu } from '@saad5400/midad/browser';
+import {
+    CommandMenuController,
+    composeCommandMenu,
+    documentCommandMenu,
+    searchCommandMenu,
+} from '@saad5400/midad/browser';
 import { describe, expect, it } from 'vitest';
 
 const groups = [
@@ -75,5 +80,39 @@ describe('portable command menus', () => {
         menu.update([], 'unknown');
         expect(menu.key({ key: 'Enter' }, 'ltr').handled).toBe(false);
         expect(menu.activate()).toBeUndefined();
+    });
+    it('composes host actions and groups without losing callbacks, exclusions or search behavior', () => {
+        const run = () => 'selected';
+        const tree = composeCommandMenu(
+            documentCommandMenu({ label: (id) => id }),
+            [
+                {
+                    id: 'insert',
+                    label: 'Host insert',
+                    items: [{ id: 'catalog', label: 'Shared catalog', keywords: ['library'], run }],
+                },
+                { id: 'host', label: 'Host tools', items: [{ id: 'host-help', label: 'Help', run }] },
+            ],
+            { exclude: ['image', 'fields'], available: (item) => item.id !== 'table' },
+        );
+        expect(tree[0].label).toBe('insert');
+        expect(tree.at(-1)?.id).toBe('host');
+        expect(tree.flatMap((group) => group.items).some((item) => ['image', 'table'].includes(item.id))).toBe(false);
+        expect(tree.some((group) => group.id === 'fields')).toBe(false);
+        const menu = new CommandMenuController<(typeof tree)[number]['items'][number]>();
+        menu.update(tree, 'library');
+        const item = menu.key({ key: 'Enter' }, 'ltr').item!;
+        expect(item.id).toBe('catalog');
+        expect('run' in item && item.run()).toBe('selected');
+    });
+    it('rejects ambiguous command ids and does not mutate input catalogs', () => {
+        const before = JSON.stringify(groups);
+        expect(() =>
+            composeCommandMenu(groups, [
+                { id: 'insert', label: 'Insert', items: [{ id: 'table', label: 'Duplicate' }] },
+            ]),
+        ).toThrow('Duplicate command');
+        expect(composeCommandMenu(groups, [], { exclude: ['insert', 'text'] })).toEqual([]);
+        expect(JSON.stringify(groups)).toBe(before);
     });
 });

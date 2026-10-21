@@ -12,6 +12,23 @@ export interface WritingResult {
 }
 const containers = new Set(['doc', 'tableCell', 'tableHeader', 'parallelCell', 'clauseBody', 'listItem', 'blockquote']);
 
+export function resolveWritingTarget(
+    document: NativeDocument,
+    target?: WritingTarget,
+): { container: NativeNode; index: number } {
+    const after = target?.afterId ? nodePath(document, target.afterId) : undefined;
+    if (target?.afterId && (!after || after.length < 2)) throw new Error('The writing anchor no longer exists');
+    const container = after?.at(-2) ?? (target?.containerId ? findNode(document, target.containerId) : document.root);
+    if (!container || !containers.has(container.kind) || (target?.containerId && container.id !== target.containerId))
+        throw new Error('The writing container is not available');
+    if (container.kind === 'doc' && container.children?.some((node) => node.kind === 'pdfPage'))
+        throw new Error('Flow content cannot be inserted into an imported PDF');
+    return {
+        container,
+        index: after ? (container.children ?? []).indexOf(after.at(-1)!) + 1 : (container.children?.length ?? 0),
+    };
+}
+
 export function writeAtPosition<T extends WritingResult>(
     document: NativeDocument,
     selection: NativeSelection | null,
@@ -21,13 +38,7 @@ export function writeAtPosition<T extends WritingResult>(
     let working = document,
         selected = selection;
     if (!selected) {
-        const after = target?.afterId ? nodePath(document, target.afterId) : undefined;
-        if (target?.afterId && (!after || after.length < 2)) throw new Error('The writing anchor no longer exists');
-        const parent = after?.at(-2) ?? (target?.containerId ? findNode(document, target.containerId) : document.root);
-        if (!parent || !containers.has(parent.kind) || (target?.containerId && parent.id !== target.containerId))
-            throw new Error('The writing container is not available');
-        if (parent.kind === 'doc' && parent.children?.some((node) => node.kind === 'pdfPage'))
-            throw new Error('Flow content cannot be inserted into an imported PDF');
+        const { container: parent, index } = resolveWritingTarget(document, target);
         const id = allocator(document)();
         const paragraph: NativeNode = Object.freeze({
             id,
@@ -36,7 +47,6 @@ export function writeAtPosition<T extends WritingResult>(
             children: Object.freeze([]),
         });
         const children = [...(parent.children ?? [])];
-        const index = after ? children.indexOf(after.at(-1)!) + 1 : children.length;
         children.splice(index, 0, paragraph);
         const prepared = update(document, parent, [Object.freeze({ ...parent, children: Object.freeze(children) })]);
         working = Object.freeze({ ...prepared, revision: document.revision });

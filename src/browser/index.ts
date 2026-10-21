@@ -2,6 +2,7 @@ export * from './autoscroll.js';
 export * from './block-gutter.js';
 export * from './command-menu.js';
 export * from './document-menu.js';
+export * from './document-commands.js';
 export * from './focus.js';
 export * from './interaction.js';
 export * from './live-template.js';

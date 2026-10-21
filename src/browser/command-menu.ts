@@ -13,6 +13,34 @@ export interface CommandMenuGroup<T extends CommandMenuItem = CommandMenuItem> {
     readonly icon?: T['icon'];
     readonly items: readonly T[];
 }
+export function composeCommandMenu<T extends CommandMenuItem, U extends CommandMenuItem = T>(
+    groups: readonly CommandMenuGroup<T>[],
+    extensions: readonly CommandMenuGroup<U>[],
+    options: { exclude?: readonly string[]; available?: (item: T | U) => boolean } = {},
+): CommandMenuGroup<T | U>[] {
+    const merged = new Map<string, { id: string; label: string; icon?: T['icon'] | U['icon']; items: (T | U)[] }>();
+    for (const group of [...groups, ...extensions]) {
+        let target = merged.get(group.id);
+        if (!target) {
+            target = { ...group, items: [] };
+            merged.set(group.id, target);
+        }
+        for (const item of group.items) {
+            if (target.items.some((current) => current.id === item.id))
+                throw new Error(`Duplicate command: ${group.id}/${item.id}`);
+            target.items.push(item);
+        }
+    }
+    const excluded = new Set(options.exclude ?? []);
+    return [...merged.values()]
+        .filter((group) => !excluded.has(group.id))
+        .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => !excluded.has(item.id) && (options.available?.(item) ?? true)),
+        }))
+        .filter((group) => group.items.length > 0);
+}
+
 export type CommandMenuRow<T extends CommandMenuItem> =
     | { readonly kind: 'group'; readonly key: string; readonly group: CommandMenuGroup<T> }
     | { readonly kind: 'item'; readonly key: string; readonly group: CommandMenuGroup<T>; readonly item: T };

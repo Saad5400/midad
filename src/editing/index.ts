@@ -1,3 +1,4 @@
+export * from './bookmark.js';
 export * from './blocks.js';
 export * from './command.js';
 export * from './formatting.js';

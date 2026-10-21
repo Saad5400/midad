@@ -73,6 +73,10 @@ view.dispose();
 
 `writeAtPosition` in `/editing` creates a missing paragraph and applies the first content operation as one undoable revision. No-op and cancelled operations leave the original document untouched. `emptyWritingPosition` in `/browser` locates an empty cell, language column or page without changing stored content; it supplies geometry for a visible caret. Empty container layout reserves the same line space as an explicit empty paragraph.
 
+`DocumentCommandController` in `/browser` tracks slash triggers and deferred actions using host-provided document, selection and permission getters. Its bookmarks snapshot selections, marks and structural anchors; validation accepts unchanged targets after save acknowledgements and rejects changed queries or missing targets. Ending, replacing or resetting a deferred action aborts its `pending.signal`. Hosts commit confirmed content through `runDocumentCommand` in `/editing`; opening or cancelling a picker leaves the document unchanged.
+
+`composeCommandMenu` merges the built-in `documentCommandMenu` preset with application-provided groups and actions. It preserves callbacks and group order, applies group/item exclusions and availability rules, and rejects duplicate IDs within a group. Application-specific commands and network requests stay in host adapters; both controllers remain independent of a UI framework.
+
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
 ## Source organization
