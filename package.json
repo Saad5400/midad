@@ -1,0 +1,56 @@
+{
+    "name": "@saad5400/midad",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",
+    "files": [
+        "dist",
+        "assets",
+        "LICENSE",
+        "README.md"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./*": {
+            "types": "./dist/*.d.ts",
+            "import": "./dist/*.js"
+        },
+        "./assets/*": "./assets/*",
+        "./package.json": "./package.json"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "test": "npm run build && vitest run --no-file-parallelism",
+        "prepack": "npm run build"
+    },
+    "dependencies": {
+        "canvaskit-wasm": "0.42.0",
+        "pdf-lib": "1.17.1",
+        "@pdf-lib/fontkit": "1.1.1",
+        "color": "5.0.3",
+        "diff": "9.0.0",
+        "yjs": "13.6.29"
+    },
+    "devDependencies": {
+        "typescript": "5.9.3",
+        "vitest": "4.1.11",
+        "happy-dom": "20.11.6",
+        "@types/node": "22.19.8",
+        "pdfjs-dist": "5.7.284"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Saad5400/midad.git"
+    },
+    "homepage": "https://github.com/Saad5400/midad",
+    "bugs": {
+        "url": "https://github.com/Saad5400/midad/issues"
+    }
+}
