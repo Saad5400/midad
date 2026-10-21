@@ -106,6 +106,39 @@ describe('native nested rich content layout', () => {
         expect(rendered.pages[0].cells!.find((cell) => cell.cellId === 'empty-cell')).toEqual(cell);
         expect(rendered.pages.length).toBe(scene.pages.length);
     });
+    it('does not reserve another writing line after populated list items', async () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                attrs: { dir: 'ltr' },
+                content: [
+                    {
+                        type: 'bulletList',
+                        content: [
+                            {
+                                type: 'listItem',
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        attrs: { id: 'item' },
+                                        content: [{ type: 'text', text: 'Item' }],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    { type: 'paragraph', attrs: { id: 'after-list' }, content: [{ type: 'text', text: 'After list' }] },
+                ],
+            },
+            'list-spacing',
+        );
+        await kernel.prepare(document);
+        const scene = layoutDocument(document, kernel);
+        const item = scene.pages[0].lines.find((line) => line.paragraphId === 'item')!;
+        const after = scene.pages[0].lines.find((line) => line.paragraphId === 'after-list')!;
+        expect(after.top - item.top - item.height).toBeCloseTo(6, 2);
+    });
+
     it('preserves closed nested table cells after repeated stretching by outer tables and language columns', async () => {
         const doc = importDocument(makeNestedRichFixture(), 'nested-layout');
         await kernel.prepare(doc);

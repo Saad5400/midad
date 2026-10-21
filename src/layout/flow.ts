@@ -320,6 +320,7 @@ function tableBands(node: NativeNode, width: number, ctx: Context): Band[] {
             cell.node.children ?? [],
             Math.max(12, edges[cell.column + cell.colspan] - edges[cell.column] - 12),
             scope(cell.node, { ...ctx, tableDepth: (ctx.tableDepth ?? 0) + 1 }),
+            true,
         ),
     }));
     const rowHeights = grid.rows.map(() => 12);
@@ -507,6 +508,7 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: Context): Ba
                 cell.node.children ?? [],
                 Math.max(12, edges[cell.column + cell.colspan] - edges[cell.column] - 12),
                 scope(cell.node, { ...ctx, tableDepth: (ctx.tableDepth ?? 0) + 1 }),
+                true,
             ),
             Math.max(1, ctx.availableHeight - 12),
         );
@@ -636,7 +638,8 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: Context): Ba
     });
 }
 
-function blocks(nodes: readonly NativeNode[], width: number, parent: Context): Band[] {
+function blocks(nodes: readonly NativeNode[], width: number, parent: Context, ensureLine = false): Band[] {
+    if (!nodes.length && !ensureLine) return [];
     if (!nodes.length)
         return glyphBands({ id: 'empty-writing-position', kind: 'paragraph', children: [] }, width, parent).map(
             (band) => ({
@@ -724,7 +727,7 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
         });
     else if (node.kind === 'blockquote')
         output.push(
-            ...blocks(node.children ?? [], width - 18, ctx).map((entry) =>
+            ...blocks(node.children ?? [], width - 18, ctx, true).map((entry) =>
                 decorateBand(entry, (band) => {
                     const shifted = shiftBand(band, 9);
                     const border: PaintCommand = {
@@ -759,7 +762,7 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
             output.push(...blocks(children, width - 18, ctx).map((band) => shiftBand(band, 9)));
         }
     } else if (['doc', 'clauseBody', 'parallelCell', 'listItem'].includes(node.kind))
-        output.push(...blocks(node.children ?? [], width, ctx));
+        output.push(...blocks(node.children ?? [], width, ctx, true));
     else throw new Error(`Native layout is not implemented for ${node.kind}`);
     return output;
 }
