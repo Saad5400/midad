@@ -1,3 +1,4 @@
+import { inheritedDirection } from '../typography/direction.js';
 import { copyJson, type Attributes, type NativeDocument, type NativeNode } from '../document/model.js';
 import type { StructureResult } from './lists.js';
 import {
@@ -167,7 +168,7 @@ export function insertTable(
         id: nextId(),
         kind: 'table',
         attributes: Object.freeze({
-            dir: [...path].reverse().find((node) => node.attributes?.dir)?.attributes?.dir ?? 'rtl',
+            dir: path.reduce<'ltr' | 'rtl'>((direction, node) => inheritedDirection(node, direction), 'rtl'),
             columnSize: Array.from({ length: columnCount }, () => 1).join(','),
         }),
         children: Object.freeze(content),

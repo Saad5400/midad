@@ -1,6 +1,7 @@
 import { type Attributes, type NativeDocument, type NativeNode } from '../../document/model.js';
 import { selectionRanges, type NativeSelection } from '../../editing/selection.js';
 import { blockText, isTextBlock, nodePath, textBlocks, type TextCaret } from '../../editing/text.js';
+import { writeAtPosition } from '../../editing/writing-position.js';
 import type { DocumentScene } from '../../layout/scene.js';
 import { languageDirection } from '../../typography/direction.js';
 
@@ -388,6 +389,19 @@ export function configureBilingual(
     allowDiscard = false,
 ): BilingualResult | undefined {
     validateBilingualOptions(options);
+    if (!document.root.children?.length && (scope.kind === 'document' || scope.kind === 'page')) {
+        if (
+            scope.kind === 'page' &&
+            (scope.scene?.documentId !== document.id ||
+                scope.scene.revision !== document.revision ||
+                !scope.scene.pages[scope.page ?? 0] ||
+                (scope.page ?? 0) < (scope.scene.coverPages ?? 0))
+        )
+            throw new Error('The bilingual page scope is stale');
+        return writeAtPosition(document, null, undefined, (working, selection) =>
+            configureBilingual(working, options, { kind: 'selection', selection }, allowDiscard),
+        );
+    }
     const languages = options.languages;
     if (!allowDiscard && droppedLanguages(document, options, scope).length)
         throw new Error('Removing a written column requires confirmation');

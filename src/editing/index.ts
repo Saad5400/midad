@@ -1,4 +1,5 @@
 export * from './blocks.js';
+export * from './command.js';
 export * from './formatting.js';
 export * from './lists.js';
 export * from './selection.js';

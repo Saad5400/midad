@@ -12,6 +12,16 @@ import { tableGrid } from '@saad5400/midad/editing';
 import { describe, expect, it } from 'vitest';
 
 const options: BilingualOptions = { languages: ['ar', 'en'], widths: 'even', gap: 'sm', divider: true, show: null };
+
+it('splits a truly empty document in one explicit revision without normalizing it on import', () => {
+    const document = importDocument({ type: 'doc', attrs: { retained: true } }, 'empty-columns');
+    const result = configureBilingual(document, options, { kind: 'document' })!;
+    expect(result.document.revision).toBe(1);
+    expect(result.document.root.children![0].kind).toBe('parallelRow');
+    expect(result.document.root.children![0].children?.map((node) => node.attributes?.lang)).toEqual(['ar', 'en']);
+    expect(document.root.children).toBeUndefined();
+    expect(result.document.root.attributes?.retained).toBe(true);
+});
 const document = () =>
     importDocument(
         {

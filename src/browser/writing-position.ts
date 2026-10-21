@@ -1,6 +1,6 @@
 import { documentPageLayout } from '../content/page-layout.js';
 import { findNode, type NativeDocument } from '../document/model.js';
-import { nodePath, textBlocks } from '../editing/text.js';
+import { nodePath, textBlocks } from '../document/text.js';
 import type { WritingTarget } from '../editing/writing-position.js';
 import { cellAt, columnAt, type DocumentScene } from '../layout/scene.js';
 import { inheritedDirection } from '../typography/direction.js';
@@ -26,8 +26,11 @@ export function emptyWritingPosition(
     pageIndex = Math.max(scene.coverPages ?? 0, pageIndex);
     const page = scene.pages[pageIndex];
     if (!page) return;
-    const candidates = target?.containerId
-        ? [target.containerId]
+    const anchorPath = target?.afterId ? nodePath(document, target.afterId) : undefined;
+    if (target?.afterId && (!anchorPath || anchorPath.length < 2)) return;
+    const requestedContainer = target?.containerId ?? anchorPath?.at(-2)?.id;
+    const candidates = requestedContainer
+        ? [requestedContainer]
         : point
           ? [cellAt(scene, pageIndex, point.x, point.y)?.cellId, columnAt(scene, pageIndex, point.x, point.y)?.id]
           : [...(page.cells?.map((cell) => cell.cellId) ?? []), ...(page.columns?.map((column) => column.id) ?? [])];
@@ -36,7 +39,11 @@ export function emptyWritingPosition(
     );
     const id = scopes[0] ?? document.root.id;
     const container = findNode(document, id);
-    if (!container || textBlocks(container).length) return;
+    if (!container || (!target?.afterId && textBlocks(container).length)) return;
+    const after = target?.afterId
+        ? container.children?.find((node) => node.id === target.afterId)
+        : container.children?.at(-1);
+    if (target?.afterId && !after) return;
     const cell = page.cells?.find((cell) => cell.cellId === id);
     const column = page.columns?.find((column) => column.id === id);
     if (id !== document.root.id && !cell && !column) return;
@@ -51,8 +58,7 @@ export function emptyWritingPosition(
     const path = nodePath(document, id);
     const direction = path.reduce<'ltr' | 'rtl'>((value, node) => inheritedDirection(node, value), 'rtl');
     const inset = cell ? 6 : 0;
-    const after = container.children?.at(-1);
-    const block = after && page.blocks?.find((block) => block.id === after.id);
+    const block = after && page.blocks?.filter((block) => block.id === after.id).at(-1);
     return {
         target: { containerId: id, ...(after ? { afterId: after.id } : {}) },
         pageIndex,

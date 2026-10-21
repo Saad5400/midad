@@ -24,6 +24,41 @@ describe('empty writing geometry', () => {
         expect(position.height).toBeGreaterThan(10);
         expect(document.root).toBe(before);
     });
+    it('honors an explicit structural anchor among existing writing positions', () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    { type: 'horizontalRule', attrs: { id: 'first' } },
+                    { type: 'paragraph', attrs: { id: 'later' }, content: [{ type: 'text', text: 'Keep me' }] },
+                ],
+            },
+            'anchored',
+        );
+        const layout = scene(document.id);
+        const page = layout.pages[0];
+        const geometry = {
+            ...layout,
+            pages: [
+                {
+                    ...page,
+                    blocks: [
+                        { id: 'first', x: 72, y: 72, width: 456, height: 12 },
+                        { id: 'later', x: 72, y: 90, width: 456, height: 30 },
+                    ],
+                },
+            ],
+        };
+        expect(emptyWritingPosition(document, geometry, 0, undefined, { afterId: 'first' })).toMatchObject({
+            target: { containerId: document.root.id, afterId: 'first' },
+            y: 84,
+        });
+        expect(emptyWritingPosition(document, geometry, 0, undefined, { afterId: 'missing' })).toBeUndefined();
+        expect(
+            emptyWritingPosition(document, geometry, 0, undefined, { containerId: 'later', afterId: 'first' }),
+        ).toBeUndefined();
+    });
+
     it('refuses stale scenes and imported PDF bodies', () => {
         const document = importDocument({ type: 'doc' }, 'empty');
         expect(emptyWritingPosition(document, { ...scene(document.id), revision: 1 })).toBeUndefined();
