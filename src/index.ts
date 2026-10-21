@@ -1,9 +1,9 @@
-export { DocumentSession, importDocument, exportDocument } from './document.js';
-export type { NativeDocument, NativeNode, Json, Attributes } from './document.js';
-export { NativeTextKernel } from './kernel.js';
-export { layoutDocument } from './layout.js';
-export type { DocumentScene, PaintCommand } from './layout.js';
-export { paintPage } from './paint.js';
-export { writeScenePdf, sceneManifest } from './pdf.js';
-export { fillNativePdf } from './fill-pdf.js';
-export { SharedNativeDocument } from './shared-document.js';
+export { SharedNativeDocument } from './collaboration/document.js';
+export { DocumentSession, exportDocument, importDocument } from './document/index.js';
+export type { Attributes, Json, NativeDocument, NativeNode } from './document/index.js';
+export { layoutDocument } from './layout/index.js';
+export type { DocumentScene, PaintCommand } from './layout/index.js';
+export { sceneManifest, writeScenePdf } from './pdf/document.js';
+export { fillNativePdf } from './pdf/fill.js';
+export { paintPage } from './rendering/canvas.js';
+export { NativeTextKernel } from './rendering/kernel.js';

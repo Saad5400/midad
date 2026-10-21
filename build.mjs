@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,4 +21,9 @@ for (const file of [
     hash.update(relative(root, file).split(sep).join('/'));
     hash.update(readFileSync(file));
 }
-writeFileSync(join(root, 'src/build-version.ts'), `export const BUILD_RENDERER_VERSION = '${hash.digest('hex')}';\n`);
+rmSync(join(root, 'dist'), { recursive: true, force: true });
+mkdirSync(join(root, 'src/rendering'), { recursive: true });
+writeFileSync(
+    join(root, 'src/rendering/build-version.ts'),
+    `export const BUILD_RENDERER_VERSION = '${hash.digest('hex')}';\n`,
+);

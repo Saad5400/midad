@@ -1,7 +1,7 @@
 import type { NativeDocument } from '@saad5400/midad/document';
-import type { NativeTextKernel } from '@saad5400/midad/kernel';
+import type { NativeTextKernel } from '@saad5400/midad/rendering';
 import type { DocumentScene, GlyphCommand } from '@saad5400/midad/layout';
-import { paintPage } from '@saad5400/midad/paint';
+import { paintPage } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

@@ -1,4 +1,4 @@
 node_modules
 dist/
 *.tgz
-src/build-version.ts
+src/rendering/build-version.ts

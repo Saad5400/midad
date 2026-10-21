@@ -1,0 +1,708 @@
+import {
+    changeClauseVariant,
+    createNativeClause,
+    nativeClauses,
+    persistClauseVariants,
+    type LibraryClause,
+} from '@saad5400/midad/content/clauses';
+import { exportDocument, importDocument } from '@saad5400/midad/document';
+import {
+    blockText,
+    joinPreviousTextBlock,
+    replaceBlockNode,
+    replaceInlineText,
+    splitTextBlock,
+    textBlocks,
+} from '@saad5400/midad/editing';
+import { nativeFields } from '@saad5400/midad/content/fields';
+import { formatText } from '@saad5400/midad/editing';
+import { SharedNativeDocument } from '@saad5400/midad/collaboration';
+import { readSharedAttributes } from '@saad5400/midad/collaboration';
+import { nodeTextStyle } from '@saad5400/midad/typography';
+import {
+    mergeTableCells,
+    resizeTableColumns,
+    splitTableCell,
+    tableCommand,
+    type TableCommand,
+} from '@saad5400/midad/editing';
+import { describe, expect, it } from 'vitest';
+import * as Y from 'yjs';
+import { makeNativeFixture, makeNestedRichFixture } from '../fixtures/nativeDocument';
+
+const create = (text = 'Hello العربية world') =>
+    SharedNativeDocument.create(
+        importDocument(
+            { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] },
+            'shared-test',
+        ),
+    );
+const edit = (shared: SharedNativeDocument, from: number, to: number, text: string) => {
+    const document = shared.document(),
+        block = textBlocks(document.root)[0];
+    shared.publish(
+        replaceInlineText(document, { blockId: block.id, from, to, text, expectedRevision: document.revision }),
+    );
+};
+const text = (shared: SharedNativeDocument) => textBlocks(shared.document().root).map(blockText).join('\n');
+function peers() {
+    const a = create(),
+        b = SharedNativeDocument.fromState(a.state(), a.document().id);
+    return { a, b };
+}
+function merge(a: SharedNativeDocument, b: SharedNativeDocument): void {
+    const fromA = a.state(b.vector()),
+        fromB = b.state(a.vector());
+    a.receive(fromB);
+    b.receive(fromA);
+}
+
+describe('our shared native document', () => {
+    it('does not reuse an empty-container identity after its paragraph moves elsewhere', () => {
+        const seed = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        { type: 'blockquote', attrs: { id: 'quote' }, content: [] },
+                        { type: 'paragraph', attrs: { id: 'sibling' }, content: [{ type: 'text', text: 'Sibling' }] },
+                    ],
+                },
+                'empty-move',
+            ),
+        );
+        const a = SharedNativeDocument.fromState(seed.state(), 'empty-move');
+        const b = SharedNativeDocument.fromState(seed.state(), 'empty-move');
+        try {
+            const materialized = replaceBlockNode(a.document(), 'quote', (node) => ({
+                ...node,
+                attributes: { ...node.attributes, label: 'Materialized' },
+            }));
+            b.receive(a.publish(materialized));
+            const paragraph = a.document().root.children![0].children![0];
+            const root = a.document().root;
+            const moved = {
+                ...a.document(),
+                revision: a.document().revision + 1,
+                root: { ...root, children: [{ ...root.children![0], children: [] }, root.children![1], paragraph] },
+            };
+            expect(() => b.receive(a.publish(moved))).not.toThrow();
+            const fresh = b.document().root.children![0].children![0];
+            expect(fresh.id).not.toBe(paragraph.id);
+            const changed = replaceBlockNode(b.document(), 'quote', (node) => ({
+                ...node,
+                attributes: { ...node.attributes, label: 'Again' },
+            }));
+            expect(() => a.receive(b.publish(changed))).not.toThrow();
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            seed.destroy();
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it.each(['doc', 'tableCell', 'tableHeader', 'parallelCell', 'clauseBody', 'listItem', 'blockquote'])(
+        'materializes an empty %s safely when only its metadata changes',
+        (kind) => {
+            const empty = { type: kind, attrs: { id: 'empty-container' }, content: [] };
+            let root: unknown = { type: 'doc', content: [empty] };
+            if (kind === 'doc') root = empty;
+            if (kind === 'tableCell' || kind === 'tableHeader')
+                root = { type: 'doc', content: [{ type: 'table', content: [{ type: 'tableRow', content: [empty] }] }] };
+            if (kind === 'parallelCell') root = { type: 'doc', content: [{ type: 'parallelRow', content: [empty] }] };
+            if (kind === 'clauseBody')
+                root = {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'clause',
+                            content: [{ type: 'clauseTitle', content: [{ type: 'text', text: 'Title' }] }, empty],
+                        },
+                    ],
+                };
+            if (kind === 'listItem') root = { type: 'doc', content: [{ type: 'bulletList', content: [empty] }] };
+            const seed = SharedNativeDocument.create(importDocument(root, 'empty-shared'));
+            const a = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
+            const b = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
+            try {
+                const next = persistClauseVariants(
+                    replaceBlockNode(a.document(), 'empty-container', (node) => ({
+                        ...node,
+                        attributes: { ...node.attributes, label: 'Changed' },
+                    })),
+                );
+                const update = a.publish(next);
+                expect(() => b.receive(update)).not.toThrow();
+                expect(exportDocument(b.document())).toEqual(exportDocument(a.document()));
+                const reopened = SharedNativeDocument.fromState(a.state(), 'empty-shared');
+                try {
+                    expect(exportDocument(reopened.document())).toEqual(exportDocument(a.document()));
+                } finally {
+                    reopened.destroy();
+                }
+            } finally {
+                seed.destroy();
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+
+    it.each([
+        'rowBefore',
+        'rowAfter',
+        'deleteRow',
+        'columnBefore',
+        'columnAfter',
+        'deleteColumn',
+        'deleteTable',
+        'headerRow',
+        'merge',
+        'split',
+        'resize',
+    ])('synchronizes and undoes %s inside nested tables and language columns without a self-conflict', (operation) => {
+        const a = SharedNativeDocument.create(importDocument(makeNestedRichFixture(), 'nested-save'));
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            const initial = exportDocument(b.document());
+            const doc = a.document();
+            const changed =
+                operation === 'merge'
+                    ? mergeTableCells(doc, {
+                          tableId: 'arabic-table',
+                          anchorId: 'arabic-table-merged',
+                          focusId: 'arabic-table-last-cell',
+                      })
+                    : operation === 'split'
+                      ? splitTableCell(doc, 'arabic-table-merged')
+                      : operation === 'resize'
+                        ? { document: resizeTableColumns(doc, 'arabic-table', 1, 10, 300) }
+                        : tableCommand(doc, 'arabic-table-rich', operation as TableCommand);
+            expect(changed).not.toBeNull();
+            const update = a.publish(changed!.document);
+            b.receive(update);
+            expect(exportDocument(b.document())).toEqual(exportDocument(changed!.document));
+            a.undo();
+            merge(a, b);
+            expect(exportDocument(b.document())).toEqual(initial);
+            a.redo();
+            merge(a, b);
+            expect(exportDocument(b.document())).toEqual(exportDocument(changed!.document));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('initializes and reopens a deeply structured 600-row document within five seconds', () => {
+        const body = {
+            type: 'doc',
+            content: Array.from({ length: 600 }, (_, index) => ({
+                type: 'parallelRow',
+                content: ['ar', 'en'].map((lang) => ({
+                    type: 'parallelCell',
+                    attrs: { lang },
+                    content: [
+                        { type: 'paragraph', content: [{ type: 'text', text: `البند ${index} English text` }] },
+                        ...(index % 3 === 0
+                            ? [
+                                  {
+                                      type: 'table',
+                                      content: [
+                                          {
+                                              type: 'tableRow',
+                                              content: [
+                                                  {
+                                                      type: 'tableCell',
+                                                      content: [
+                                                          {
+                                                              type: 'paragraph',
+                                                              content: [
+                                                                  { type: 'text', text: 'خلية متداخلة Nested cell' },
+                                                              ],
+                                                          },
+                                                      ],
+                                                  },
+                                              ],
+                                          },
+                                      ],
+                                  },
+                              ]
+                            : []),
+                    ],
+                })),
+            })),
+        };
+        const started = performance.now();
+        const a = SharedNativeDocument.create(importDocument(body, 'structured-shared'));
+        let b: SharedNativeDocument | undefined;
+        try {
+            expect(performance.now() - started).toBeLessThan(5000);
+            const reopen = performance.now();
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+            expect(performance.now() - reopen).toBeLessThan(5000);
+            expect(b.document().root.children).toHaveLength(600);
+            expect(textBlocks(b.document().root)).toHaveLength(1600);
+            expect(performance.now() - started).toBeLessThan(5000);
+            const original = text(b);
+            edit(b, 0, 0, 'Changed ');
+            expect(b.canUndo).toBe(true);
+            b.undo();
+            expect(text(b)).toBe(original);
+            b.redo();
+            expect(text(b)).toBe(`Changed ${original}`);
+        } finally {
+            a.destroy();
+            b?.destroy();
+        }
+    }, 15000);
+    it('round trips Arabic rich text and independent document identities', () => {
+        const a = create(),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        expect(text(a)).toBe('Hello العربية world');
+        expect(text(b)).toBe(text(a));
+        expect(exportDocument(b.document())).toMatchObject({ type: 'doc', content: [{ type: 'paragraph' }] });
+        a.destroy();
+        b.destroy();
+    });
+    it('merges concurrent edits in the same paragraph without dropping either insertion', () => {
+        const { a, b } = peers();
+        edit(a, 0, 0, 'First ');
+        edit(b, 'Hello العربية world'.length, 'Hello العربية world'.length, ' Last');
+        merge(a, b);
+        expect(text(a)).toBe('First Hello العربية world Last');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('merges concurrent insertions at the same offset deterministically', () => {
+        const { a, b } = peers();
+        edit(a, 0, 0, 'One ');
+        edit(b, 0, 0, 'Two ');
+        merge(a, b);
+        expect(text(a)).toBe(text(b));
+        expect(text(a)).toContain('One ');
+        expect(text(a)).toContain('Two ');
+        a.destroy();
+        b.destroy();
+    });
+    it('undoes only this users work and retains remote edits', () => {
+        const { a, b } = peers();
+        edit(a, 0, 0, 'Mine ');
+        edit(b, 0, 0, 'Theirs ');
+        merge(a, b);
+        a.undo();
+        merge(a, b);
+        expect(text(a)).toBe('Theirs Hello العربية world');
+        expect(text(b)).toBe(text(a));
+        a.redo();
+        merge(a, b);
+        expect(text(a)).toContain('Mine ');
+        expect(text(a)).toContain('Theirs ');
+        a.destroy();
+        b.destroy();
+    });
+    it('merges different formatting marks on the same text', () => {
+        const { a, b } = peers();
+        for (const [shared, mark] of [
+            [a, 'bold'],
+            [b, 'italic'],
+        ] as const) {
+            const document = shared.document(),
+                block = textBlocks(document.root)[0];
+            shared.publish(
+                formatText(
+                    document,
+                    { blockId: block.id, from: 0, to: 5, expectedRevision: document.revision },
+                    { kind: 'toggle', mark },
+                ),
+            );
+        }
+        merge(a, b);
+        const marks = textBlocks(a.document().root)[0].children![0].marks!.map((mark) => mark.kind);
+        expect(marks).toContain('bold');
+        expect(marks).toContain('italic');
+        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        a.destroy();
+        b.destroy();
+    });
+    it('keeps caret anchors attached to their text when another user inserts before them', () => {
+        const { a, b } = peers(),
+            block = textBlocks(a.document().root)[0];
+        const caret = a.caret({ blockId: block.id, offset: 5 })!;
+        edit(b, 0, 0, 'Prefix ');
+        merge(a, b);
+        expect(a.resolve(caret)).toEqual({ blockId: block.id, offset: 12 });
+        a.destroy();
+        b.destroy();
+    });
+    it('keeps edits to an inactive clause variant when another user switches wording', () => {
+        const body = (text: string) => ({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+        });
+        const library: LibraryClause = {
+            uuid: 'group',
+            title: 'Clause',
+            variants: [
+                { uuid: 'a', body_content: body('First') },
+                { uuid: 'b', body_content: body('Second') },
+            ],
+        };
+        const original = importDocument({ type: 'doc' }, 'clause-document');
+        const clause = createNativeClause(original, library.title, library);
+        const a = SharedNativeDocument.create({ ...original, root: { ...original.root, children: [clause] } }),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const document = a.document(),
+            liveClause = nativeClauses(document)[0],
+            paragraph = textBlocks(liveClause.children![1])[0];
+        a.publish(
+            replaceInlineText(document, {
+                blockId: paragraph.id,
+                from: 0,
+                to: 0,
+                text: 'Edited ',
+                expectedRevision: document.revision,
+            }),
+        );
+        b.publish(changeClauseVariant(b.document(), liveClause.id, { kind: 'select', id: 'b' }).document);
+        merge(a, b);
+        a.publish(changeClauseVariant(a.document(), liveClause.id, { kind: 'select', id: 'a' }).document);
+        merge(a, b);
+        expect(text(a)).toContain('Edited First');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('keeps shared updates small for a 600-paragraph document', () => {
+        const started = performance.now();
+        const a = SharedNativeDocument.create(importDocument(makeNativeFixture(600), 'large-shared'));
+        const document = a.document(),
+            block = textBlocks(document.root)[300],
+            vector = a.vector();
+        a.publish(
+            replaceInlineText(document, {
+                blockId: block.id,
+                from: 0,
+                to: 0,
+                text: 'جديد ',
+                expectedRevision: document.revision,
+            }),
+        );
+        expect(a.state(vector).length).toBeLessThan(2000);
+        expect(performance.now() - started).toBeLessThan(5000);
+        a.destroy();
+    });
+    it('merges concurrent paragraph splits without copying or losing suffix text', () => {
+        const a = create('ABCDEFGHIJ'),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        for (const [shared, offset] of [
+            [a, 3],
+            [b, 7],
+        ] as const) {
+            const document = shared.document(),
+                block = textBlocks(document.root)[0];
+            shared.publish(
+                splitTextBlock(document, {
+                    blockId: block.id,
+                    from: offset,
+                    to: offset,
+                    expectedRevision: document.revision,
+                }).document,
+            );
+        }
+        merge(a, b);
+        expect(text(a)).toBe('ABC\nDEFG\nHIJ');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('keeps edits inside a suffix moved by a concurrent paragraph split', () => {
+        const a = create('ABCDEFGHIJ'),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const document = a.document(),
+            block = textBlocks(document.root)[0];
+        a.publish(
+            splitTextBlock(document, { blockId: block.id, from: 3, to: 3, expectedRevision: document.revision })
+                .document,
+        );
+        edit(b, 8, 8, 'new');
+        merge(a, b);
+        expect(text(a)).toBe('ABC\nDEFGHnewIJ');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('undoes a split while keeping another authors edits in the new paragraph', () => {
+        const a = create('ABCDEFGHIJ'),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const document = a.document(),
+            block = textBlocks(document.root)[0];
+        a.publish(
+            splitTextBlock(document, { blockId: block.id, from: 3, to: 3, expectedRevision: document.revision })
+                .document,
+        );
+        merge(a, b);
+        const right = textBlocks(b.document().root)[1];
+        b.publish(
+            replaceInlineText(b.document(), {
+                blockId: right.id,
+                from: 0,
+                to: 0,
+                text: 'peer',
+                expectedRevision: b.document().revision,
+            }),
+        );
+        merge(a, b);
+        a.undo();
+        merge(a, b);
+        expect(text(a)).toBe('ABCpeerDEFGHIJ');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('keeps a concurrent edit when adjacent paragraphs are joined', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: ['First', 'Second'].map((text) => ({
+                        type: 'paragraph',
+                        content: [{ type: 'text', text }],
+                    })),
+                },
+                'join-test',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const right = textBlocks(a.document().root)[1];
+        a.publish(joinPreviousTextBlock(a.document(), right.id)!.document);
+        b.publish(
+            replaceInlineText(b.document(), {
+                blockId: right.id,
+                from: 0,
+                to: 0,
+                text: 'Peer ',
+                expectedRevision: b.document().revision,
+            }),
+        );
+        merge(a, b);
+        expect(text(a)).toBe('FirstPeer Second');
+        expect(text(b)).toBe(text(a));
+        a.destroy();
+        b.destroy();
+    });
+    it('does not create a new visible revision for a duplicate network update', () => {
+        const { a, b } = peers();
+        const before = b.document();
+        b.receive(a.state());
+        expect(b.document()).toBe(before);
+        a.destroy();
+        b.destroy();
+    });
+    it.each([false, true])('keeps one field after concurrent inline/floating moves and undo: %s', (reverse) => {
+        const original = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        attrs: { nativeId: 'first' },
+                        content: [
+                            { type: 'variable', attrs: { id: 'field', type: 'text', name: 'Name', value: 'Original' } },
+                        ],
+                    },
+                    { type: 'paragraph', attrs: { nativeId: 'second' }, content: [{ type: 'text', text: 'Second' }] },
+                ],
+            },
+            'field-document',
+        );
+        const a = SharedNativeDocument.create(original),
+            b = SharedNativeDocument.fromState(a.state(), original.id);
+        const clients = [1, 2, 3].filter((id) => id !== a.ydoc.clientID).slice(0, 2);
+        a.ydoc.clientID = clients[reverse ? 1 : 0];
+        b.ydoc.clientID = clients[reverse ? 0 : 1];
+        for (const [shared, floating] of [
+            [a, true],
+            [b, false],
+        ] as const) {
+            const document = shared.document(),
+                [first, second] = document.root.children!,
+                field = first.children![0];
+            shared.publish({
+                ...document,
+                revision: document.revision + 1,
+                root: {
+                    ...document.root,
+                    attributes: {
+                        ...document.root.attributes,
+                        ...(floating ? { blockVariables: [{ ...field.attributes, x: 20, y: 30 }] } : {}),
+                    },
+                    children: [
+                        { ...first, children: [] },
+                        floating ? second : { ...second, children: [...second.children!, field] },
+                    ],
+                },
+            });
+        }
+        merge(a, b);
+        expect(nativeFields(a.document()).filter((field) => field.id === 'field')).toHaveLength(1);
+        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        a.undo();
+        merge(a, b);
+        expect(nativeFields(a.document()).filter((field) => field.id === 'field')).toHaveLength(1);
+        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        a.destroy();
+        b.destroy();
+    });
+    it('merges independent nested settings on a shared field', () => {
+        const original = importDocument(
+            {
+                type: 'doc',
+                attrs: {
+                    blockVariables: [{ id: 'field', type: 'text', settings: { fontSize: 14, color: '#000000' } }],
+                },
+                content: [{ type: 'paragraph' }],
+            },
+            'settings-document',
+        );
+        const a = SharedNativeDocument.create(original),
+            b = SharedNativeDocument.fromState(a.state(), original.id);
+        for (const [shared, settings] of [
+            [a, { fontSize: 20 }],
+            [b, { color: '#ff0000' }],
+        ] as const) {
+            const document = shared.document(),
+                field = nativeFields(document)[0].attributes;
+            shared.publish({
+                ...document,
+                revision: document.revision + 1,
+                root: {
+                    ...document.root,
+                    attributes: {
+                        ...document.root.attributes,
+                        blockVariables: [{ ...field, settings: { ...(field.settings as object), ...settings } }],
+                    },
+                },
+            });
+        }
+        merge(a, b);
+        expect(nativeFields(a.document())[0].attributes.settings).toMatchObject({ fontSize: 20, color: '#ff0000' });
+        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        a.destroy();
+        b.destroy();
+    });
+    it('preserves the ordering of inline code and font overrides', () => {
+        const source = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Code',
+                                marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial' } }, { type: 'code' }],
+                            },
+                        ],
+                    },
+                ],
+            },
+            'marks',
+        );
+        const a = SharedNativeDocument.create(source),
+            b = SharedNativeDocument.fromState(a.state(), source.id);
+        expect(nodeTextStyle(textBlocks(b.document().root)[0].children![0]).family).toBe(
+            nodeTextStyle(textBlocks(source.root)[0].children![0]).family,
+        );
+        a.destroy();
+        b.destroy();
+    });
+    it('stores a long formatting operation as a small update', () => {
+        const a = create('Long text '.repeat(500)),
+            document = a.document(),
+            block = textBlocks(document.root)[0],
+            vector = a.vector();
+        a.publish(
+            formatText(
+                document,
+                { blockId: block.id, from: 0, to: blockText(block).length, expectedRevision: document.revision },
+                { kind: 'toggle', mark: 'bold' },
+            ),
+        );
+        expect(a.state(vector).length).toBeLessThan(2000);
+        a.destroy();
+    });
+    it('does not allow shared attribute paths to modify object prototypes', () => {
+        const doc = new Y.Doc(),
+            map = doc.getMap<import('@saad5400/midad/document').Json>('attributes');
+        map.set(JSON.stringify(['settings']), {});
+        map.set(JSON.stringify(['settings', '__proto__', 'clmPolluted']), true);
+        const attributes = readSharedAttributes(map);
+        expect(({} as Record<string, unknown>).clmPolluted).toBeUndefined();
+        const settings = attributes.settings as Record<string, unknown>;
+        expect(Object.hasOwn(settings, '__proto__')).toBe(true);
+        expect((settings['__proto__'] as Record<string, unknown>).clmPolluted).toBe(true);
+        doc.destroy();
+    });
+    it('rejects updates that replace protocol identity and retains a recoverable document', () => {
+        const { a, b } = peers(),
+            before = a.document();
+        b.ydoc.getMap('native').set('schema', 2);
+        expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
+        expect(a.document()).toBe(before);
+        expect(() => a.publish(before)).toThrow('closed');
+        a.destroy();
+        b.destroy();
+    });
+    it('switches legacy variants with shared node ids without splitting their text a second time', () => {
+        const paragraph = (id: string, text: string) => ({
+            type: 'paragraph',
+            attrs: { id },
+            content: [{ type: 'text', text }],
+        });
+        const first = { type: 'clauseBody', attrs: { id: 'body' }, content: [paragraph('p', 'FirstSecond')] };
+        const second = {
+            type: 'clauseBody',
+            attrs: { id: 'body' },
+            content: [paragraph('p', 'First'), paragraph('p2', 'Second')],
+        };
+        const document = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'clause',
+                        attrs: {
+                            id: 'a',
+                            nativeId: 'clause',
+                            activeVariantId: 'a',
+                            variants: [
+                                { id: 'a', bodyContent: first },
+                                { id: 'b', bodyContent: second },
+                            ],
+                        },
+                        content: [{ type: 'clauseTitle' }, first],
+                    },
+                ],
+            },
+            'legacy-variants',
+        );
+        const a = SharedNativeDocument.create(document),
+            b = SharedNativeDocument.fromState(a.state(), document.id);
+        const boundaries = () =>
+            [...b.ydoc.share.keys()]
+                .filter((name) => name.startsWith('t:'))
+                .flatMap((name) => b.ydoc.getText(name).toDelta())
+                .filter((part) => typeof part.insert === 'object' && part.insert?.block).length;
+        const count = boundaries();
+        a.publish(
+            changeClauseVariant(a.document(), nativeClauses(a.document())[0].id, { kind: 'select', id: 'b' }).document,
+        );
+        merge(a, b);
+        expect(boundaries()).toBe(count);
+        expect(text(b)).toContain('First\nSecond');
+        a.destroy();
+        b.destroy();
+    });
+});

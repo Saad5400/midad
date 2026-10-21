@@ -1,7 +1,8 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.1.3",
+    "version": "0.2.0",
     "type": "module",
+    "sideEffects": false,
     "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",
     "files": [
         "dist",
@@ -14,9 +15,321 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
         },
-        "./*": {
-            "types": "./dist/*.d.ts",
-            "import": "./dist/*.js"
+        "./document": {
+            "types": "./dist/document/index.d.ts",
+            "import": "./dist/document/index.js"
+        },
+        "./editing": {
+            "types": "./dist/editing/index.d.ts",
+            "import": "./dist/editing/index.js"
+        },
+        "./content/fields": {
+            "types": "./dist/content/fields/index.d.ts",
+            "import": "./dist/content/fields/index.js"
+        },
+        "./content/bilingual": {
+            "types": "./dist/content/bilingual/index.d.ts",
+            "import": "./dist/content/bilingual/index.js"
+        },
+        "./content/clauses": {
+            "types": "./dist/content/clauses/index.d.ts",
+            "import": "./dist/content/clauses/index.js"
+        },
+        "./layout": {
+            "types": "./dist/layout/index.d.ts",
+            "import": "./dist/layout/index.js"
+        },
+        "./typography": {
+            "types": "./dist/typography/index.d.ts",
+            "import": "./dist/typography/index.js"
+        },
+        "./rendering": {
+            "types": "./dist/rendering/index.d.ts",
+            "import": "./dist/rendering/index.js"
+        },
+        "./pdf": {
+            "types": "./dist/pdf/index.d.ts",
+            "import": "./dist/pdf/index.js"
+        },
+        "./browser": {
+            "types": "./dist/browser/index.d.ts",
+            "import": "./dist/browser/index.js"
+        },
+        "./collaboration": {
+            "types": "./dist/collaboration/index.d.ts",
+            "import": "./dist/collaboration/index.js"
+        },
+        "./interchange": {
+            "types": "./dist/interchange/index.d.ts",
+            "import": "./dist/interchange/index.js"
+        },
+        "./content/images": {
+            "types": "./dist/content/images.d.ts",
+            "import": "./dist/content/images.js"
+        },
+        "./content/page-layout": {
+            "types": "./dist/content/page-layout.d.ts",
+            "import": "./dist/content/page-layout.js"
+        },
+        "./content/presentation": {
+            "types": "./dist/content/presentation.d.ts",
+            "import": "./dist/content/presentation.js"
+        },
+        "./content/floating-anchors": {
+            "types": "./dist/content/floating-anchors.d.ts",
+            "import": "./dist/content/floating-anchors.js"
+        },
+        "./assets": {
+            "types": "./dist/rendering/assets.d.ts",
+            "import": "./dist/rendering/assets.js"
+        },
+        "./autoscroll": {
+            "types": "./dist/browser/autoscroll.d.ts",
+            "import": "./dist/browser/autoscroll.js"
+        },
+        "./bilingual-copy": {
+            "types": "./dist/content/bilingual/copy.d.ts",
+            "import": "./dist/content/bilingual/copy.js"
+        },
+        "./bilingual-runner": {
+            "types": "./dist/content/bilingual/runner.d.ts",
+            "import": "./dist/content/bilingual/runner.js"
+        },
+        "./bilingual-translation": {
+            "types": "./dist/content/bilingual/translation.d.ts",
+            "import": "./dist/content/bilingual/translation.js"
+        },
+        "./bilingual": {
+            "types": "./dist/content/bilingual/columns.d.ts",
+            "import": "./dist/content/bilingual/columns.js"
+        },
+        "./blocks": {
+            "types": "./dist/editing/blocks.d.ts",
+            "import": "./dist/editing/blocks.js"
+        },
+        "./clause-numbering": {
+            "types": "./dist/content/clauses/numbering.d.ts",
+            "import": "./dist/content/clauses/numbering.js"
+        },
+        "./clauses": {
+            "types": "./dist/content/clauses/commands.d.ts",
+            "import": "./dist/content/clauses/commands.js"
+        },
+        "./clipboard": {
+            "types": "./dist/interchange/clipboard.d.ts",
+            "import": "./dist/interchange/clipboard.js"
+        },
+        "./direction": {
+            "types": "./dist/typography/direction.d.ts",
+            "import": "./dist/typography/direction.js"
+        },
+        "./field-appearance": {
+            "types": "./dist/pdf/field-appearance.d.ts",
+            "import": "./dist/pdf/field-appearance.js"
+        },
+        "./field-layout": {
+            "types": "./dist/layout/fields.d.ts",
+            "import": "./dist/layout/fields.js"
+        },
+        "./field-placement": {
+            "types": "./dist/content/fields/placement.d.ts",
+            "import": "./dist/content/fields/placement.js"
+        },
+        "./field-schema": {
+            "types": "./dist/content/fields/schema.d.ts",
+            "import": "./dist/content/fields/schema.js"
+        },
+        "./fields": {
+            "types": "./dist/content/fields/commands.d.ts",
+            "import": "./dist/content/fields/commands.js"
+        },
+        "./fill-pdf": {
+            "types": "./dist/pdf/fill.d.ts",
+            "import": "./dist/pdf/fill.js"
+        },
+        "./floating-anchors": {
+            "types": "./dist/content/floating-anchors.d.ts",
+            "import": "./dist/content/floating-anchors.js"
+        },
+        "./font-assets": {
+            "types": "./dist/typography/font-assets.d.ts",
+            "import": "./dist/typography/font-assets.js"
+        },
+        "./font-options": {
+            "types": "./dist/typography/font-options.d.ts",
+            "import": "./dist/typography/font-options.js"
+        },
+        "./font-sizes": {
+            "types": "./dist/typography/font-sizes.d.ts",
+            "import": "./dist/typography/font-sizes.js"
+        },
+        "./fonts": {
+            "types": "./dist/compat/fonts.d.ts",
+            "import": "./dist/compat/fonts.js"
+        },
+        "./formatting": {
+            "types": "./dist/editing/formatting.d.ts",
+            "import": "./dist/editing/formatting.js"
+        },
+        "./frozen-fields": {
+            "types": "./dist/pdf/frozen-fields.d.ts",
+            "import": "./dist/pdf/frozen-fields.js"
+        },
+        "./history": {
+            "types": "./dist/interchange/history.d.ts",
+            "import": "./dist/interchange/history.js"
+        },
+        "./identities": {
+            "types": "./dist/document/identities.d.ts",
+            "import": "./dist/document/identities.js"
+        },
+        "./images": {
+            "types": "./dist/content/images.d.ts",
+            "import": "./dist/content/images.js"
+        },
+        "./incremental-pdf": {
+            "types": "./dist/pdf/incremental.d.ts",
+            "import": "./dist/pdf/incremental.js"
+        },
+        "./interaction": {
+            "types": "./dist/browser/interaction.d.ts",
+            "import": "./dist/browser/interaction.js"
+        },
+        "./kernel": {
+            "types": "./dist/rendering/kernel.d.ts",
+            "import": "./dist/rendering/kernel.js"
+        },
+        "./labels": {
+            "types": "./dist/browser/labels.d.ts",
+            "import": "./dist/browser/labels.js"
+        },
+        "./lists": {
+            "types": "./dist/editing/lists.d.ts",
+            "import": "./dist/editing/lists.js"
+        },
+        "./message": {
+            "types": "./dist/interchange/message.d.ts",
+            "import": "./dist/interchange/message.js"
+        },
+        "./navigation": {
+            "types": "./dist/browser/navigation.d.ts",
+            "import": "./dist/browser/navigation.js"
+        },
+        "./outline": {
+            "types": "./dist/layout/outline.d.ts",
+            "import": "./dist/layout/outline.js"
+        },
+        "./page-layout": {
+            "types": "./dist/content/page-layout.d.ts",
+            "import": "./dist/content/page-layout.js"
+        },
+        "./paint": {
+            "types": "./dist/rendering/canvas.d.ts",
+            "import": "./dist/rendering/canvas.js"
+        },
+        "./pdf-reading": {
+            "types": "./dist/pdf/reading.d.ts",
+            "import": "./dist/pdf/reading.js"
+        },
+        "./pdf-review": {
+            "types": "./dist/pdf/review.d.ts",
+            "import": "./dist/pdf/review.js"
+        },
+        "./pdfFont": {
+            "types": "./dist/pdf/font.d.ts",
+            "import": "./dist/pdf/font.js"
+        },
+        "./persistence": {
+            "types": "./dist/interchange/persistence.d.ts",
+            "import": "./dist/interchange/persistence.js"
+        },
+        "./plain-text": {
+            "types": "./dist/interchange/plain-text.d.ts",
+            "import": "./dist/interchange/plain-text.js"
+        },
+        "./presentation": {
+            "types": "./dist/content/presentation.d.ts",
+            "import": "./dist/content/presentation.js"
+        },
+        "./raster-image": {
+            "types": "./dist/rendering/raster-image.d.ts",
+            "import": "./dist/rendering/raster-image.js"
+        },
+        "./selection": {
+            "types": "./dist/editing/selection.d.ts",
+            "import": "./dist/editing/selection.js"
+        },
+        "./shared-document": {
+            "types": "./dist/collaboration/document.d.ts",
+            "import": "./dist/collaboration/document.js"
+        },
+        "./shared-values": {
+            "types": "./dist/collaboration/values.d.ts",
+            "import": "./dist/collaboration/values.js"
+        },
+        "./style": {
+            "types": "./dist/typography/style.d.ts",
+            "import": "./dist/typography/style.js"
+        },
+        "./sync-client": {
+            "types": "./dist/collaboration/client.d.ts",
+            "import": "./dist/collaboration/client.js"
+        },
+        "./table-grid": {
+            "types": "./dist/editing/table-grid.d.ts",
+            "import": "./dist/editing/table-grid.js"
+        },
+        "./tables": {
+            "types": "./dist/editing/tables.d.ts",
+            "import": "./dist/editing/tables.js"
+        },
+        "./text-reading": {
+            "types": "./dist/layout/text-reading.d.ts",
+            "import": "./dist/layout/text-reading.js"
+        },
+        "./version": {
+            "types": "./dist/rendering/version.d.ts",
+            "import": "./dist/rendering/version.js"
+        },
+        "./viewport": {
+            "types": "./dist/browser/viewport.d.ts",
+            "import": "./dist/browser/viewport.js"
+        },
+        "./browser/page-pointer": {
+            "types": "./dist/browser/page-pointer.d.ts",
+            "import": "./dist/browser/page-pointer.js"
+        },
+        "./browser/page-canvas": {
+            "types": "./dist/browser/page-canvas.d.ts",
+            "import": "./dist/browser/page-canvas.js"
+        },
+        "./browser/autoscroll": {
+            "types": "./dist/browser/autoscroll.d.ts",
+            "import": "./dist/browser/autoscroll.js"
+        },
+        "./browser/page-view": {
+            "types": "./dist/browser/page-view.d.ts",
+            "import": "./dist/browser/page-view.js"
+        },
+        "./browser/navigation": {
+            "types": "./dist/browser/navigation.d.ts",
+            "import": "./dist/browser/navigation.js"
+        },
+        "./browser/viewport": {
+            "types": "./dist/browser/viewport.d.ts",
+            "import": "./dist/browser/viewport.js"
+        },
+        "./browser/viewport-readiness": {
+            "types": "./dist/browser/viewport-readiness.d.ts",
+            "import": "./dist/browser/viewport-readiness.js"
+        },
+        "./browser/interaction": {
+            "types": "./dist/browser/interaction.d.ts",
+            "import": "./dist/browser/interaction.js"
+        },
+        "./browser/labels": {
+            "types": "./dist/browser/labels.d.ts",
+            "import": "./dist/browser/labels.js"
         },
         "./assets/*": "./assets/*",
         "./package.json": "./package.json"

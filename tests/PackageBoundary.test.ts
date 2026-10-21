@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { DocumentSession, exportDocument, importDocument } from '@saad5400/midad';
-import { getDefaultVariableSettings } from '@saad5400/midad/field-schema';
-import { fontAssets } from '@saad5400/midad/font-assets';
-import { NATIVE_RENDERER_VERSION } from '@saad5400/midad/version';
+import { getDefaultVariableSettings } from '@saad5400/midad/content/fields';
+import { NATIVE_RENDERER_VERSION } from '@saad5400/midad/rendering';
+import { fontAssets } from '@saad5400/midad/typography';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,49 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('standalone package entrypoints', () => {
+    it('ships explicit entrypoints and keeps implementation files private', async () => {
+        const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+        expect(packageJson.exports['./*']).toBeUndefined();
+        for (const entry of Object.values(packageJson.exports)) {
+            if (typeof entry === 'string') continue;
+            const target = entry as { types: string; import: string };
+            expect((await readFile(target.types)).length).toBeGreaterThan(0);
+            expect((await readFile(target.import)).length).toBeGreaterThan(0);
+        }
+        const resolution = JSON.parse(
+            execFileSync(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '--eval',
+                    `
+            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/flow', '@saad5400/midad/document/model'];
+            console.log(JSON.stringify(paths.map((path) => {
+                try { return import.meta.resolve(path); } catch (error) { return error.code; }
+            })));
+        `,
+                ],
+                { encoding: 'utf8' },
+            ),
+        );
+        expect(resolution[0]).toContain('/dist/document/index.js');
+        expect(resolution.slice(1)).toEqual(['ERR_PACKAGE_PATH_NOT_EXPORTED', 'ERR_PACKAGE_PATH_NOT_EXPORTED']);
+    });
+
+    it('preserves existing integration entrypoints through the same implementations', async () => {
+        const [oldFields, fields, oldFonts, typography, rendering, oldPaint] = await Promise.all([
+            import('@saad5400/midad/fields'),
+            import('@saad5400/midad/content/fields'),
+            import('@saad5400/midad/fonts'),
+            import('@saad5400/midad/typography'),
+            import('@saad5400/midad/rendering'),
+            import('@saad5400/midad/paint'),
+        ]);
+        expect(oldFields.nativeFields).toBe(fields.nativeFields);
+        expect(oldFonts.chooseFont).toBe(typography.chooseFont);
+        expect(oldFonts.neededFontFiles).toBe(rendering.neededFontFiles);
+        expect(oldPaint.paintPage).toBe(rendering.paintPage);
+    });
     it('identifies its renderer without an application build definition', () => {
         expect(NATIVE_RENDERER_VERSION).toMatch(/^[a-f0-9]{64}$/);
     });
@@ -29,11 +72,14 @@ describe('standalone package entrypoints', () => {
             await writeFile(join(directory, 'package.json'), '{}');
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             await writeFile(join(directory, 'assets/font.ttf'), 'font-one');
+            await mkdir(join(directory, 'dist'));
+            await writeFile(join(directory, 'dist/removed-module.js'), 'stale implementation');
             const build = async () => {
                 execFileSync(process.execPath, [join(directory, 'build.mjs')]);
-                return readFile(join(directory, 'src/build-version.ts'), 'utf8');
+                return readFile(join(directory, 'src/rendering/build-version.ts'), 'utf8');
             };
             const original = await build();
+            await expect(readFile(join(directory, 'dist/removed-module.js'))).rejects.toThrow();
             expect(await build()).toBe(original);
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 2;');
             expect(await build()).not.toBe(original);
