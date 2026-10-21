@@ -6,6 +6,8 @@ import {
     type NativeMark,
     type NativeNode,
 } from '../document/model.js';
+import { blockText, isTextBlock } from '../document/text.js';
+export { blockText, isTextBlock, nodePath, textBlocks } from '../document/text.js';
 
 export interface InlineEdit {
     readonly blockId: string;
@@ -19,43 +21,10 @@ export interface TextCaret {
     readonly blockId: string;
     readonly offset: number;
 }
-const textBlockKinds = new Set(['paragraph', 'heading', 'clauseTitle', 'codeBlock']);
-
-export function isTextBlock(node: NativeNode): boolean {
-    return textBlockKinds.has(node.kind);
-}
-
-export function nodePath(document: NativeDocument, id: string): readonly NativeNode[] {
-    const visit = (node: NativeNode): NativeNode[] | undefined => {
-        if (node.id === id) return [node];
-        for (const child of node.children ?? []) {
-            const path = visit(child);
-            if (path) return [node, ...path];
-        }
-    };
-    return visit(document.root) ?? [];
-}
-
-export function textBlocks(root: NativeNode): NativeNode[] {
-    if (isTextBlock(root)) return [root];
-    return root.children?.flatMap(textBlocks) ?? [];
-}
-
-export function blockText(node: NativeNode): string {
-    return (node.children ?? [])
-        .map((child) => {
-            if (child.kind === 'text') return child.text ?? '';
-            if (child.kind === 'hardBreak') return '\n';
-            if (child.kind === 'image' || child.kind === 'variable') return '\uFFFC';
-            throw new Error(`Unsupported inline content: ${child.kind}`);
-        })
-        .join('');
-}
-
 export function editableTextBlock(document: NativeDocument, edit: InlineEdit): NativeNode {
     if (document.revision !== edit.expectedRevision) throw new Error('Document revision conflict');
     const block = findNode(document, edit.blockId);
-    if (!block || !textBlockKinds.has(block.kind)) throw new Error('The text block no longer exists');
+    if (!block || !isTextBlock(block)) throw new Error('The text block no longer exists');
     const text = blockText(block);
     const boundaries = new Set([
         text.length,
@@ -154,7 +123,7 @@ export function pasteBlocks(
             },
             nextId(),
         );
-    const inlineBlock = (node: NativeNode): boolean => textBlockKinds.has(node.kind);
+    const inlineBlock = (node: NativeNode): boolean => isTextBlock(node);
     const flatten = (node: NativeNode): string =>
         inlineBlock(node) ? blockText(node) : (node.children ?? []).map(flatten).join('\n');
     if (block.kind === 'codeBlock' || block.kind === 'clauseTitle') {

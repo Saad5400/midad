@@ -26,7 +26,7 @@ describe('standalone package entrypoints', () => {
                     '--input-type=module',
                     '--eval',
                     `
-            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/flow', '@saad5400/midad/document/model'];
+            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/measurement', '@saad5400/midad/document/model'];
             console.log(JSON.stringify(paths.map((path) => {
                 try { return import.meta.resolve(path); } catch (error) { return error.code; }
             })));
@@ -52,6 +52,12 @@ describe('standalone package entrypoints', () => {
         expect(oldFonts.chooseFont).toBe(typography.chooseFont);
         expect(oldFonts.neededFontFiles).toBe(rendering.neededFontFiles);
         expect(oldPaint.paintPage).toBe(rendering.paintPage);
+        const [document, editing] = await Promise.all([
+            import('@saad5400/midad/document'),
+            import('@saad5400/midad/editing'),
+        ]);
+        expect(document.blockText).toBe(editing.blockText);
+        expect(document.textBlocks).toBe(editing.textBlocks);
     });
     it('identifies its renderer without an application build definition', () => {
         expect(NATIVE_RENDERER_VERSION).toMatch(/^[a-f0-9]{64}$/);

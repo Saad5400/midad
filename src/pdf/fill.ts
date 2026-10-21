@@ -9,7 +9,7 @@ import {
     type PDFField,
     type PDFObject,
 } from 'pdf-lib';
-import { fieldDefinition, fieldDisplayValue, IMAGE_FIELD_TYPES, nativeFields } from '../content/fields/commands.js';
+import { fieldDefinition, fieldDisplayValue, IMAGE_FIELD_TYPES, nativeFields } from '../content/fields/queries.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { isRecord } from '../document/model.js';
 import type { DocumentScene } from '../layout/scene.js';

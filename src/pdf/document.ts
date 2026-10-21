@@ -18,7 +18,7 @@ import {
     fieldSettings,
     fieldStyle,
     IMAGE_FIELD_TYPES,
-} from '../content/fields/commands.js';
+} from '../content/fields/queries.js';
 import type { NativeDocument } from '../document/model.js';
 import { assertSceneRevision, type DocumentScene } from '../layout/scene.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';

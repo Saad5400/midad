@@ -1,4 +1,4 @@
-import { fieldDisplayValue, fieldStyle, nativeFields } from '../content/fields/commands.js';
+import { fieldDisplayValue, fieldStyle, nativeFields } from '../content/fields/queries.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { chooseFont, scriptFontFiles } from '../typography/fonts.js';
 import { DEFAULT_TEXT_STYLE, blockTextStyle, nodeTextStyle, type TextStyle } from '../typography/style.js';

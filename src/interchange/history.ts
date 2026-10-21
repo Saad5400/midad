@@ -1,5 +1,5 @@
 import { diffArrays, diffWordsWithSpace } from 'diff';
-import { nativeFields } from '../content/fields/commands.js';
+import { nativeFields } from '../content/fields/queries.js';
 import { nativeImages } from '../content/images.js';
 import { exportDocument } from '../document/codec.js';
 import { isRecord, type Json, type NativeDocument, type NativeNode } from '../document/model.js';

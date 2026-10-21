@@ -1,4 +1,4 @@
-import { fieldDisplayValue, fieldSettings, fieldStyle, IMAGE_FIELD_TYPES } from '../content/fields/commands.js';
+import { fieldDisplayValue, fieldSettings, fieldStyle, IMAGE_FIELD_TYPES } from '../content/fields/queries.js';
 import type { Attributes } from '../document/model.js';
 import { NativeTextKernel, point, type ShapedParagraph } from '../rendering/kernel.js';
 import { DEFAULT_TEXT_STYLE, type TextStyle } from '../typography/style.js';

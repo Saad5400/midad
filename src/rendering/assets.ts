@@ -1,6 +1,6 @@
 import type { CanvasKit, Image } from 'canvaskit-wasm';
-import { IMAGE_FIELD_TYPES, nativeFields } from '../content/fields/commands.js';
-import { documentPresentation } from '../content/presentation.js';
+import { IMAGE_FIELD_TYPES, nativeFields } from '../content/fields/queries.js';
+import { documentPresentation } from '../content/presentation/queries.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { decodeImage, rasterImage } from './raster-image.js';
 

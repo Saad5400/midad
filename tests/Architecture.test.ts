@@ -103,6 +103,67 @@ describe('source architecture', () => {
         expect(failures).toEqual([]);
     });
 
+    it('keeps layout measurers independent of cache and page orchestration', () => {
+        const phases: Record<string, number> = {
+            'layout/scene.ts': 0,
+            'layout/context.ts': 0,
+            'layout/text-reading.ts': 0,
+            'layout/bands.ts': 1,
+            'layout/fields.ts': 1,
+            'layout/finalize.ts': 1,
+            'layout/text.ts': 2,
+            'layout/columns.ts': 2,
+            'layout/tables.ts': 2,
+            'layout/measurement.ts': 3,
+            'layout/pages.ts': 4,
+            'layout/document.ts': 5,
+        };
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            const phase = phases[name(path)];
+            if (phase === undefined) continue;
+            for (const dependency of imports) {
+                if (!dependency.runtime || !dependency.specifier.startsWith('.')) continue;
+                const child = name(target(path, dependency.specifier));
+                if (phases[child] !== undefined && phases[child] > phase) failures.push(`${name(path)} → ${child}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('keeps internal dependencies away from public barrels', () => {
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            if (name(path) === 'index.ts' || name(path).endsWith('/index.ts')) continue;
+            for (const dependency of imports) {
+                if (
+                    dependency.specifier.startsWith('.') &&
+                    name(target(path, dependency.specifier)).endsWith('/index.ts')
+                )
+                    failures.push(`${name(path)} → ${dependency.specifier}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it.each(['rendering/index.ts', 'content/fields/queries.ts', 'content/presentation/queries.ts'])(
+        'keeps %s independent of editing mutations',
+        (entry) => {
+            const visited = new Set<string>();
+            const visit = (path: string): void => {
+                if (visited.has(path)) return;
+                visited.add(path);
+                for (const dependency of graph.get(path) ?? [])
+                    if (dependency.runtime && dependency.specifier.startsWith('.'))
+                        visit(target(path, dependency.specifier));
+            };
+            visit(resolve(root, entry));
+            expect(
+                [...visited].map(name).filter((path) => path.startsWith('editing/') || path.endsWith('/commands.ts')),
+            ).toEqual([]);
+        },
+    );
+
     it('has no circular runtime imports', () => {
         const complete = new Set<string>(),
             active = new Set<string>(),

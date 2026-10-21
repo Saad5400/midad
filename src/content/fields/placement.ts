@@ -1,4 +1,4 @@
-import { type Attributes, type NativeDocument, type NativeNode } from '../../document/model.js';
+import { isRecord, type Attributes, type NativeDocument, type NativeNode } from '../../document/model.js';
 import {
     allocator,
     blockText,
@@ -10,14 +10,8 @@ import {
 } from '../../editing/text.js';
 import type { DocumentScene } from '../../layout/scene.js';
 import { anchorForPlacement, floatingAnchorIndex, followsText } from '../floating-anchors.js';
-import {
-    createNativeFieldAttributes,
-    fieldSettings,
-    isRecord,
-    nativeFields,
-    removeNativeField,
-    type FieldDraft,
-} from './commands.js';
+import { createNativeFieldAttributes, removeNativeField, type FieldDraft } from './commands.js';
+import { fieldSettings, nativeFields } from './queries.js';
 
 export interface FieldBounds {
     readonly x: number;
