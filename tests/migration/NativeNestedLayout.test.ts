@@ -627,10 +627,24 @@ describe('native nested rich content layout', () => {
                     expect(index).toBeLessThan(firstGlyph);
         }
     });
-    it.each([-0.02, 0, 0.02])(
-        'paginates the final text line at a tightly filled page boundary (%s pt)',
-        async (extra) => {
-            const content = Array.from({ length: 20 }, (_, index) => paragraph(`tight-${index}`, 'Full page العربية'));
+    it.each(['plain', 'columns'].flatMap((context) => [-0.02, 0, 0.02].map((extra) => ({ context, extra }))))(
+        'paginates the final text line at a tightly filled page boundary ($context, $extra pt)',
+        async ({ context, extra }) => {
+            const paragraphs = Array.from({ length: 28 }, (_, index) =>
+                paragraph(`tight-${index}`, 'Full page العربية'),
+            );
+            const content =
+                context === 'columns'
+                    ? [
+                          columns(
+                              'tight-columns',
+                              paragraphs,
+                              Array.from({ length: 28 }, (_, index) =>
+                                  paragraph(`tight-peer-${index}`, 'Full page العربية'),
+                              ),
+                          ),
+                      ]
+                    : paragraphs;
             const probe = await scene(content);
             const bottom = Math.max(...probe.pages[0].lines.map((line) => line.top + line.height));
             const fixture: Json = {
@@ -649,12 +663,30 @@ describe('native nested rich content layout', () => {
                 content,
             };
             const doc = importDocument(fixture, 'tight-boundary');
+            const margins = (fixture as { attrs: { pageLayout: { margins: { bottom: number } } } }).attrs.pageLayout
+                .margins;
+            expect(margins.bottom).toBeGreaterThanOrEqual(38);
+            expect(margins.bottom).toBeLessThanOrEqual(200);
             await kernel.prepare(doc);
             const result = layoutDocument(doc, kernel);
+            expect(probe.pages).toHaveLength(1);
             expect(result.pages.length).toBe(extra < 0 ? 2 : 1);
-            expect(result.pages.flatMap((page) => page.lines)).toHaveLength(20);
+            expect(result.pages.flatMap((page) => page.lines)).toHaveLength(context === 'columns' ? 56 : 28);
             expect(result.pages.at(-1)!.lines.length).toBeGreaterThan(0);
-            await verifyScenePdf(doc, result, kernel, `tight-${extra}`);
+            await verifyScenePdf(doc, result, kernel, `tight-${context}-${extra}`);
+            if (extra === 0) {
+                const intentionalBlank = importDocument(
+                    {
+                        ...(fixture as object),
+                        content: [...content, { type: 'paragraph', attrs: { id: 'intentional-empty' } }],
+                    },
+                    'intentional-empty',
+                );
+                await kernel.prepare(intentionalBlank);
+                const withBlank = layoutDocument(intentionalBlank, kernel);
+                expect(withBlank.pages).toHaveLength(2);
+                expect(withBlank.pages.at(-1)!.lines.at(-1)!.paragraphId).toBe('intentional-empty');
+            }
         },
     );
 });
