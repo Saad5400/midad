@@ -8,6 +8,7 @@ export interface Band {
     cells?: SceneCell[];
     columns?: SceneColumn[];
     keepNext?: boolean;
+    writable?: boolean;
     minimumHeight?: number;
     split?: (available: number) => BandParts | undefined;
 }
@@ -122,7 +123,14 @@ export function requiredHeight(bands: readonly Band[], start: number, fullHeight
 }
 
 export function isSpacing(band: Band): boolean {
-    return !band.split && !band.commands.length && !band.lines.length && !band.cells?.length && !band.columns?.length;
+    return (
+        !band.writable &&
+        !band.split &&
+        !band.commands.length &&
+        !band.lines.length &&
+        !band.cells?.length &&
+        !band.columns?.length
+    );
 }
 
 export function takeBands(

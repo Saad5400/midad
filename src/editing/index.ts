@@ -5,3 +5,4 @@ export * from './selection.js';
 export * from './table-grid.js';
 export * from './tables.js';
 export * from './text.js';
+export * from './writing-position.js';

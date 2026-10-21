@@ -637,6 +637,15 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: Context): Ba
 }
 
 function blocks(nodes: readonly NativeNode[], width: number, parent: Context): Band[] {
+    if (!nodes.length)
+        return glyphBands({ id: 'empty-writing-position', kind: 'paragraph', children: [] }, width, parent).map(
+            (band) => ({
+                ...band,
+                commands: [],
+                lines: [],
+                writable: band.lines.length > 0,
+            }),
+        );
     let state = measurements.get(parent.kernel);
     if (!state) {
         state = { nodes: new WeakMap(), active: new Set() };

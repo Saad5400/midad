@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { importDocument, type Json } from '@saad5400/midad/document';
+import { exportDocument } from '@saad5400/midad/document';
+import { emptyWritingPosition } from '@saad5400/midad/browser';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { layoutDocument } from '@saad5400/midad/layout';
 import { NativeNavigation } from '@saad5400/midad/browser';
@@ -48,6 +50,62 @@ describe('native nested rich content layout', () => {
         );
     });
     afterAll(() => kernel.destroy());
+    it('reserves the same writable space for a missing table paragraph as an explicit empty paragraph', async () => {
+        const content = {
+            type: 'doc',
+            content: [
+                {
+                    type: 'parallelRow',
+                    content: [
+                        {
+                            type: 'parallelCell',
+                            attrs: { id: 'ar', lang: 'ar' },
+                            content: [
+                                {
+                                    type: 'table',
+                                    content: [
+                                        {
+                                            type: 'tableRow',
+                                            content: [{ type: 'tableCell', attrs: { id: 'empty-cell' }, content: [] }],
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            type: 'parallelCell',
+                            attrs: { id: 'en', lang: 'en' },
+                            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Keep this column' }] }],
+                        },
+                    ],
+                },
+            ],
+        };
+        const document = importDocument(content, 'empty-nested');
+        await kernel.prepare(document);
+        const scene = layoutDocument(document, kernel);
+        const cell = scene.pages[0].cells!.find((cell) => cell.cellId === 'empty-cell')!;
+        expect(cell.height).toBeGreaterThan(25);
+        const position = emptyWritingPosition(document, scene, 0, {
+            x: cell.x + cell.width / 2,
+            y: cell.y + cell.height / 2,
+        });
+        expect(position?.target.containerId).toBe('empty-cell');
+        expect(position!.x).toBeGreaterThan(cell.x);
+        expect(position!.x).toBeLessThan(cell.x + cell.width);
+        expect(position!.y + position!.height).toBeLessThanOrEqual(cell.y + cell.height);
+        expect(exportDocument(document)).toEqual(content);
+        const explicit = JSON.parse(JSON.stringify(content));
+        explicit.content[0].content[0].content[0].content[0].content[0].content.push({
+            type: 'paragraph',
+            content: [],
+        });
+        const visible = importDocument(explicit, 'empty-nested');
+        await kernel.prepare(visible);
+        const rendered = layoutDocument(visible, kernel);
+        expect(rendered.pages[0].cells!.find((cell) => cell.cellId === 'empty-cell')).toEqual(cell);
+        expect(rendered.pages.length).toBe(scene.pages.length);
+    });
     it('preserves closed nested table cells after repeated stretching by outer tables and language columns', async () => {
         const doc = importDocument(makeNestedRichFixture(), 'nested-layout');
         await kernel.prepare(doc);

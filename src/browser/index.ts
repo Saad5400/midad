@@ -7,3 +7,4 @@ export * from './page-pointer.js';
 export * from './page-view.js';
 export * from './viewport-readiness.js';
 export * from './viewport.js';
+export * from './writing-position.js';
