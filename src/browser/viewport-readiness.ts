@@ -12,7 +12,7 @@ export class ViewportReadiness {
         private readonly options: {
             revision: () => number | undefined;
             canCommit?: () => boolean;
-            committed: () => void;
+            committed: (page: number) => void;
         },
     ) {
         this.ready = new Promise((resolve, reject) => {
@@ -25,14 +25,15 @@ export class ViewportReadiness {
     update(page: number, state: PageViewState): void {
         if (this.settled) return;
         this.pages.set(page, state);
-        if (this.frame !== undefined || !this.hasPaintedViewport()) return;
+        if (this.frame !== undefined || this.paintedViewport() === undefined) return;
         this.frame = requestAnimationFrame(() => {
             this.frame = undefined;
-            if (this.settled || !this.hasPaintedViewport() || this.options.canCommit?.() === false) return;
+            const page = this.paintedViewport();
+            if (this.settled || page === undefined || this.options.canCommit?.() === false) return;
             this.settled = true;
             this.pages.clear();
             try {
-                this.options.committed();
+                this.options.committed(page);
                 this.resolve();
             } catch (error) {
                 this.reject(error);
@@ -53,13 +54,12 @@ export class ViewportReadiness {
         this.fail(new Error('The editor closed before its viewport was painted'));
     }
 
-    private hasPaintedViewport(): boolean {
+    private paintedViewport(): number | undefined {
         const revision = this.options.revision();
-        return (
-            revision !== undefined &&
-            [...this.pages.values()].some(
-                (state) => state.near && state.visible && !state.failed && state.paintedRevision === revision,
-            )
-        );
+        if (revision === undefined) return;
+        const candidates = [...this.pages.entries()]
+            .filter(([, state]) => state.near && state.visible && !state.failed && state.paintedRevision === revision)
+            .map(([page]) => page);
+        return candidates.length ? Math.min(...candidates) : undefined;
     }
 }

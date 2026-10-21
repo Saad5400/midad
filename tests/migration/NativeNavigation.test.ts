@@ -1,6 +1,7 @@
 import { importDocument } from '@saad5400/midad/document';
 import type { ShapedParagraph } from '@saad5400/midad/kernel';
 import type { DocumentScene, SceneLine } from '@saad5400/midad/layout';
+import { SelectionController } from '@saad5400/midad/interaction';
 import { NativeNavigation, wordBoundary } from '@saad5400/midad/navigation';
 import type { CanvasKit } from 'canvaskit-wasm';
 import { describe, expect, it } from 'vitest';
@@ -99,6 +100,73 @@ function navigation(shape: ShapedParagraph): NativeNavigation {
 }
 
 describe('native text navigation', () => {
+    it('keeps document-boundary navigation inside rendered content when other language blocks are hidden', () => {
+        const base = navigation(shaped('abc'));
+        const doc = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        attrs: { id: 'hidden-before' },
+                        content: [{ type: 'text', text: 'Hidden before' }],
+                    },
+                    { type: 'paragraph', attrs: { id: 'p' }, content: [{ type: 'text', text: 'abc' }] },
+                    {
+                        type: 'paragraph',
+                        attrs: { id: 'hidden-after' },
+                        content: [{ type: 'text', text: 'Hidden after' }],
+                    },
+                ],
+            },
+            'navigation',
+        );
+        const nav = new NativeNavigation(doc, base.scene, ck),
+            controller = new SelectionController();
+        const selected = { anchor: { blockId: 'p', offset: 1 }, focus: { blockId: 'p', offset: 1 } };
+        const event = { key: 'End', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+        expect(controller.navigate(event, nav, selected)?.selection?.focus).toMatchObject({ blockId: 'p', offset: 3 });
+        expect(controller.navigate({ ...event, key: 'Home' }, nav, selected)?.selection?.focus).toMatchObject({
+            blockId: 'p',
+            offset: 0,
+        });
+    });
+    it('extends keyboard selection without splitting an emoji and retains its anchor', () => {
+        const nav = navigation(shaped('A👨‍👩‍👧B')),
+            controller = new SelectionController();
+        const selected = { anchor: { blockId: 'p', offset: 1 }, focus: { blockId: 'p', offset: 1 } };
+        const moved = controller.navigate(
+            { key: 'ArrowRight', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true },
+            nav,
+            selected,
+        )!;
+        expect(moved.selection?.anchor).toEqual(selected.anchor);
+        expect(moved.selection?.focus.offset).toBe(9);
+    });
+    it('keeps the preferred physical column during repeated vertical movement', () => {
+        const nav = navigation(shaped('abcdefghijk', 'ltr', 3)),
+            controller = new SelectionController();
+        const event = { key: 'ArrowDown', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false };
+        let selected = { anchor: { blockId: 'p', offset: 1 }, focus: { blockId: 'p', offset: 1 } };
+        selected = controller.navigate(event, nav, selected)!.selection!;
+        expect(selected.focus.offset).toBe(4);
+        const column = controller.column;
+        selected = controller.navigate(event, nav, selected)!.selection!;
+        expect(selected.focus.offset).toBe(7);
+        expect(controller.column).toBe(column);
+    });
+    it('distinguishes macOS word movement and browser Alt-arrow shortcuts during composition', () => {
+        const nav = navigation(shaped('Hello world')),
+            controller = new SelectionController();
+        const event = { key: 'ArrowRight', ctrlKey: false, metaKey: false, altKey: true, shiftKey: false };
+        const selected = { anchor: { blockId: 'p', offset: 0 }, focus: { blockId: 'p', offset: 0 } };
+        expect(controller.navigate(event, nav, selected, { platform: 'Win32' })).toBeUndefined();
+        expect(
+            controller.navigate({ ...event, isComposing: true }, nav, selected, { platform: 'MacIntel' }),
+        ).toBeUndefined();
+        expect(controller.navigate(event, nav, selected, { platform: 'MacIntel' })?.selection?.focus.offset).toBe(5);
+    });
+
     it('moves through LTR and RTL text in the physical arrow direction', () => {
         const latin = navigation(shaped('abc'));
         expect(latin.horizontal({ blockId: 'p', offset: 0 }, 1, 'downstream').offset).toBe(1);

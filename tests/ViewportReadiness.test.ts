@@ -37,6 +37,7 @@ describe('first visible viewport readiness', () => {
         tick();
         await view.ready;
         expect(committed).toHaveBeenCalledTimes(1);
+        expect(committed).toHaveBeenCalledWith(7);
         view.update(8, state(2));
         tick();
         expect(committed).toHaveBeenCalledTimes(1);

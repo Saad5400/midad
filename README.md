@@ -56,6 +56,8 @@ view.update({ kernel, page: scene.pages[0], revision: scene.revision, scale: 1 }
 view.dispose();
 ```
 
+`SelectionController` in `@saad5400/midad/interaction` owns keyboard movement, preferred columns, bidirectional table-cell arrows and repeated scoped Select All. `initialTextCaret` uses rendered page lines, including source offsets in continued paragraphs, without changing the document or taking focus. Keyboard actions marked as composing should be left to the input method.
+
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
 ## Independence

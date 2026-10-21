@@ -248,6 +248,13 @@ export class NativeNavigation {
             : { ...target, affinity };
     }
 
+    boundary(end: boolean): NavigationCaret | undefined {
+        const block = end ? this.blocks.at(-1) : this.blocks[0];
+        return block
+            ? { blockId: block.id, offset: end ? blockText(block).length : 0, affinity: 'downstream' }
+            : undefined;
+    }
+
     paragraph(target: TextCaret, direction: -1 | 1): NavigationCaret {
         const blocks = this.blocks,
             index = blocks.findIndex((block) => block.id === target.blockId);
