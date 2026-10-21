@@ -1,4 +1,10 @@
-import CanvasKitInit, { type CanvasKit, type Paragraph, type Surface, type Typeface } from 'canvaskit-wasm';
+import CanvasKitInit, {
+    type CanvasKit,
+    type FontCollection,
+    type Paragraph,
+    type Surface,
+    type Typeface,
+} from 'canvaskit-wasm';
 import type { NativeDocument } from '../document/model.js';
 import { chooseFont, fontUrl, scriptFontFiles } from '../typography/fonts.js';
 import { DEFAULT_TEXT_STYLE, type TextSpan, type TextStyle } from '../typography/style.js';
@@ -74,6 +80,7 @@ async function hash(bytes: Uint8Array): Promise<string> {
 }
 
 export class NativeTextKernel {
+    private collection?: FontCollection;
     private cache = new Map<string, ShapedParagraph>();
     private assets = new Map<string, NativeFontAsset>();
     private preparing: Promise<void> = Promise.resolve();
@@ -191,7 +198,26 @@ export class NativeTextKernel {
                 );
             }),
         );
+        if (missing.length) {
+            this.collection?.delete();
+            this.collection = undefined;
+        }
         this.fontHash = await this.fingerprintFonts(files);
+    }
+
+    private shapingFonts(): FontCollection {
+        if (!this.collection) {
+            const collection = this.ck.FontCollection.Make();
+            try {
+                collection.setDefaultFontManager(this.provider);
+                collection.enableFontFallback();
+                this.collection = collection;
+            } catch (failure) {
+                collection.delete();
+                throw failure;
+            }
+        }
+        return this.collection;
     }
 
     async fontFingerprint(document: NativeDocument): Promise<string> {
@@ -249,7 +275,7 @@ export class NativeTextKernel {
                       : direction === 'rtl'
                         ? ck.TextAlign.Right
                         : ck.TextAlign.Left;
-        const builder = ck.ParagraphBuilder.MakeFromFontProvider(
+        const builder = ck.ParagraphBuilder.MakeFromFontCollection(
             new ck.ParagraphStyle({
                 disableHinting: true,
                 applyRoundingHack: false,
@@ -264,7 +290,7 @@ export class NativeTextKernel {
                 textAlign: align,
                 ...(heightMultiplier ? { heightMultiplier } : {}),
             }),
-            this.provider,
+            this.shapingFonts(),
         );
         let text = '';
         let bytes = 0;
@@ -529,6 +555,8 @@ export class NativeTextKernel {
             .catch(() => undefined)
             .then(() => {
                 this.clearUnused(new Set());
+                this.collection?.delete();
+                this.collection = undefined;
                 for (const asset of this.assets.values()) asset.typeface.delete();
                 this.assets.clear();
                 this.images.destroy();
