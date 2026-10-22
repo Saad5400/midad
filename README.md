@@ -75,6 +75,12 @@ view.dispose();
 
 `DocumentCommandController` in `/browser/commands` tracks slash triggers and deferred actions using host-provided document, selection and permission getters. Its bookmarks snapshot selections, marks and structural anchors; validation accepts unchanged targets after save acknowledgements and rejects changed queries or missing targets. Ending, replacing or resetting a deferred action aborts its `pending.signal`. Hosts commit confirmed content through `runDocumentCommand` in `/editing`; opening or cancelling a picker leaves the document unchanged.
 
+`FragmentContentController` in `/interchange/fragment` adapts embedded rich content while preserving document objects, body arrays, JSON string envelopes, field identities and attachment references. Fragment view settings stay out of stored content. Hosts pass authoritative external changes to `accept`; a matching local acknowledgement keeps the current editing session and undo history. `fragmentIsEmpty` recognizes structural content as well as text. `fragmentPageHeight` in `/browser/view` sizes embedded page viewports from body geometry.
+
+`insertCapabilities` in `/content/capabilities` describes insertion controls independently for fields, images, tables, clauses and language columns. Hosts can offer rich tables in an explanation editor while keeping document-specific insertion controls elsewhere.
+
+`TypingHistory` in `/browser/input` supplies capture tokens for adjacent input events. Pass the token to `DocumentSession.commit`; its boolean return indicates a new undo step. Continuous typing or deletion shares an undo step within 500 ms. Reset the input controller and call `session.stopCapturing()` on pointer actions, navigation, focus changes or other boundaries. Composition, paste and selection replacement remain separate operations.
+
 `composeCommandMenu` merges the built-in `documentCommandMenu` preset with application-provided groups and actions. It preserves callbacks and group order, applies group/item exclusions and availability rules, and rejects duplicate IDs within a group. Application-specific commands and network requests stay in host adapters; both controllers remain independent of a UI framework.
 
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.

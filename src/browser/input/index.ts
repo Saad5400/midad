@@ -4,3 +4,4 @@ export * from './interaction.js';
 export * from './navigation.js';
 export * from './page-pointer.js';
 export * from './writing-position.js';
+export * from './typing-history.js';

@@ -45,6 +45,7 @@ export function replaceText(document: NativeDocument, replacement: TextReplaceme
 export class DocumentSession {
     private past: NativeNode[] = [];
     private future: NativeNode[] = [];
+    private capture?: { token: object; at: number };
 
     constructor(public document: NativeDocument) {}
 
@@ -55,13 +56,19 @@ export class DocumentSession {
         return this.future.length > 0;
     }
 
+    stopCapturing(): void {
+        this.capture = undefined;
+    }
+
     reset(document: NativeDocument): void {
+        this.stopCapturing();
         this.document = Object.freeze({ ...document, revision: this.document.revision + 1 });
         this.past = [];
         this.future = [];
     }
 
     rebase(transform: (document: NativeDocument) => NativeDocument): { past: number[]; future: number[] } {
+        this.stopCapturing();
         const mapped = new Map<NativeNode, NativeNode>();
         const rootOf = (root: NativeNode): NativeNode => {
             if (mapped.has(root)) return mapped.get(root)!;
@@ -97,16 +104,26 @@ export class DocumentSession {
         this.commit(replaceText(this.document, replacement));
     }
 
-    commit(next: NativeDocument): void {
-        if (next === this.document) return;
+    commit(next: NativeDocument, token?: object): boolean {
+        if (next === this.document) return false;
         if (next.id !== this.document.id || next.revision !== this.document.revision + 1)
             throw new Error('Document revision conflict');
-        this.past.push(this.document.root);
+        const now = Date.now();
+        const merge =
+            !!token &&
+            this.capture?.token === token &&
+            now - this.capture.at >= 0 &&
+            now - this.capture.at <= 500 &&
+            !this.future.length;
+        if (!merge) this.past.push(this.document.root);
+        this.capture = token ? { token, at: now } : undefined;
         this.future = [];
         this.document = next;
+        return !merge;
     }
 
     undo(validate?: (document: NativeDocument) => void): boolean {
+        this.stopCapturing();
         const target = this.past.at(-1);
         if (target) validate?.({ ...this.document, root: target });
         const root = this.past.pop();
@@ -117,6 +134,7 @@ export class DocumentSession {
     }
 
     redo(validate?: (document: NativeDocument) => void): boolean {
+        this.stopCapturing();
         const target = this.future.at(-1);
         if (target) validate?.({ ...this.document, root: target });
         const root = this.future.pop();
