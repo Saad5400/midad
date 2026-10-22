@@ -110,6 +110,8 @@ describe('source architecture', () => {
             'layout/text-reading.ts': 0,
             'layout/bands.ts': 1,
             'layout/fields.ts': 1,
+            'layout/object-regions.ts': 1,
+            'layout/pdf-overlays.ts': 3,
             'layout/finalize.ts': 1,
             'layout/text.ts': 2,
             'layout/columns.ts': 2,
@@ -213,6 +215,9 @@ describe('source architecture', () => {
         'content/fields/queries.ts',
         'content/presentation/queries.ts',
         'content/clauses/queries.ts',
+        'content/fields/geometry.ts',
+        'layout/pdf-overlays.ts',
+        'layout/object-regions.ts',
         'collaboration/shared/reader.ts',
     ])('keeps %s independent of editing mutations', (entry) => {
         const visited = new Set<string>();

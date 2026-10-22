@@ -10,6 +10,7 @@ export interface PageCanvasTarget {
     readonly revision: number;
     readonly scale: number;
     readonly pixelRatio?: number;
+    readonly transparent?: boolean;
 }
 
 export class PageCanvasController {
@@ -35,9 +36,10 @@ export class PageCanvasController {
             const pixelScale = Math.min(
                 Math.min(ratio, 2) * target.scale,
                 Math.sqrt(12_000_000 / (target.page.width * target.page.height)),
+                8192 / Math.max(target.page.width, target.page.height),
             );
-            const width = Math.ceil(target.page.width * pixelScale),
-                height = Math.ceil(target.page.height * pixelScale);
+            const width = Math.min(8192, Math.ceil(target.page.width * pixelScale)),
+                height = Math.min(8192, Math.ceil(target.page.height * pixelScale));
             if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0)
                 throw new Error('Invalid canvas dimensions');
             if (
@@ -54,7 +56,7 @@ export class PageCanvasController {
                 target.canvas.height = height;
                 this.surface = target.kernel.surface(target.canvas);
             }
-            paintPage(target.kernel, this.surface, target.page, pixelScale);
+            paintPage(target.kernel, this.surface, target.page, pixelScale, target.transparent);
             this.revision = target.revision;
         } catch (error) {
             this.dispose();

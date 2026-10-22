@@ -1,5 +1,5 @@
 import { clauseNumbers } from '../content/clauses/numbering.js';
-import { floatingFieldPlacement } from '../content/fields/placement.js';
+import { floatingFieldPlacement } from '../content/fields/geometry.js';
 import { floatingAnchorIndex, resolveFloatingAnchor } from '../content/floating-anchors.js';
 import { documentPageLayout, pageSize } from '../content/page-layout.js';
 import { documentPresentation, headerTile } from '../content/presentation/queries.js';

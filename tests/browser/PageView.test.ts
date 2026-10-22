@@ -46,6 +46,13 @@ describe('standalone canvas lifecycle', () => {
         expect(dispose).toHaveBeenCalledTimes(3);
         view.dispose();
     });
+    it('can paint transparent overlays without replacing the original page background', () => {
+        const { target } = fixture();
+        const view = new PageCanvasController();
+        view.paint({ ...target, transparent: true });
+        expect(paint).toHaveBeenLastCalledWith(target.kernel, expect.anything(), target.page, expect.any(Number), true);
+        view.dispose();
+    });
     it('clears failed pixels, preserves the painting failure and recovers even when disposal throws', () => {
         const { target, dispose } = fixture();
         const view = new PageCanvasController();
@@ -63,6 +70,15 @@ describe('standalone canvas lifecycle', () => {
         view.paint({ ...target, revision: 3 });
         expect(view.paintedRevision).toBe(3);
         view.dispose();
+        view.dispose();
+    });
+    it('bounds extremely wide or tall source pages without losing their logical geometry', () => {
+        const { target } = fixture();
+        const view = new PageCanvasController();
+        for (const page of [{ ...target.page, width: 100000, height: 100 }, { ...target.page, width: 100, height: 100000 }]) {
+            view.paint({ ...target, page });
+            expect(Math.max(target.canvas.width, target.canvas.height)).toBeLessThanOrEqual(8192);
+        }
         view.dispose();
     });
     it('bounds backing storage and rejects invalid geometry without leaving stale pixels', () => {

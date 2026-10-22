@@ -69,6 +69,10 @@ view.update({ kernel, page: scene.pages[0], revision: scene.revision, scale: 1 }
 view.dispose();
 ```
 
+`layoutPdfOverlays` in `/layout/pdf-overlays` projects document fields and floating images onto externally rendered PDF page boxes. It preserves each source page's size and uses the shared field shaper and painter for values. Normalized positions use their own page dimensions; older absolute pixel positions account for varying page heights and page gaps. Original PDF bytes stay with the host's PDF reader. `objectRegions` in `/layout` supplies the same nested clipping geometry to editable targets and read-only field labels.
+
+`PageCanvasController` accepts `transparent: true` for overlay canvases. Its backing storage is bounded by both pixel area and an 8192-pixel maximum side while retaining logical page coordinates. Field geometry queries live separately from mutation commands, so PDF overlays do not load editing code.
+
 `SelectionController` in `@saad5400/midad/browser/input` owns keyboard movement, preferred columns, bidirectional table-cell arrows and repeated scoped Select All. `initialTextCaret` uses rendered page lines, including source offsets in continued paragraphs, without changing the document or taking focus. Keyboard actions marked as composing should be left to the input method.
 
 `writeAtPosition` in `/editing` creates a missing paragraph and applies the first content operation as one undoable revision. No-op and cancelled operations leave the original document untouched. `emptyWritingPosition` in `/browser` locates an empty cell, language column or page without changing stored content; it supplies geometry for a visible caret. Empty container layout reserves the same line space as an explicit empty paragraph.

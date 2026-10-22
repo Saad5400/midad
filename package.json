@@ -1,6 +1,6 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "type": "module",
     "sideEffects": false,
     "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",
@@ -356,6 +356,10 @@
         "./interchange/fragment": {
             "types": "./dist/interchange/fragment.d.ts",
             "import": "./dist/interchange/fragment.js"
+        },
+        "./layout/pdf-overlays": {
+            "types": "./dist/layout/pdf-overlays.d.ts",
+            "import": "./dist/layout/pdf-overlays.js"
         }
     },
     "scripts": {
