@@ -26,7 +26,7 @@ describe('standalone package entrypoints', () => {
                     '--input-type=module',
                     '--eval',
                     `
-            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/measurement', '@saad5400/midad/document/model', '@saad5400/midad/collaboration/shared/store', '@saad5400/midad/interchange/clipboard/html-reader'];
+            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/measurement', '@saad5400/midad/document/model', '@saad5400/midad/collaboration/shared/store', '@saad5400/midad/interchange/clipboard/html-reader', '@saad5400/midad/rendering/text/fonts', '@saad5400/midad/collaboration/sync/presence'];
             console.log(JSON.stringify(paths.map((path) => {
                 try { return import.meta.resolve(path); } catch (error) { return error.code; }
             })));
@@ -36,7 +36,7 @@ describe('standalone package entrypoints', () => {
             ),
         );
         expect(resolution[0]).toContain('/dist/document/index.js');
-        expect(resolution.slice(1)).toEqual(Array(4).fill('ERR_PACKAGE_PATH_NOT_EXPORTED'));
+        expect(resolution.slice(1)).toEqual(Array(6).fill('ERR_PACKAGE_PATH_NOT_EXPORTED'));
     });
 
     it('preserves existing integration entrypoints through the same implementations', async () => {

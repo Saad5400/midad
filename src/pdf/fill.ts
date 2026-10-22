@@ -13,7 +13,8 @@ import { fieldDefinition, fieldDisplayValue, IMAGE_FIELD_TYPES, nativeFields } f
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { isRecord } from '../document/model.js';
 import type { DocumentScene } from '../layout/scene.js';
-import type { NativeTextKernel, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 import { NATIVE_RENDERER_VERSION } from '../rendering/version.js';
 import { writeScenePdf } from './document.js';
 import { fieldAppearancePage } from './field-appearance.js';

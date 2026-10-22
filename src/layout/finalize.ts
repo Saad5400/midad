@@ -1,4 +1,4 @@
-import { point } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import type { PaintCommand, RectCommand, SceneCell, SceneColumn, ScenePage } from './scene.js';
 
 export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {

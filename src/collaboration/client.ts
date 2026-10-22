@@ -1,85 +1,14 @@
 import { exportDocument } from '../document/codec.js';
 import type { NativeDocument } from '../document/model.js';
 import type { NativeSelection } from '../editing/selection.js';
-import { blockText, textBlocks } from '../editing/text.js';
-import { SharedNativeDocument, type SharedCaret } from './document.js';
+import { SharedNativeDocument } from './document.js';
 import { canonicalSharedJson, decodeSharedBytes, encodeSharedBytes } from './values.js';
+import type { SyncReply, SyncState, SyncEditor, SyncTransport } from './sync/contracts.js';
+import { SyncPresence } from './sync/presence.js';
+import { SyncDeadline, SyncTransportFailure, withinDeadline, transfer } from './sync/requests.js';
+import { captureSelection, resolveSelection, clampSelection } from './sync/selection.js';
 
-export interface SyncReply {
-    epoch: string;
-    number: number;
-    state?: string;
-    update?: string;
-    vector?: string;
-    changed: boolean;
-    persisted?: boolean;
-    writable?: boolean;
-    peers?: readonly PresencePeer[];
-}
-export interface PresencePeer {
-    client_id: string;
-    user: string;
-    name: string;
-    color: string;
-    writable: boolean;
-    anchor: { block: string; position: string } | null;
-    focus: { block: string; position: string } | null;
-}
-export interface NativePeer {
-    id: string;
-    user: string;
-    name: string;
-    color: string;
-    writable: boolean;
-    selection: NativeSelection | null;
-}
-export interface SyncState {
-    status: 'loading' | 'saved' | 'pending' | 'saving' | 'offline' | 'error' | 'conflict' | 'forbidden';
-    dirty: boolean;
-    version: number;
-    canUndo: boolean;
-    canRedo: boolean;
-    reason?: string;
-    peers: readonly NativePeer[];
-}
-export interface SyncEditor {
-    failure?: (error: unknown) => void;
-    initial(document: NativeDocument): Promise<NativeDocument | void>;
-    prepare(document: NativeDocument): Promise<NativeDocument>;
-    preview(document: NativeDocument): Promise<void>;
-    lock(): NativeSelection | null | false;
-    apply(document: NativeDocument, selection: NativeSelection | null): Promise<void>;
-    unlock(): void;
-    undoLocal(): Promise<void>;
-    selection?: () => NativeSelection | null;
-}
-export interface SyncTransport {
-    read(input: { vector?: string; since_number?: number; epoch?: string }, budget?: number): Promise<SyncReply>;
-    write(
-        input: {
-            epoch: string;
-            update: string;
-            vector: string;
-            base_number: number;
-            request_id: string;
-            restored_from_number?: number;
-        },
-        budget?: number,
-    ): Promise<SyncReply>;
-    presence?: (input: {
-        client_id: string;
-        anchor: PresencePeer['anchor'];
-        focus: PresencePeer['focus'];
-    }) => Promise<{ peers: readonly PresencePeer[]; self?: string }>;
-    leave?: (clientId: string) => Promise<void>;
-}
-class SyncTransportFailure extends Error {
-    constructor(readonly original: unknown) {
-        super('The collaboration request failed');
-    }
-}
-
-class SyncDeadline extends Error {}
+export type { SyncReply, PresencePeer, NativePeer, SyncState, SyncEditor, SyncTransport } from './sync/contracts.js';
 
 export class NativeSyncClient {
     private shared?: SharedNativeDocument;
@@ -98,12 +27,7 @@ export class NativeSyncClient {
     private status: SyncState['status'] = 'loading';
     private reason?: string;
     private invalidLocal = false;
-    private readonly clientId = crypto.randomUUID();
-    private peerCache: readonly PresencePeer[] = [];
-    private ownUser?: string;
-    private presenceTimer?: ReturnType<typeof setTimeout>;
-    private lastPresence = '';
-    private lastPresenceAt = 0;
+    private readonly presence: SyncPresence;
     private outbound?: { input: Parameters<SyncTransport['write']>[0]; sent: number };
     private inbound?: { reply: SyncReply; sent: number; dirty: boolean };
 
@@ -114,7 +38,18 @@ export class NativeSyncClient {
         private readonly editor: SyncEditor,
         private readonly changed: (state: SyncState) => void,
         private readonly interval = 800,
-    ) {}
+    ) {
+        this.presence = new SyncPresence(transport, writable, {
+            shared: () => this.shared,
+            selection: () => (this.state().dirty ? null : (editor.selection?.() ?? null)),
+            allowed: () => this.status !== 'forbidden',
+            changed: () => this.publish(),
+            accessChanged: () => {
+                this.status = 'forbidden';
+                this.reason = 'access_changed';
+            },
+        });
+    }
 
     state(): SyncState {
         return {
@@ -124,36 +59,7 @@ export class NativeSyncClient {
             canUndo: this.writable && (!!this.pending || !!this.shared?.canUndo),
             canRedo: this.writable && !!this.shared?.canRedo,
             reason: this.reason,
-            peers: this.peerCache
-                .filter((peer) => peer.client_id !== this.clientId || (!!this.ownUser && peer.user !== this.ownUser))
-                .map((peer) => {
-                    let selection: NativeSelection | null = null;
-                    try {
-                        const anchor =
-                            peer.anchor &&
-                            this.shared?.resolve({
-                                block: peer.anchor.block,
-                                position: decodeSharedBytes(peer.anchor.position, 6144),
-                            });
-                        const focus =
-                            peer.focus &&
-                            this.shared?.resolve({
-                                block: peer.focus.block,
-                                position: decodeSharedBytes(peer.focus.position, 6144),
-                            });
-                        if (anchor && focus) selection = { anchor, focus };
-                    } catch {
-                        selection = null;
-                    }
-                    return {
-                        id: `${peer.user}:${peer.client_id}`,
-                        user: peer.user,
-                        name: peer.name,
-                        color: /^#[a-f0-9]{6}$/i.test(peer.color) ? peer.color : '#7c3aed',
-                        writable: peer.writable,
-                        selection,
-                    };
-                }),
+            peers: this.presence.peers(this.shared),
         };
     }
     async start(): Promise<void> {
@@ -171,7 +77,7 @@ export class NativeSyncClient {
         this.number = reply.number;
         this.base = reply.number;
         this.acknowledgedVector = decodeSharedBytes(reply.vector);
-        this.peerCache = reply.peers ?? [];
+        this.presence.replace(reply.peers ?? []);
         const received = this.shared.document();
         const initial = await this.editor.initial(received);
         if (reply.writable !== undefined && reply.writable !== this.writable) {
@@ -201,7 +107,7 @@ export class NativeSyncClient {
             clearTimeout(this.delay);
             this.delay = setTimeout(() => void this.flush(), 0);
         }
-        void this.presence();
+        this.presence.start();
     }
     queue(document: NativeDocument, restoredFrom?: number): void {
         if (this.closed || !this.writable || this.status === 'conflict' || this.status === 'forbidden') return;
@@ -251,13 +157,13 @@ export class NativeSyncClient {
     private async history(direction: 'undo' | 'redo'): Promise<void> {
         const locked = this.editor.lock();
         if (locked === false || !this.shared) return;
-        const anchors = this.capture(locked);
+        const anchors = captureSelection(this.shared, locked);
         try {
             if (!this.state().dirty) this.base = this.number;
             const document = this.shared[direction]();
             this.shadow!.receive(this.shared.state(this.shadow!.vector()));
             this.sequence++;
-            await this.editor.apply(document, this.resolve(anchors));
+            await this.editor.apply(document, resolveSelection(this.shared, anchors));
             this.status = 'pending';
             this.publish();
         } finally {
@@ -265,51 +171,12 @@ export class NativeSyncClient {
         }
         void this.flush();
     }
-    private capture(selection: NativeSelection | null): {
-        anchor: SharedCaret | null;
-        focus: SharedCaret | null;
-        scopeId?: string;
-        cells?: NativeSelection['cells'];
-    } | null {
-        if (!selection || !this.shared) return null;
-        const blocks = textBlocks(this.shared.document().root).map((block) => block.id);
-        const collapsed =
-            selection.anchor.blockId === selection.focus.blockId && selection.anchor.offset === selection.focus.offset;
-        const forward =
-            selection.anchor.blockId === selection.focus.blockId
-                ? selection.anchor.offset < selection.focus.offset
-                : blocks.indexOf(selection.anchor.blockId) < blocks.indexOf(selection.focus.blockId);
-        return {
-            anchor: this.shared.caret(selection.anchor, collapsed || !forward ? -1 : 0),
-            focus: this.shared.caret(selection.focus, collapsed || forward ? -1 : 0),
-            scopeId: selection.scopeId,
-            cells: selection.cells,
-        };
-    }
-    private resolve(selection: ReturnType<NativeSyncClient['capture']>): NativeSelection | null {
-        const anchor = selection?.anchor && this.shared?.resolve(selection.anchor),
-            focus = selection?.focus && this.shared?.resolve(selection.focus);
-        return anchor && focus ? { anchor, focus, scopeId: selection?.scopeId, cells: selection?.cells } : null;
-    }
-    private async timebox<T>(job: Promise<T>, deadline: number): Promise<T> {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-            return await Promise.race([
-                job,
-                new Promise<T>((_, reject) => {
-                    timer = setTimeout(() => reject(new SyncDeadline()), Math.max(0, deadline - Date.now()));
-                }),
-            ]);
-        } finally {
-            clearTimeout(timer);
-        }
-    }
     private async local(deadline: number): Promise<boolean> {
         while (this.pending && !this.closed) {
             const document = this.pending;
             let prepared: NativeDocument;
             try {
-                prepared = await this.timebox(this.editor.prepare(document), deadline);
+                prepared = await withinDeadline(this.editor.prepare(document), deadline);
             } catch (error) {
                 if (error instanceof SyncDeadline) {
                     this.status = 'pending';
@@ -341,8 +208,8 @@ export class NativeSyncClient {
         const fresh =
             reply.state && reply.vector
                 ? reply
-                : await this.timebox(
-                      this.transfer(() => this.transport.read({}, deadline - Date.now())),
+                : await withinDeadline(
+                      transfer(() => this.transport.read({}, deadline - Date.now())),
                       deadline,
                   );
         if (!fresh.state || !fresh.vector || fresh.epoch !== reply.epoch)
@@ -359,7 +226,7 @@ export class NativeSyncClient {
         );
         try {
             if (candidate.epoch() !== fresh.epoch) throw new Error('The replacement identity differs');
-            await this.timebox(this.editor.preview(candidate.document()), deadline);
+            await withinDeadline(this.editor.preview(candidate.document()), deadline);
             let selected = this.editor.lock();
             for (
                 let attempt = 0;
@@ -389,28 +256,7 @@ export class NativeSyncClient {
                     this.publish();
                     return false;
                 }
-                const blocks = new Map(textBlocks(candidate.document().root).map((block) => [block.id, block]));
-                const clamp = (point: NativeSelection['anchor']) => {
-                    const block = blocks.get(point.blockId);
-                    if (!block) return null;
-                    const text = blockText(block),
-                        offset = Math.min(point.offset, text.length);
-                    const boundaries = [
-                        0,
-                        ...Array.from(
-                            new Intl.Segmenter('und', { granularity: 'grapheme' }).segment(text),
-                            (part) => part.index,
-                        ),
-                        text.length,
-                    ];
-                    return {
-                        blockId: point.blockId,
-                        offset: boundaries.findLast((boundary) => boundary <= offset) ?? 0,
-                    };
-                };
-                const anchor = selected && clamp(selected.anchor),
-                    focus = selected && clamp(selected.focus);
-                await this.editor.apply(candidate.document(), anchor && focus ? { anchor, focus } : null);
+                await this.editor.apply(candidate.document(), clampSelection(candidate.document(), selected));
                 this.shared!.destroy();
                 this.shadow!.destroy();
                 this.shared = candidate;
@@ -423,9 +269,8 @@ export class NativeSyncClient {
                 this.acknowledged = 0;
                 this.outbound = undefined;
                 this.inbound = undefined;
-                this.peerCache = fresh.peers ?? reply.peers ?? [];
-                this.lastPresence = '';
-                this.lastPresenceAt = 0;
+                this.presence.replace(fresh.peers ?? reply.peers ?? []);
+                this.presence.reset();
                 this.status = this.state().dirty ? 'pending' : 'saved';
                 this.reason = undefined;
                 this.publish();
@@ -463,12 +308,12 @@ export class NativeSyncClient {
                 const reply =
                     this.inbound?.reply ??
                     (this.outbound
-                        ? await this.timebox(
-                              this.transfer(() => this.transport.write(this.outbound!.input, deadline - Date.now())),
+                        ? await withinDeadline(
+                              transfer(() => this.transport.write(this.outbound!.input, deadline - Date.now())),
                               deadline,
                           )
-                        : await this.timebox(
-                              this.transfer(() =>
+                        : await withinDeadline(
+                              transfer(() =>
                                   this.transport.read(
                                       {
                                           vector: encodeSharedBytes(this.shared!.vector()),
@@ -482,7 +327,7 @@ export class NativeSyncClient {
                           ));
                 sent = this.inbound?.sent ?? this.outbound?.sent ?? sent;
                 this.inbound = { reply, sent, dirty };
-                this.peerCache = reply.peers ?? this.peerCache;
+                this.presence.replace(reply.peers);
                 this.outbound = undefined;
                 if (this.closed) return false;
                 if (reply.writable !== undefined && reply.writable !== this.writable) {
@@ -507,10 +352,10 @@ export class NativeSyncClient {
                 }
                 if (reply.update) this.shadow!.receive(decodeSharedBytes(reply.update));
                 if (!(await this.local(deadline))) return false;
-                await this.timebox(this.editor.preview(this.shadow!.document()), deadline);
+                await withinDeadline(this.editor.preview(this.shadow!.document()), deadline);
                 while (this.pending) {
                     if (!(await this.local(deadline))) return false;
-                    await this.timebox(this.editor.preview(this.shadow!.document()), deadline);
+                    await withinDeadline(this.editor.preview(this.shadow!.document()), deadline);
                 }
                 let selection: NativeSelection | null | false = this.editor.lock();
                 if (selection === false) {
@@ -529,7 +374,7 @@ export class NativeSyncClient {
                     this.publish();
                     return false;
                 }
-                const anchors = this.capture(selection);
+                const anchors = captureSelection(this.shared, selection);
                 try {
                     const before = this.shared.document();
                     if (reply.update) this.shared.receive(decodeSharedBytes(reply.update));
@@ -541,7 +386,7 @@ export class NativeSyncClient {
                         this.restoredFrom = undefined;
                     }
                     if (dirty || this.shared.document() !== before)
-                        await this.editor.apply(this.shadow!.document(), this.resolve(anchors));
+                        await this.editor.apply(this.shadow!.document(), resolveSelection(this.shared, anchors));
                     if (ownAcknowledgement || (this.acknowledged === this.sequence && !this.pending))
                         this.base = this.number;
                     this.inbound = undefined;
@@ -580,47 +425,8 @@ export class NativeSyncClient {
             return false;
         }
     }
-    private async transfer<T>(request: () => Promise<T>): Promise<T> {
-        try {
-            return await request();
-        } catch (error) {
-            throw new SyncTransportFailure(error);
-        }
-    }
     private publish(): void {
         if (!this.closed) this.changed(this.state());
-    }
-    private async presence(): Promise<void> {
-        if (this.closed || !this.transport.presence || this.status === 'forbidden') return;
-        try {
-            const selected = this.state().dirty ? null : (this.editor.selection?.() ?? null);
-            const signature = JSON.stringify(selected);
-            if (signature !== this.lastPresence || Date.now() - this.lastPresenceAt > 5000) {
-                const anchors = this.capture(selected);
-                const encode = (caret: SharedCaret | null | undefined) =>
-                    caret ? { block: caret.block, position: encodeSharedBytes(caret.position) } : null;
-                const reply = await this.transport.presence({
-                    client_id: this.clientId,
-                    anchor: encode(anchors?.anchor),
-                    focus: encode(anchors?.focus),
-                });
-                if (this.closed) return;
-                this.peerCache = reply.peers;
-                this.ownUser = reply.self ?? this.ownUser;
-                const own = reply.peers.find((peer) => peer.client_id === this.clientId && peer.user === this.ownUser);
-                if (own && own.writable !== this.writable) {
-                    this.status = 'forbidden';
-                    this.reason = 'access_changed';
-                }
-                this.lastPresence = signature;
-                this.lastPresenceAt = Date.now();
-                this.publish();
-            }
-        } catch {
-            this.lastPresenceAt = 0;
-        } finally {
-            if (!this.closed) this.presenceTimer = setTimeout(() => void this.presence(), 250);
-        }
     }
     private schedule(): void {
         clearTimeout(this.poll);
@@ -633,7 +439,6 @@ export class NativeSyncClient {
         clearTimeout(this.poll);
         this.shared?.destroy();
         this.shadow?.destroy();
-        clearTimeout(this.presenceTimer);
-        if (this.transport.leave) void this.transport.leave(this.clientId).catch(() => undefined);
+        this.presence.destroy();
     }
 }

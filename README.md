@@ -118,15 +118,23 @@ browser/
   commands/    menu composition, slash triggers, placeholders and deferred actions
 collaboration/
   document.ts  public document lifecycle, transactions, undo and relative carets
-  client.ts    host transport coordination
+  client.ts    synchronization, acknowledgements, conflicts and editor transactions
+  sync/        protocol contracts, request deadlines, relative selections and presence
   values.ts    shared attribute and byte encoding
   shared/      private CRDT store, tree writer, inline synchronization and decoder
 interchange/
   clipboard.ts public copy/paste coordination
   clipboard/   private selection extraction, format codecs and insertion
+rendering/
+  kernel.ts    public resource lifecycle, preparation and shape cache
+  text/        font resources, shaping algorithm and shaped-text contracts
 content/
   clauses/     read-only queries and mutation commands in separate modules
 ```
+
+The rendering kernel coordinates resource lifetime and caches shaped paragraphs. `text/fonts.ts` owns native typefaces, the font collection and fingerprints; `text/shaping.ts` converts styled spans into shared glyph geometry; `text/model.ts` defines that geometry without loading CanvasKit. Layout imports only those contracts and receives its kernel from the caller. Numerical rounding lives in `typography/metrics.ts`, so importing pagination or the canvas painter does not load the text engine, PDF writer or collaboration runtime.
+
+The sync client coordinates document synchronization and acknowledgement state. `sync/contracts.ts` defines the host protocol, `sync/requests.ts` owns deadlines and transport failures, `sync/selection.ts` captures and restores relative selections, and `sync/presence.ts` owns its peer cache, identity, heartbeat and disposal. These private modules never import the client coordinator. Existing public kernel and sync entrypoints re-export their original contracts for compatibility.
 
 Each module owns its state explicitly. Collaboration composes a shared store and writer; the decoder reads that store without depending on the writer or public lifecycle. Clipboard codecs do not depend on selection extraction or insertion. Browser input, views and menus can be consumed independently and do not import one another.
 
@@ -139,7 +147,7 @@ Layout has a private pipeline behind `/layout`:
 - `bands.ts` owns splitting and track composition. `pages.ts` places measured bands on pages, resolves floating objects and adds covers, headers and page numbers.
 - `finalize.ts` freezes scene output, merges adjacent interaction regions and orders table backgrounds. Canvas and PDF consume the resulting scene through their existing APIs.
 
-`tests/Architecture.test.ts` enforces dependency direction, private layout and collaboration stages, independent browser areas, clipboard codec boundaries, resolvable local imports and an acyclic runtime graph. It also prevents implementation files from importing public barrels. `tests/PackageBoundary.test.ts` verifies package exports, compatibility aliases, bundled font URLs and clean deterministic builds. Tests are grouped by subsystem; `tests/fixtures/` holds shared rich-document and PDF geometry fixtures.
+`tests/Architecture.test.ts` enforces dependency direction, private layout, text-rendering and collaboration stages, renderer-free layout loading, independent browser areas, clipboard codec boundaries, resolvable local imports and an acyclic runtime graph. It also prevents implementation files from importing public barrels. `tests/PackageBoundary.test.ts` verifies package exports, compatibility aliases, bundled font URLs and clean deterministic builds. Tests are grouped by subsystem; `tests/fixtures/` holds shared rich-document and PDF geometry fixtures.
 
 The package exposes an explicit export map. Implementation files such as `layout/measurement.ts` are private. Earlier flat entrypoints remain explicit compatibility aliases to the same implementations, allowing existing integrations to upgrade without duplicating the engine. New integrations should use the subsystem entrypoints above. Build output is cleared before compilation so moved or deleted modules cannot leak into a package.
 

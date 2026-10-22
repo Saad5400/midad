@@ -575,6 +575,54 @@ describe('native synchronization client', () => {
         expect(a.client.state().status).toBe('saved');
         expect(a.client.state().peers.map((peer) => peer.name)).toEqual(['Other viewer']);
     });
+    it('publishes selection changes without exposing unacknowledged local anchors', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        const presence = vi.fn(async (_input: Parameters<NonNullable<SyncTransport['presence']>>[0]) => ({
+            peers: [],
+        }));
+        const a = editor({ ...backend.transport, presence });
+        a.adapter.selection = () => {
+            const block = textBlocks(a.document().root)[0];
+            return { anchor: { blockId: block.id, offset: 0 }, focus: { blockId: block.id, offset: 1 } };
+        };
+        await a.client.start();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(presence).toHaveBeenCalledTimes(1);
+        expect(presence.mock.calls[0][0].anchor).not.toBeNull();
+        await vi.advanceTimersByTimeAsync(250);
+        expect(presence).toHaveBeenCalledTimes(1);
+        a.edit(0, 0, 'Local ');
+        await vi.advanceTimersByTimeAsync(250);
+        expect(presence).toHaveBeenCalledTimes(2);
+        expect(presence.mock.calls[1][0]).toMatchObject({ anchor: null, focus: null });
+        await a.client.flush();
+        await vi.advanceTimersByTimeAsync(250);
+        expect(presence).toHaveBeenCalledTimes(3);
+        expect(presence.mock.calls[2][0].anchor).not.toBeNull();
+    });
+
+    it('leaves presence and ignores a pending presence response after disposal', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        let release!: (value: { peers: [] }) => void;
+        const presence = vi.fn(
+            (_input: Parameters<NonNullable<SyncTransport['presence']>>[0]) =>
+                new Promise<{ peers: [] }>((resolve) => (release = resolve)),
+        );
+        const leave = vi.fn(async () => undefined);
+        const a = editor({ ...backend.transport, presence, leave });
+        await a.client.start();
+        expect(presence).toHaveBeenCalledTimes(1);
+        const before = a.client.state();
+        a.client.destroy();
+        expect(leave).toHaveBeenCalledWith(presence.mock.calls[0][0].client_id);
+        release({ peers: [] });
+        await vi.advanceTimersByTimeAsync(6000);
+        expect(presence).toHaveBeenCalledTimes(1);
+        expect(a.client.state()).toEqual(before);
+    });
+
     it('undoes immediately while the save request is still in flight', async () => {
         const backend = server();
         let release!: () => void, entered!: () => void;

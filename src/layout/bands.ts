@@ -1,4 +1,4 @@
-import { point } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import type { PaintCommand, SceneCell, SceneColumn, SceneLine } from './scene.js';
 
 export interface Band {

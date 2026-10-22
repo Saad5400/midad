@@ -4,7 +4,8 @@ import { floatingAnchorIndex, resolveFloatingAnchor } from '../content/floating-
 import { documentPageLayout, pageSize } from '../content/page-layout.js';
 import { documentPresentation, headerTile } from '../content/presentation/queries.js';
 import { isRecord, type NativeDocument } from '../document/model.js';
-import { NativeTextKernel, point } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import { isSpacing, shiftBand, type Band, type BandParts } from './bands.js';
 import type { LayoutContext as Context } from './context.js';
 import { fieldPaintCommands } from './fields.js';

@@ -2,7 +2,7 @@ import type { NativeDocument, NativeNode } from '../document/model.js';
 import { blockText, isTextBlock } from '../editing/text.js';
 import type { DocumentScene, TextReading } from '../layout/scene.js';
 import { compareReading } from '../layout/text-reading.js';
-import type { ShapedParagraph } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 
 export interface PdfReviewMap {
     version: 1;

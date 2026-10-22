@@ -1,6 +1,6 @@
 import type { NativeNode } from '../document/model.js';
 import { columnWeights, tableGrid } from '../editing/table-grid.js';
-import { point } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import { color, type Color } from '../typography/style.js';
 import { flowSpace, flowTracks, materializeBands, shiftBand, type Band } from './bands.js';
 import { scope, type LayoutContext, type MeasureBlocks } from './context.js';

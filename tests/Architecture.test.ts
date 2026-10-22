@@ -158,6 +158,56 @@ describe('source architecture', () => {
         expect(failures).toEqual([]);
     });
 
+    it('keeps renderer resources and shaping below the kernel lifecycle', () => {
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            if (!name(path).startsWith('rendering/text/')) continue;
+            for (const dependency of imports) {
+                if (!dependency.specifier.startsWith('.')) continue;
+                const child = name(target(path, dependency.specifier));
+                if (child.startsWith('rendering/') && !child.startsWith('rendering/text/'))
+                    failures.push(`${name(path)} → ${child}`);
+                if (name(path) === 'rendering/text/fonts.ts' && child === 'rendering/text/shaping.ts')
+                    failures.push(`${name(path)} → ${child}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('keeps sync protocol, presence and selection independent of the client coordinator', () => {
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            if (!name(path).startsWith('collaboration/sync/')) continue;
+            for (const dependency of imports) {
+                if (!dependency.specifier.startsWith('.')) continue;
+                const child = name(target(path, dependency.specifier));
+                if (child === 'collaboration/client.ts' || child === 'collaboration/index.ts')
+                    failures.push(`${name(path)} → ${child}`);
+                if (name(path) === 'collaboration/sync/contracts.ts' && dependency.runtime)
+                    failures.push(`${name(path)} → ${child}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('loads layout and canvas painting without initializing the text engine or collaboration', () => {
+        const visited = new Set<string>(),
+            external = new Set<string>();
+        const visit = (path: string): void => {
+            if (visited.has(path)) return;
+            visited.add(path);
+            for (const dependency of graph.get(path) ?? []) {
+                if (!dependency.runtime) continue;
+                if (dependency.specifier.startsWith('.')) visit(target(path, dependency.specifier));
+                else external.add(dependency.specifier);
+            }
+        };
+        visit(resolve(root, 'layout/index.ts'));
+        visit(resolve(root, 'rendering/canvas.ts'));
+        expect([...visited].map(name)).not.toContain('rendering/kernel.ts');
+        expect([...external].filter((name) => /^(canvaskit-wasm|pdf-lib|yjs)(\/|$)/.test(name))).toEqual([]);
+    });
+
     it('keeps browser input, page views and command menus independent', () => {
         const areas = new Set(['input', 'view', 'commands']);
         const failures: string[] = [];

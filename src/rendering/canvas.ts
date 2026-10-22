@@ -1,6 +1,6 @@
 import type { Paint, Surface } from 'canvaskit-wasm';
 import type { ScenePage } from '../layout/scene.js';
-import { NativeTextKernel } from './kernel.js';
+import type { NativeTextKernel } from './kernel.js';
 
 export function paintPage(
     kernel: NativeTextKernel,

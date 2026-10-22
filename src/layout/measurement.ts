@@ -1,6 +1,7 @@
 import { rejectedClause } from '../content/clauses/numbering.js';
 import type { NativeNode } from '../document/model.js';
-import type { NativeTextKernel, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 import { DEFAULT_TEXT_STYLE, numericAttribute } from '../typography/style.js';
 import { blank, decorateBand, shiftBand, type Band } from './bands.js';
 import { parallelBands } from './columns.js';
