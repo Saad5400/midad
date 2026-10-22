@@ -26,7 +26,7 @@ describe('standalone package entrypoints', () => {
                     '--input-type=module',
                     '--eval',
                     `
-            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/measurement', '@saad5400/midad/document/model'];
+            const paths = ['@saad5400/midad/document', '@saad5400/midad/layout/measurement', '@saad5400/midad/document/model', '@saad5400/midad/collaboration/shared/store', '@saad5400/midad/interchange/clipboard/html-reader'];
             console.log(JSON.stringify(paths.map((path) => {
                 try { return import.meta.resolve(path); } catch (error) { return error.code; }
             })));
@@ -36,7 +36,7 @@ describe('standalone package entrypoints', () => {
             ),
         );
         expect(resolution[0]).toContain('/dist/document/index.js');
-        expect(resolution.slice(1)).toEqual(['ERR_PACKAGE_PATH_NOT_EXPORTED', 'ERR_PACKAGE_PATH_NOT_EXPORTED']);
+        expect(resolution.slice(1)).toEqual(Array(4).fill('ERR_PACKAGE_PATH_NOT_EXPORTED'));
     });
 
     it('preserves existing integration entrypoints through the same implementations', async () => {
@@ -59,6 +59,25 @@ describe('standalone package entrypoints', () => {
         expect(document.blockText).toBe(editing.blockText);
         expect(document.textBlocks).toBe(editing.textBlocks);
     });
+    it('offers focused browser APIs while preserving earlier individual imports', async () => {
+        const [browser, input, view, commands, pointer, canvas, navigation] = await Promise.all([
+            import('@saad5400/midad/browser'),
+            import('@saad5400/midad/browser/input'),
+            import('@saad5400/midad/browser/view'),
+            import('@saad5400/midad/browser/commands'),
+            import('@saad5400/midad/browser/page-pointer'),
+            import('@saad5400/midad/browser/page-canvas'),
+            import('@saad5400/midad/navigation'),
+        ]);
+        expect(input.PagePointerController).toBe(pointer.PagePointerController);
+        expect(view.PageCanvasController).toBe(canvas.PageCanvasController);
+        expect(input.NativeNavigation).toBe(navigation.NativeNavigation);
+        expect(commands.DocumentCommandController).toBe(browser.DocumentCommandController);
+        expect(Object.keys(input)).not.toContain('PageView');
+        expect(Object.keys(view)).not.toContain('DocumentCommandController');
+        expect(Object.keys(commands)).not.toContain('SelectionController');
+    });
+
     it('identifies its renderer without an application build definition', () => {
         expect(NATIVE_RENDERER_VERSION).toMatch(/^[a-f0-9]{64}$/);
     });

@@ -1,9 +1,9 @@
 import type { CanvasKit } from 'canvaskit-wasm';
-import type { NativeDocument, NativeNode } from '../document/model.js';
-import { selectionRanges, textBlocks, type NativeSelection } from '../editing/selection.js';
-import { blockText, isTextBlock, type TextCaret } from '../editing/text.js';
-import type { DocumentScene, SceneLine } from '../layout/scene.js';
-import type { ShapedLine, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeDocument, NativeNode } from '../../document/model.js';
+import { selectionRanges, textBlocks, type NativeSelection } from '../../editing/selection.js';
+import { blockText, isTextBlock, type TextCaret } from '../../editing/text.js';
+import type { DocumentScene, SceneLine } from '../../layout/scene.js';
+import type { ShapedLine, ShapedParagraph } from '../../rendering/kernel.js';
 
 export type CaretAffinity = 'upstream' | 'downstream';
 export interface NavigationCaret extends TextCaret {

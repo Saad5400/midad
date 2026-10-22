@@ -1,8 +1,8 @@
-import { findNode, type NativeDocument } from '../document/model.js';
-import { selectNodeText, selectionRanges, selectionRegion, type NativeSelection } from '../editing/selection.js';
-import { tableRectangle, type TableCellSelection } from '../editing/table-grid.js';
-import { isTextBlock, type TextCaret } from '../editing/text.js';
-import type { DocumentScene } from '../layout/scene.js';
+import { findNode, type NativeDocument } from '../../document/model.js';
+import { selectNodeText, selectionRanges, selectionRegion, type NativeSelection } from '../../editing/selection.js';
+import { tableRectangle, type TableCellSelection } from '../../editing/table-grid.js';
+import { isTextBlock, type TextCaret } from '../../editing/text.js';
+import type { DocumentScene } from '../../layout/scene.js';
 import type { CaretAffinity, NativeNavigation, NavigationCaret } from './navigation.js';
 
 export interface NavigationKey {

@@ -55,6 +55,18 @@
             "types": "./dist/browser/index.d.ts",
             "import": "./dist/browser/index.js"
         },
+        "./browser/input": {
+            "types": "./dist/browser/input/index.d.ts",
+            "import": "./dist/browser/input/index.js"
+        },
+        "./browser/view": {
+            "types": "./dist/browser/view/index.d.ts",
+            "import": "./dist/browser/view/index.js"
+        },
+        "./browser/commands": {
+            "types": "./dist/browser/commands/index.d.ts",
+            "import": "./dist/browser/commands/index.js"
+        },
         "./collaboration": {
             "types": "./dist/collaboration/index.d.ts",
             "import": "./dist/collaboration/index.js"
@@ -84,8 +96,8 @@
             "import": "./dist/rendering/assets.js"
         },
         "./autoscroll": {
-            "types": "./dist/browser/autoscroll.d.ts",
-            "import": "./dist/browser/autoscroll.js"
+            "types": "./dist/browser/input/autoscroll.d.ts",
+            "import": "./dist/browser/input/autoscroll.js"
         },
         "./bilingual-copy": {
             "types": "./dist/content/bilingual/copy.d.ts",
@@ -192,8 +204,8 @@
             "import": "./dist/pdf/incremental.js"
         },
         "./interaction": {
-            "types": "./dist/browser/interaction.d.ts",
-            "import": "./dist/browser/interaction.js"
+            "types": "./dist/browser/input/interaction.d.ts",
+            "import": "./dist/browser/input/interaction.js"
         },
         "./kernel": {
             "types": "./dist/rendering/kernel.d.ts",
@@ -212,8 +224,8 @@
             "import": "./dist/interchange/message.js"
         },
         "./navigation": {
-            "types": "./dist/browser/navigation.d.ts",
-            "import": "./dist/browser/navigation.js"
+            "types": "./dist/browser/input/navigation.d.ts",
+            "import": "./dist/browser/input/navigation.js"
         },
         "./outline": {
             "types": "./dist/layout/outline.d.ts",
@@ -292,40 +304,40 @@
             "import": "./dist/rendering/version.js"
         },
         "./viewport": {
-            "types": "./dist/browser/viewport.d.ts",
-            "import": "./dist/browser/viewport.js"
+            "types": "./dist/browser/view/viewport.d.ts",
+            "import": "./dist/browser/view/viewport.js"
         },
         "./browser/page-pointer": {
-            "types": "./dist/browser/page-pointer.d.ts",
-            "import": "./dist/browser/page-pointer.js"
+            "types": "./dist/browser/input/page-pointer.d.ts",
+            "import": "./dist/browser/input/page-pointer.js"
         },
         "./browser/page-canvas": {
-            "types": "./dist/browser/page-canvas.d.ts",
-            "import": "./dist/browser/page-canvas.js"
+            "types": "./dist/browser/view/page-canvas.d.ts",
+            "import": "./dist/browser/view/page-canvas.js"
         },
         "./browser/autoscroll": {
-            "types": "./dist/browser/autoscroll.d.ts",
-            "import": "./dist/browser/autoscroll.js"
+            "types": "./dist/browser/input/autoscroll.d.ts",
+            "import": "./dist/browser/input/autoscroll.js"
         },
         "./browser/page-view": {
-            "types": "./dist/browser/page-view.d.ts",
-            "import": "./dist/browser/page-view.js"
+            "types": "./dist/browser/view/page-view.d.ts",
+            "import": "./dist/browser/view/page-view.js"
         },
         "./browser/navigation": {
-            "types": "./dist/browser/navigation.d.ts",
-            "import": "./dist/browser/navigation.js"
+            "types": "./dist/browser/input/navigation.d.ts",
+            "import": "./dist/browser/input/navigation.js"
         },
         "./browser/viewport": {
-            "types": "./dist/browser/viewport.d.ts",
-            "import": "./dist/browser/viewport.js"
+            "types": "./dist/browser/view/viewport.d.ts",
+            "import": "./dist/browser/view/viewport.js"
         },
         "./browser/viewport-readiness": {
-            "types": "./dist/browser/viewport-readiness.d.ts",
-            "import": "./dist/browser/viewport-readiness.js"
+            "types": "./dist/browser/view/viewport-readiness.d.ts",
+            "import": "./dist/browser/view/viewport-readiness.js"
         },
         "./browser/interaction": {
-            "types": "./dist/browser/interaction.d.ts",
-            "import": "./dist/browser/interaction.js"
+            "types": "./dist/browser/input/interaction.d.ts",
+            "import": "./dist/browser/input/interaction.js"
         },
         "./browser/labels": {
             "types": "./dist/browser/labels.d.ts",

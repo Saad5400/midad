@@ -131,6 +131,68 @@ describe('source architecture', () => {
         expect(failures).toEqual([]);
     });
 
+    it('keeps collaboration storage, reading and writing below the public lifecycle', () => {
+        const phases: Record<string, number> = {
+            'collaboration/values.ts': 0,
+            'collaboration/shared/schema.ts': 0,
+            'collaboration/shared/variants.ts': 1,
+            'collaboration/shared/store.ts': 1,
+            'collaboration/shared/reader.ts': 2,
+            'collaboration/shared/inline.ts': 2,
+            'collaboration/shared/writer.ts': 3,
+            'collaboration/document.ts': 4,
+            'collaboration/client.ts': 5,
+        };
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            const phase = phases[name(path)];
+            if (phase === undefined) continue;
+            for (const dependency of imports) {
+                if (!dependency.runtime || !dependency.specifier.startsWith('.')) continue;
+                const child = name(target(path, dependency.specifier));
+                if (phases[child] !== undefined && phases[child] > phase) failures.push(`${name(path)} → ${child}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('keeps browser input, page views and command menus independent', () => {
+        const areas = new Set(['input', 'view', 'commands']);
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            const [module, area] = name(path).split('/');
+            if (module !== 'browser' || !areas.has(area)) continue;
+            for (const dependency of imports) {
+                if (!dependency.runtime || !dependency.specifier.startsWith('.')) continue;
+                const [childModule, childArea] = name(target(path, dependency.specifier)).split('/');
+                if (childModule === 'browser' && areas.has(childArea) && childArea !== area)
+                    failures.push(`${name(path)} → ${childArea}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('keeps clipboard codecs independent of selection and insertion', () => {
+        const codecs = ['model', 'html-policy', 'html-reader', 'html-writer', 'native-format'];
+        const failures: string[] = [];
+        for (const file of codecs) {
+            const path = resolve(root, `interchange/clipboard/${file}.ts`);
+            for (const dependency of graph.get(path) ?? []) {
+                if (!dependency.specifier.startsWith('.')) continue;
+                const child = name(target(path, dependency.specifier));
+                if (
+                    [
+                        'interchange/clipboard.ts',
+                        'interchange/clipboard/selection.ts',
+                        'interchange/clipboard/paste.ts',
+                    ].includes(child)
+                )
+                    failures.push(`${name(path)} → ${child}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
     it('keeps internal dependencies away from public barrels', () => {
         const failures: string[] = [];
         for (const [path, imports] of graph) {
@@ -146,23 +208,26 @@ describe('source architecture', () => {
         expect(failures).toEqual([]);
     });
 
-    it.each(['rendering/index.ts', 'content/fields/queries.ts', 'content/presentation/queries.ts'])(
-        'keeps %s independent of editing mutations',
-        (entry) => {
-            const visited = new Set<string>();
-            const visit = (path: string): void => {
-                if (visited.has(path)) return;
-                visited.add(path);
-                for (const dependency of graph.get(path) ?? [])
-                    if (dependency.runtime && dependency.specifier.startsWith('.'))
-                        visit(target(path, dependency.specifier));
-            };
-            visit(resolve(root, entry));
-            expect(
-                [...visited].map(name).filter((path) => path.startsWith('editing/') || path.endsWith('/commands.ts')),
-            ).toEqual([]);
-        },
-    );
+    it.each([
+        'rendering/index.ts',
+        'content/fields/queries.ts',
+        'content/presentation/queries.ts',
+        'content/clauses/queries.ts',
+        'collaboration/shared/reader.ts',
+    ])('keeps %s independent of editing mutations', (entry) => {
+        const visited = new Set<string>();
+        const visit = (path: string): void => {
+            if (visited.has(path)) return;
+            visited.add(path);
+            for (const dependency of graph.get(path) ?? [])
+                if (dependency.runtime && dependency.specifier.startsWith('.'))
+                    visit(target(path, dependency.specifier));
+        };
+        visit(resolve(root, entry));
+        expect(
+            [...visited].map(name).filter((path) => path.startsWith('editing/') || path.endsWith('/commands.ts')),
+        ).toEqual([]);
+    });
 
     it('has no circular runtime imports', () => {
         const complete = new Set<string>(),

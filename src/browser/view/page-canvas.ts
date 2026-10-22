@@ -1,7 +1,7 @@
 import type { Surface } from 'canvaskit-wasm';
-import type { ScenePage } from '../layout/scene.js';
-import { paintPage } from '../rendering/canvas.js';
-import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ScenePage } from '../../layout/scene.js';
+import { paintPage } from '../../rendering/canvas.js';
+import type { NativeTextKernel } from '../../rendering/kernel.js';
 
 export interface PageCanvasTarget {
     readonly canvas: HTMLCanvasElement;

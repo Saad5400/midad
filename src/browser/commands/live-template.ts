@@ -1,6 +1,6 @@
-import { findNode, type NativeDocument } from '../document/model.js';
-import type { NativeSelection } from '../editing/selection.js';
-import { blockText, editableTextBlock, textDifference } from '../editing/text.js';
+import { findNode, type NativeDocument } from '../../document/model.js';
+import type { NativeSelection } from '../../editing/selection.js';
+import { blockText, editableTextBlock, textDifference } from '../../editing/text.js';
 
 export interface TemplateRange {
     readonly id: string;

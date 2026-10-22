@@ -1,10 +1,10 @@
-import { documentPageLayout } from '../content/page-layout.js';
-import { findNode, type NativeDocument } from '../document/model.js';
-import { nodePath, textBlocks } from '../document/text.js';
-import type { WritingTarget } from '../editing/writing-position.js';
-import { cellAt, columnAt, type DocumentScene } from '../layout/scene.js';
-import { inheritedDirection } from '../typography/direction.js';
-import { DEFAULT_TEXT_STYLE } from '../typography/style.js';
+import { documentPageLayout } from '../../content/page-layout.js';
+import { findNode, type NativeDocument } from '../../document/model.js';
+import { nodePath, textBlocks } from '../../document/text.js';
+import type { WritingTarget } from '../../editing/writing-position.js';
+import { cellAt, columnAt, type DocumentScene } from '../../layout/scene.js';
+import { inheritedDirection } from '../../typography/direction.js';
+import { DEFAULT_TEXT_STYLE } from '../../typography/style.js';
 
 export interface EmptyWritingPosition {
     readonly target: WritingTarget;

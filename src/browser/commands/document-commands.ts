@@ -1,8 +1,8 @@
-import type { NativeDocument, NativeMark } from '../document/model.js';
-import { captureCommandBookmark, commandBookmarkValid, type CommandBookmark } from '../editing/bookmark.js';
-import { commandTrigger, type CommandTrigger } from '../editing/command.js';
-import type { NativeSelection } from '../editing/selection.js';
-import type { WritingTarget } from '../editing/writing-position.js';
+import type { NativeDocument, NativeMark } from '../../document/model.js';
+import { captureCommandBookmark, commandBookmarkValid, type CommandBookmark } from '../../editing/bookmark.js';
+import { commandTrigger, type CommandTrigger } from '../../editing/command.js';
+import type { NativeSelection } from '../../editing/selection.js';
+import type { WritingTarget } from '../../editing/writing-position.js';
 
 export interface DocumentCommandKey {
     key: string;
