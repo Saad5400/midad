@@ -84,8 +84,7 @@ export function syncSharedInline(
             signature = '';
         const flush = (): void => {
             if (pending) {
-                text.insert(store.physicalOffset(address, index), pending, attributes);
-                store.invalidateCaches();
+                store.insertText(address, index, pending, attributes);
                 index += pending.length;
                 pending = '';
             }
@@ -93,9 +92,7 @@ export function syncSharedInline(
         let formatting: { from: number; length: number; patch: Record<string, Json>; signature: string } | undefined;
         const flushFormatting = (): void => {
             if (!formatting) return;
-            const from = store.physicalOffset(address, formatting.from),
-                to = store.physicalOffset(address, formatting.from + formatting.length);
-            text.format(from, to - from, formatting.patch);
+            store.formatInline(address, formatting.from, formatting.length, formatting.patch);
             store.invalidateCaches();
             formatting = undefined;
         };
@@ -110,11 +107,7 @@ export function syncSharedInline(
                 } else {
                     flush();
                     const placement = store.placement();
-                    text.insertEmbed(
-                        store.physicalOffset(address, index),
-                        { ...token.insert, ...placement },
-                        token.attributes,
-                    );
+                    store.insertEmbed(address, index, { ...token.insert, ...placement }, token.attributes);
                     store.invalidateCaches();
                     index++;
                 }

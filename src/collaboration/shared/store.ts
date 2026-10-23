@@ -1,19 +1,27 @@
 import * as Y from 'yjs';
 import type { Json } from '../../document/model.js';
-import type { Edge, Parent, SharedType, FlowSegment } from './schema.js';
+import type { Edge, Parent, SharedType, FlowSegment, FlowPart, Joined } from './schema.js';
+import { key } from './schema.js';
+
+interface FlowTrail {
+    parent?: FlowTrail;
+    block: string;
+    edge: string;
+}
 
 export class SharedStore {
     readonly registry: Y.Map<string>;
     readonly meta: Y.Map<Json>;
     readonly flows: Y.Map<string>;
     readonly families: Y.Map<string>;
-    readonly deleted: Y.Map<boolean>;
+    readonly deleted: Y.Map<boolean | Joined>;
     private readonly types = new Map<string, SharedType>();
     private unregistered: SharedType[] = [];
     seeding = false;
     private flowCache = new Map<string, Map<string, FlowSegment>>();
     private edgeCache?: Map<string, Parent & { id: string }>;
     private parentCache?: Map<string, Parent & { id: string }>;
+    private joinOwners = new Map<string, string>();
     private placementClock = 0;
     placementReady = false;
 
@@ -60,6 +68,7 @@ export class SharedStore {
         if (this.edgeCache) return this.edgeCache;
         const edges = new Map<string, Parent & { id: string }>(),
             parents = new Map<string, Parent & { id: string }>();
+        this.joinOwners.clear();
         const add = (entry: Edge, container: string): void => {
             const rank = Number.isSafeInteger(entry.rank) ? entry.rank! : 0,
                 actor = Number.isSafeInteger(entry.actor) ? entry.actor! : 0;
@@ -78,15 +87,18 @@ export class SharedStore {
         for (const name of this.ydoc.share.keys()) {
             if (name.startsWith('c:'))
                 for (const entry of this.ydoc.getArray<Edge>(name).toArray()) add(entry, name.slice(2));
-            if (name.startsWith('t:'))
-                for (const delta of this.ydoc.getText(name).toDelta())
-                    if (
-                        delta.insert &&
-                        typeof delta.insert === 'object' &&
-                        typeof delta.insert.node === 'string' &&
-                        typeof delta.insert.edge === 'string'
-                    )
-                        add({ ...delta.insert, id: delta.insert.node }, `inline:${name.slice(2)}`);
+            if (name.startsWith('t:')) {
+                let block = name.slice(2);
+                for (const delta of this.ydoc.getText(name).toDelta()) {
+                    if (delta.insert && typeof delta.insert === 'object') {
+                        if (typeof delta.insert.block === 'string') block = delta.insert.block;
+                        if (typeof delta.insert.join === 'string' && this.activeJoin(delta.insert))
+                            this.joinOwners.set(delta.insert.join, block);
+                        if (typeof delta.insert.node === 'string' && typeof delta.insert.edge === 'string')
+                            add({ ...delta.insert, id: delta.insert.node }, `inline:${name.slice(2)}`);
+                    }
+                }
+            }
         }
         this.edgeCache = edges;
         this.parentCache = parents;
@@ -94,9 +106,49 @@ export class SharedStore {
         return edges;
     }
     effectiveParent(id: string): Parent | undefined {
-        if (this.deleted.get(id)) return;
+        if (this.deleted.get(id) === true || this.joinedOwner(id) !== id) return;
+        return this.physicalParent(id);
+    }
+    physicalParent(id: string): Parent | undefined {
         this.physicalEdges();
         return this.parentCache!.get(id);
+    }
+    joinedOwner(address: string): string {
+        this.physicalEdges();
+        const chain = new Map<string, Joined & { target: string }>();
+        while (true) {
+            const entry = this.deleted.get(address);
+            if (!entry || typeof entry !== 'object') return address;
+            if (chain.has(address)) {
+                const cycle: Array<Joined & { target: string }> = [];
+                const start = address;
+                do {
+                    const value = chain.get(address)!;
+                    cycle.push(value);
+                    address = value.target;
+                } while (address !== start);
+                cycle.sort(
+                    (a, b) =>
+                        b.rank - a.rank || b.actor - a.actor || (a.edge === b.edge ? 0 : a.edge > b.edge ? -1 : 1),
+                );
+                return cycle[0].target;
+            }
+            if (chain.size > 100000) throw new Error('Invalid shared join structure');
+            const target = this.joinOwners.get(address) ?? entry.join;
+            chain.set(address, { ...entry, target });
+            address = target;
+        }
+    }
+    activeJoin(insert: { join?: string; edge?: string }): boolean {
+        const entry = insert.join && this.deleted.get(insert.join);
+        return !!entry && typeof entry === 'object' && entry.edge === insert.edge;
+    }
+    join(left: string, right: string, _offset: number): void {
+        const point = this.endPoint(left);
+        const placement = this.placement();
+        this.deleted.set(right, { join: left, edge: placement.edge, rank: placement.rank!, actor: placement.actor! });
+        point.text.insertEmbed(point.index, { join: right, edge: placement.edge });
+        this.invalidateCaches();
     }
     placement(): Omit<Edge, 'id'> {
         if (!this.seeding && !this.placementReady) this.physicalEdges();
@@ -147,6 +199,181 @@ export class SharedStore {
         const parent = this.effectiveParent(insert.node);
         return parent?.container === `inline:${this.source(address)}` && parent.edge === insert.edge;
     }
+    parts(
+        address: string,
+        seen = new Set<string>(),
+        trail?: FlowTrail,
+    ): Array<FlowPart & { source: string; block: string; trail?: FlowTrail }> {
+        if (seen.has(address)) return [];
+        if (seen.size > 100000) throw new Error('Invalid shared text structure');
+        seen.add(address);
+        return this.flow(address).parts.flatMap((part) =>
+            typeof part.insert === 'object' && typeof part.insert.join === 'string'
+                ? this.activeJoin(part.insert)
+                    ? this.parts(part.insert.join, seen, { parent: trail, block: address, edge: part.insert.edge! })
+                    : []
+                : [{ ...part, source: this.source(address), block: address, trail }],
+        );
+    }
+    length(address: string): number {
+        return this.parts(address).reduce(
+            (length, part) =>
+                length +
+                (typeof part.insert === 'string'
+                    ? part.insert.length
+                    : this.visibleEmbed(part.source, part.insert)
+                      ? 1
+                      : 0),
+            0,
+        );
+    }
+    point(
+        address: string,
+        logical: number,
+    ): { text: Y.Text; index: number; source: string; block: string; trail?: FlowTrail } {
+        for (const part of this.parts(address)) {
+            const length =
+                typeof part.insert === 'string'
+                    ? part.insert.length
+                    : this.visibleEmbed(part.source, part.insert)
+                      ? 1
+                      : 0;
+            if (!length) continue;
+            if (logical <= length)
+                return {
+                    text: this.inline(part.source),
+                    index: part.from + logical,
+                    source: part.source,
+                    block: part.block,
+                    trail: part.trail,
+                };
+            logical -= length;
+        }
+        if (logical) throw new Error('Invalid shared text offset');
+        return {
+            text: this.inline(address),
+            index: this.bounds(address).end,
+            source: this.source(address),
+            block: address,
+        };
+    }
+    endPoint(address: string): { text: Y.Text; index: number; source: string; block: string; trail?: FlowTrail } {
+        const seen = new Set<string>();
+        let trail: FlowTrail | undefined;
+        while (!seen.has(address)) {
+            seen.add(address);
+            const parts = this.flow(address).parts;
+            const last = parts.findLast(
+                (part) =>
+                    typeof part.insert === 'string' ||
+                    this.visibleEmbed(address, part.insert) ||
+                    (typeof part.insert.join === 'string' && this.activeJoin(part.insert)),
+            );
+            if (
+                last &&
+                typeof last.insert === 'object' &&
+                typeof last.insert.join === 'string' &&
+                !seen.has(last.insert.join)
+            ) {
+                trail = { parent: trail, block: address, edge: last.insert.edge! };
+                address = last.insert.join;
+                continue;
+            }
+            return {
+                text: this.inline(address),
+                index: this.bounds(address).end,
+                source: this.source(address),
+                block: address,
+                trail,
+            };
+        }
+        throw new Error('Invalid shared text endpoint');
+    }
+    continueSplit(trail: FlowTrail | undefined, suffix: string): void {
+        for (; trail; trail = trail.parent) {
+            const range = this.flow(trail.block);
+            const reference = range.parts.find(
+                (part) =>
+                    typeof part.insert === 'object' &&
+                    part.insert.edge === trail!.edge &&
+                    typeof part.insert.join === 'string',
+            );
+            if (!reference || reference.from + 1 >= range.end) continue;
+            const address = key('', `shared-tail:${crypto.randomUUID()}`);
+            this.flows.set(address, this.source(trail.block));
+            this.families.set(address, this.families.get(trail.block) ?? trail.block);
+            this.inline(trail.block).insertEmbed(reference.from + 1, { block: address });
+            this.invalidateCaches();
+            this.join(suffix, address, this.length(suffix));
+        }
+    }
+    locate(address: string, text: Y.Text, position: number, seen = new Set<string>()): number | undefined {
+        if (seen.has(address)) return;
+        seen.add(address);
+        const source = this.inline(address),
+            range = this.bounds(address);
+        let logical = 0;
+        for (const part of this.flow(address).parts) {
+            if (typeof part.insert === 'object' && typeof part.insert.join === 'string') {
+                if (text === source && position >= part.from && position <= part.from + 1) return logical;
+                if (!this.activeJoin(part.insert)) continue;
+                const nested = this.locate(part.insert.join, text, position, new Set(seen));
+                if (nested !== undefined) return logical + nested;
+                logical += this.length(part.insert.join);
+            } else {
+                const length =
+                    typeof part.insert === 'string'
+                        ? part.insert.length
+                        : this.visibleEmbed(address, part.insert)
+                          ? 1
+                          : 0;
+                if (text === source && position >= part.from && position <= part.from + length)
+                    return logical + position - part.from;
+                logical += length;
+            }
+        }
+        if (text === source && position >= range.start && position <= range.end) return logical;
+    }
+    insertText(address: string, offset: number, value: string, attributes: Record<string, Json>): void {
+        const point = this.point(address, offset);
+        point.text.insert(point.index, value, attributes);
+        this.invalidateCaches();
+    }
+    insertEmbed(address: string, offset: number, value: Record<string, Json>, attributes?: Record<string, Json>): void {
+        const point = this.point(address, offset);
+        point.text.insertEmbed(point.index, value, attributes);
+        this.invalidateCaches();
+    }
+    private ranges(
+        address: string,
+        offset: number,
+        length: number,
+    ): Array<{ text: Y.Text; from: number; length: number }> {
+        const ranges: Array<{ text: Y.Text; from: number; length: number }> = [];
+        for (const part of this.parts(address)) {
+            const size =
+                typeof part.insert === 'string'
+                    ? part.insert.length
+                    : this.visibleEmbed(part.source, part.insert)
+                      ? 1
+                      : 0;
+            if (offset >= size) {
+                offset -= size;
+                continue;
+            }
+            const take = Math.min(length, size - offset);
+            ranges.push({ text: this.inline(part.source), from: part.from + offset, length: take });
+            offset = 0;
+            length -= take;
+            if (!length) break;
+        }
+        if (length) throw new Error('Invalid shared text range');
+        return ranges;
+    }
+    formatInline(address: string, offset: number, length: number, patch: Record<string, Json>): void {
+        for (const range of this.ranges(address, offset, length)) range.text.format(range.from, range.length, patch);
+        this.invalidateCaches();
+    }
     physicalOffset(address: string, logical: number): number {
         const range = this.bounds(address);
         for (const delta of this.flow(address).parts) {
@@ -175,21 +402,8 @@ export class SharedStore {
         return logical;
     }
     deleteInline(address: string, index: number, length: number): void {
-        const from = this.physicalOffset(address, index),
-            to = this.physicalOffset(address, index + length);
-        const ranges: Array<{ from: number; length: number }> = [];
-        for (const delta of this.flow(address).parts) {
-            const physical = delta.from;
-            const size = typeof delta.insert === 'string' ? delta.insert.length : 1;
-            const start = Math.max(from, physical),
-                end = Math.min(to, physical + size);
-            if (start >= end) continue;
-            if (typeof delta.insert !== 'string') {
-                if (!this.visibleEmbed(address, delta.insert)) continue;
-            }
-            ranges.push({ from: start, length: end - start });
-        }
-        ranges.reverse().forEach((range) => this.inline(address).delete(range.from, range.length));
+        const ranges = this.ranges(address, index, length);
+        ranges.sort((a, b) => b.from - a.from).forEach((range) => range.text.delete(range.from, range.length));
         this.invalidateCaches();
     }
     activeChildren(container: string): Edge[] {
@@ -199,22 +413,46 @@ export class SharedStore {
                 const parent = this.effectiveParent(entry.id);
                 return parent?.container === container && parent.edge === entry.edge;
             });
-        const groups = new Map<string, number[]>();
-        entries.forEach((entry, index) => {
+        const groups = new Map<string, string[]>();
+        entries.forEach((entry) => {
             const family = this.families.get(entry.id) ?? entry.id;
             const group = groups.get(family) ?? [];
-            group.push(index);
+            group.push(entry.id);
             groups.set(family, group);
         });
-        for (const indices of groups.values())
-            if (indices.length > 1) {
+        const depth = (family: string): number => {
+            const seen = new Set<string>();
+            while (!seen.has(family)) {
+                seen.add(family);
+                const parent = this.families.get(family);
+                if (!parent || parent === family) break;
+                family = parent;
+            }
+            return seen.size;
+        };
+        for (const [family, ids] of [...groups].sort(([a], [b]) => depth(a) - depth(b))) {
+            const anchor = entries.find((entry) => entry.id === this.joinedOwner(family));
+            if (anchor && (ids.length > 1 || !ids.includes(anchor.id))) {
+                const members = new Set(ids);
+                const sorted = entries
+                    .filter((entry) => members.has(entry.id) && entry !== anchor)
+                    .sort((a, b) => this.bounds(a.id).start - this.bounds(b.id).start);
+                if (members.has(anchor.id)) sorted.unshift(anchor);
+                const index = entries.indexOf(anchor);
+                const insertion = entries
+                    .slice(0, index + (members.has(anchor.id) ? 0 : 1))
+                    .filter((entry) => !members.has(entry.id)).length;
+                const remaining = entries.filter((entry) => !members.has(entry.id));
+                remaining.splice(insertion, 0, ...sorted);
+                entries.splice(0, entries.length, ...remaining);
+            } else if (ids.length > 1) {
+                const indices = entries.flatMap((entry, index) => (ids.includes(entry.id) ? [index] : []));
                 const sorted = indices
                     .map((index) => entries[index])
                     .sort((a, b) => this.bounds(a.id).start - this.bounds(b.id).start);
-                indices.forEach((index, offset) => {
-                    entries[index] = sorted[offset];
-                });
+                indices.forEach((index, offset) => (entries[index] = sorted[offset]));
             }
+        }
         return entries;
     }
 }

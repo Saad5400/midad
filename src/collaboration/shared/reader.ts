@@ -29,13 +29,13 @@ export function readSharedDocument(store: SharedStore, view: NativeDocument, rev
             attrs: Record<string, Json> = { ...readSharedAttributes(source) };
         let children: NativeNode[] = [];
         if (isTextBlock({ kind, id })) {
-            for (const delta of store.flow(address).parts) {
+            for (const delta of store.parts(address)) {
                 const offset = delta.from;
                 if (typeof delta.insert === 'string') {
                     const attributes = (delta.attributes ?? {}) as Record<string, Json>,
                         raw = attributes.textAttributes;
                     const marks = nativeSharedMarks(attributes),
-                        relative = Y.createRelativePositionFromTypeIndex(store.inline(address), offset);
+                        relative = Y.createRelativePositionFromTypeIndex(store.inline(delta.source), offset);
                     const textId = `shared-text:${encodeSharedBytes(Y.encodeRelativePosition(relative))}`;
                     const textAttrs = isRecord(raw)
                         ? {
@@ -51,7 +51,7 @@ export function readSharedDocument(store: SharedStore, view: NativeDocument, rev
                         ...(marks.length ? { marks } : {}),
                     });
                 } else if (delta.insert && typeof delta.insert === 'object' && typeof delta.insert.node === 'string') {
-                    if (store.visibleEmbed(address, delta.insert))
+                    if (store.visibleEmbed(delta.source, delta.insert))
                         children.push(readNode(delta.insert.node, depth + 1));
                 } else throw new Error('Invalid shared inline content');
             }
