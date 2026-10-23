@@ -20,7 +20,7 @@ npm test
 npm pack
 ```
 
-The package is not published to npm yet. Build locally and install the resulting tarball into your application.
+The package is not published to npm yet. Versioned tarballs are attached to [GitHub releases](https://github.com/Saad5400/midad/releases); install a release artifact URL or build and install a local tarball. Applications do not need to commit the binary package to their source repository.
 
 ## Engine API
 
@@ -82,6 +82,12 @@ view.dispose();
 `FragmentContentController` in `/interchange/fragment` adapts embedded rich content while preserving document objects, body arrays, JSON string envelopes, field identities and attachment references. Fragment view settings stay out of stored content. Hosts pass authoritative external changes to `accept`; a matching local acknowledgement keeps the current editing session and undo history. `fragmentIsEmpty` recognizes structural content as well as text. `fragmentPageHeight` in `/browser/view` sizes embedded page viewports from body geometry.
 
 `insertCapabilities` in `/content/capabilities` describes insertion controls independently for fields, images, tables, clauses and language columns. Hosts can offer rich tables in an explanation editor while keeping document-specific insertion controls elsewhere.
+
+`applyDocumentEdit` in `/document` prepares a candidate before accepting it. Pass the candidate, a current-document getter, a preparation callback and a synchronous acceptance callback. Identity/revision checks run before preparation and immediately before acceptance; failures leave the session untouched. `DocumentEditError.code` distinguishes `INVALID_DOCUMENT_EDIT` from `STALE_DOCUMENT_EDIT`. An optional fifth callback releases prepared resources after acceptance, stale rejection or an acceptance error. Preparation owns cleanup if it throws before returning resources. Keep session/history changes in the synchronous acceptance callback; notify persistence afterward.
+
+`InputQueue` in `/browser/input` preserves the order of captured input and keyboard actions while preparation is asynchronous. Rejected tasks do not prevent later tasks from running. `idle()` waits for the currently queued work. `reset()` skips queued tasks from the previous generation; an already running task still needs the host's disposal and current-document checks.
+
+`NativeTextKernel.retainParagraphs` keeps displayed or staged shaped paragraphs alive while another document is measured. It returns an idempotent release function. Hosts retain the current scene and transfer ownership to its replacement before releasing the old scene. `clearUnused` respects outstanding leases; destroying the kernel releases all native resources even when a lease remains.
 
 `TypingHistory` in `/browser/input` supplies capture tokens for adjacent input events. Pass the token to `DocumentSession.commit`; its boolean return indicates a new undo step. Continuous typing or deletion shares an undo step within 500 ms. Reset the input controller and call `session.stopCapturing()` on pointer actions, navigation, focus changes or other boundaries. Composition, paste and selection replacement remain separate operations.
 

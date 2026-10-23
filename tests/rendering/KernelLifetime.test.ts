@@ -21,6 +21,7 @@ describe('text kernel resource lifetime', () => {
             },
         );
         let first: ReturnType<typeof kernel.shapeRich> | undefined;
+        let retained: ReturnType<typeof kernel.shape> | undefined;
         try {
             const start = ck.HEAPU8.byteLength;
             for (let index = 0; index < 600; index++) {
@@ -72,11 +73,25 @@ describe('text kernel resource lifetime', () => {
                 'rtl',
             );
             expect(first!.paragraph.getGlyphPositionAtCoordinate(0, 0)).toEqual(position);
+            const release = kernel.retainParagraphs([first!]);
+            const secondRelease = kernel.retainParagraphs([first!]);
+            kernel.clearUnused(new Set());
+            expect(first!.paragraph.isDeleted()).toBe(false);
+            release();
+            release();
+            kernel.clearUnused(new Set());
+            expect(first!.paragraph.isDeleted()).toBe(false);
+            secondRelease();
+            kernel.clearUnused(new Set());
+            expect(first!.paragraph.isDeleted()).toBe(true);
+            retained = kernel.shape('Retained until disposal', 200, 12, 'ltr');
+            kernel.retainParagraphs([retained]);
         } finally {
             kernel.destroy();
             kernel.destroy();
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
         expect(first!.paragraph.isDeleted()).toBe(true);
+        expect(retained!.paragraph.isDeleted()).toBe(true);
     });
 });

@@ -19,6 +19,7 @@ let loading: Promise<CanvasKit> | undefined;
 
 export class NativeTextKernel {
     private cache = new Map<string, ShapedParagraph>();
+    private retained = new Map<ShapedParagraph, number>();
     private readonly fonts: TextFonts;
     private preparing: Promise<void> = Promise.resolve();
     private disposed = false;
@@ -133,9 +134,25 @@ export class NativeTextKernel {
         return surface;
     }
 
+    retainParagraphs(paragraphs: Iterable<ShapedParagraph>): () => void {
+        if (this.disposed) throw new Error('The document renderer has been disposed');
+        const entries = new Set(paragraphs);
+        for (const entry of entries) this.retained.set(entry, (this.retained.get(entry) ?? 0) + 1);
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            for (const entry of entries) {
+                const count = this.retained.get(entry) ?? 0;
+                if (count > 1) this.retained.set(entry, count - 1);
+                else this.retained.delete(entry);
+            }
+        };
+    }
+
     clearUnused(used: ReadonlySet<ShapedParagraph>): void {
         for (const [key, shaped] of this.cache)
-            if (!used.has(shaped)) {
+            if (!used.has(shaped) && !this.retained.has(shaped)) {
                 shaped.paragraph.delete();
                 this.cache.delete(key);
             }
@@ -147,6 +164,7 @@ export class NativeTextKernel {
         void this.preparing
             .catch(() => undefined)
             .then(() => {
+                this.retained.clear();
                 this.clearUnused(new Set());
                 this.fonts.destroy();
                 this.images.destroy();
