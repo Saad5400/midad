@@ -14,7 +14,7 @@ import { syncSharedInline } from './inline.js';
 import { key } from './schema.js';
 import type { SharedStore } from './store.js';
 import { variantScope as clauseVariantScope, variantBody } from './variants.js';
-import { readSharedDocument } from './reader.js';
+import { readSharedDocument, readSharedNode } from './reader.js';
 
 export class SharedWriter {
     private readonly previousNodes = new Map<string, NativeNode>();
@@ -37,10 +37,12 @@ export class SharedWriter {
         const nextNodes = new Map<string, NativeNode>();
         this.indexNodes(document.root, '', document, nextNodes);
         let detached = false;
+        const revived: string[] = [];
         for (const address of nextNodes.keys()) {
-            if (!this.previousNodes.has(address) && typeof this.store.deleted.get(address) === 'object') {
+            if (!this.previousNodes.has(address) && this.store.deleted.get(address)) {
                 this.store.deleted.set(address, false);
                 detached = true;
+                revived.push(address);
             }
         }
         if (detached) {
@@ -48,6 +50,9 @@ export class SharedWriter {
             before = readSharedDocument(this.store, before, before.revision);
             this.previousNodes.clear();
             this.indexNodes(before.root, '', before);
+            for (const address of revived)
+                if (!this.previousNodes.has(address) && this.store.registry.has(address))
+                    this.previousNodes.set(address, readSharedNode(this.store, before, address));
         }
         this.planStructure(before.root, document.root, '');
         this.syncNode(before.root, document.root, '', before, document);

@@ -14,9 +14,7 @@ import { encodeSharedBytes, nativeSharedMarks, readSharedAttributes } from '../v
 import { identity, key } from './schema.js';
 import type { SharedStore } from './store.js';
 
-export function readSharedDocument(store: SharedStore, view: NativeDocument, revision: number): NativeDocument {
-    const root = store.meta.get('root');
-    if (typeof root !== 'string') throw new Error('The shared document has no root');
+function nodeReader(store: SharedStore, view: NativeDocument): (address: string, depth?: number) => NativeNode {
     const visited = new Set<string>();
     const readNode = (address: string, depth = 0): NativeNode => {
         if (depth > 64 || visited.has(address) || visited.size > 100000)
@@ -118,7 +116,17 @@ export function readSharedDocument(store: SharedStore, view: NativeDocument, rev
                 : {}),
         });
     };
-    const parsed = importDocument(exportDocument({ ...view, root: readNode(root) }), view.id);
+    return readNode;
+}
+
+export function readSharedNode(store: SharedStore, view: NativeDocument, address: string): NativeNode {
+    return nodeReader(store, view)(address);
+}
+
+export function readSharedDocument(store: SharedStore, view: NativeDocument, revision: number): NativeDocument {
+    const root = store.meta.get('root');
+    if (typeof root !== 'string') throw new Error('The shared document has no root');
+    const parsed = importDocument(exportDocument({ ...view, root: readSharedNode(store, view, root) }), view.id);
     if (!textBlocks(parsed.root).length) throw new Error('The shared document has no editable text');
     return Object.freeze({ ...parsed, revision });
 }
