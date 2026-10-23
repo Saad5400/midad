@@ -151,7 +151,7 @@ export class SharedWriter {
             for (let index = run.length - 1; index > 0; index--) {
                 const address = key(scope, run[index].id);
                 const point =
-                    offsets[index] === this.store.length(leftAddress)
+                    offsets[index] > 0 && offsets[index] === this.store.length(leftAddress)
                         ? this.store.endPoint(leftAddress)
                         : this.store.point(leftAddress, offsets[index]);
                 this.store.flows.set(address, point.source);

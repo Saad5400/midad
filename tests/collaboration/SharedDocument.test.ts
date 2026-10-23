@@ -700,6 +700,152 @@ describe('our shared native document', () => {
         }
     });
 
+    it.each([0, 3, 7].flatMap((offset) => [false, true].map((independent) => ({ offset, independent }))))(
+        'keeps existing split siblings after splitting their joined prefix ($offset, $independent)',
+        ({ offset, independent }) => {
+            const pair = () => {
+                const a = SharedNativeDocument.create(
+                    importDocument(
+                        {
+                            type: 'doc',
+                            content: ['First', 'Second'].map((text) => ({
+                                type: 'paragraph',
+                                content: [{ type: 'text', text }],
+                            })),
+                        },
+                        'shared-prefix',
+                    ),
+                );
+                return { a, b: SharedNativeDocument.fromState(a.state(), a.document().id) };
+            };
+            const { a, b } = independent ? independentPeers() : pair();
+            try {
+                const [left, right] = textBlocks(a.document().root);
+                a.publish(
+                    splitTextBlock(a.document(), {
+                        blockId: right.id,
+                        from: 2,
+                        to: 2,
+                        expectedRevision: a.document().revision,
+                    }).document,
+                );
+                a.publish(joinPreviousTextBlock(a.document(), right.id)!.document);
+                expect(text(a)).toBe('FirstSe\ncond');
+                a.publish(
+                    splitTextBlock(a.document(), {
+                        blockId: left.id,
+                        from: offset,
+                        to: offset,
+                        expectedRevision: a.document().revision,
+                    }).document,
+                );
+                merge(a, b);
+                expect(text(a)).toBe('FirstSe'.slice(0, offset) + '\n' + 'FirstSe'.slice(offset) + '\ncond');
+                expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+
+    it('keeps split siblings after a paragraph containing an empty joined prefix is split', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        { type: 'paragraph', attrs: { nativeId: 'left' }, content: [] },
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'right' },
+                            content: [{ type: 'text', text: 'Second' }],
+                        },
+                    ],
+                },
+                'empty-joined-prefix',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'right',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            a.publish(joinPreviousTextBlock(a.document(), 'right')!.document);
+            edit(a, 0, 0, 'First');
+            expect(text(a)).toBe('First\nSecond');
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            merge(a, b);
+            expect(text(a)).toBe('\nFirst\nSecond');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each([false, true])('splits an empty joined paragraph before its known suffix (%s)', (independent) => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'left' },
+                            content: [{ type: 'text', text: 'FirstSecond' }],
+                        },
+                        ...(independent ? [{ type: 'horizontalRule', attrs: { nativeId: 'divider' } }] : []),
+                        { type: 'paragraph', attrs: { nativeId: 'right' }, content: [] },
+                    ],
+                },
+                'empty-joined-split',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            if (independent) a.publish(deleteBlock(a.document(), 'divider')!.document);
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 5,
+                    to: 5,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            a.publish(moveBlock(a.document(), 'right', 'left', 'after'));
+            a.publish(joinPreviousTextBlock(a.document(), 'right')!.document);
+            edit(a, 0, 5, '');
+            expect(text(a)).toBe('\nSecond');
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            merge(a, b);
+            expect(text(a)).toBe('\n\nSecond');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
     it('moves the remaining joined references into the suffix when splitting composed text', () => {
         const a = SharedNativeDocument.create(
             importDocument(

@@ -9,7 +9,7 @@ import {
     splitTextBlock,
     textBlocks,
 } from '@saad5400/midad/editing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 
 const characters = (peer: SharedNativeDocument) =>
@@ -22,6 +22,13 @@ describe('three-peer structural convergence', () => {
     it.each([0x5eed, 0xc1, 0x5400])(
         'preserves text and canonical data with delayed delivery (seed %s)',
         (seed) => {
+            let identity = 0;
+            const uuid = vi
+                .spyOn(crypto, 'randomUUID')
+                .mockImplementation(
+                    () =>
+                        `00000000-0000-4000-8000-${seed.toString(16).padStart(4, '0')}${(++identity).toString(16).padStart(8, '0')}`,
+                );
             let random = seed;
             const next = () => (random = (Math.imul(random, 1664525) + 1013904223) >>> 0);
             const source = SharedNativeDocument.create(
@@ -157,6 +164,7 @@ describe('three-peer structural convergence', () => {
                 throw new Error(`Seed ${seed}; trace ${trace.join(', ')}; ${String(error)}`, { cause: error });
             } finally {
                 peers.forEach((peer) => peer.destroy());
+                uuid.mockRestore();
             }
         },
         120000,

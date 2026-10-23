@@ -415,7 +415,7 @@ export class SharedStore {
             });
         const groups = new Map<string, string[]>();
         entries.forEach((entry) => {
-            const family = this.families.get(entry.id) ?? entry.id;
+            const family = this.joinedOwner(this.families.get(entry.id) ?? entry.id);
             const group = groups.get(family) ?? [];
             group.push(entry.id);
             groups.set(family, group);
@@ -434,9 +434,18 @@ export class SharedStore {
             const anchor = entries.find((entry) => entry.id === this.joinedOwner(family));
             if (anchor && (ids.length > 1 || !ids.includes(anchor.id))) {
                 const members = new Set(ids);
-                const sorted = entries
-                    .filter((entry) => members.has(entry.id) && entry !== anchor)
-                    .sort((a, b) => this.bounds(a.id).start - this.bounds(b.id).start);
+                const sorted = entries.filter((entry) => members.has(entry.id) && entry !== anchor);
+                const sources = new Map<string, number[]>();
+                sorted.forEach((entry, index) => {
+                    const source = this.source(entry.id);
+                    sources.set(source, [...(sources.get(source) ?? []), index]);
+                });
+                for (const indices of sources.values()) {
+                    const sourceOrder = indices
+                        .map((index) => sorted[index])
+                        .sort((a, b) => this.bounds(a.id).start - this.bounds(b.id).start);
+                    indices.forEach((index, offset) => (sorted[index] = sourceOrder[offset]));
+                }
                 if (members.has(anchor.id)) sorted.unshift(anchor);
                 const index = entries.indexOf(anchor);
                 const insertion = entries
