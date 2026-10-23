@@ -56,8 +56,13 @@ export function syncSharedInline(
             }
         }
         flush();
+        text.insertEmbed(text.length, { end: true });
         store.invalidateCaches();
         return;
+    }
+    if (!before && (store.source(address) !== address || !text.length)) {
+        text.insertEmbed(text.length, { end: true });
+        store.invalidateCaches();
     }
     const same = (a: InlineToken, b: InlineToken): boolean =>
         typeof a.insert === 'string' && typeof b.insert === 'string'

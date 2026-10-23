@@ -395,6 +395,31 @@ describe('our shared native document', () => {
         a.destroy();
         b.destroy();
     });
+    it.each(['', 'First'])('keeps a caret at the old left boundary when its suffix is joined (%s)', (prefix) => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [prefix, 'Second'].map((text, index) => ({
+                        type: 'paragraph',
+                        attrs: { nativeId: `boundary-${index}` },
+                        content: text ? [{ type: 'text', text }] : [],
+                    })),
+                },
+                'join-caret-affinity',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            const caret = b.caret({ blockId: 'boundary-0', offset: prefix.length })!;
+            a.publish(joinPreviousTextBlock(a.document(), 'boundary-1')!.document);
+            merge(a, b);
+            expect(b.resolve(caret)).toEqual({ blockId: 'boundary-0', offset: prefix.length });
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
     it('keeps shared updates small for a 600-paragraph document', () => {
         const started = performance.now();
         const a = SharedNativeDocument.create(importDocument(makeNativeFixture(600), 'large-shared'));
@@ -535,6 +560,52 @@ describe('our shared native document', () => {
             b.destroy();
         }
     });
+    it.each([false, true].flatMap((independent) => [false, true].map((reverse) => ({ independent, reverse }))))(
+        'keeps an old left-paragraph append before its joined suffix ($independent, $reverse)',
+        ({ independent, reverse }) => {
+            const pair = () => {
+                const a = SharedNativeDocument.create(
+                    importDocument(
+                        {
+                            type: 'doc',
+                            content: ['First', 'Second'].map((text) => ({
+                                type: 'paragraph',
+                                content: [{ type: 'text', text }],
+                            })),
+                        },
+                        'join-end-affinity',
+                    ),
+                );
+                return { a, b: SharedNativeDocument.fromState(a.state(), a.document().id) };
+            };
+            const { a, b } = independent ? independentPeers() : pair();
+            a.ydoc.clientID = reverse ? 1002 : 1001;
+            b.ydoc.clientID = reverse ? 1001 : 1002;
+            try {
+                a.publish(joinPreviousTextBlock(a.document(), textBlocks(a.document().root)[1].id)!.document);
+                edit(b, 5, 5, ' peer ');
+                merge(a, b);
+                expect(text(a)).toBe('First peer Second');
+                expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+                a.stopCapturing();
+                const document = a.document(),
+                    block = textBlocks(document.root)[0];
+                a.publish(
+                    splitTextBlock(document, { blockId: block.id, from: 7, to: 7, expectedRevision: document.revision })
+                        .document,
+                );
+                merge(a, b);
+                expect(text(a)).toBe('First p\neer Second');
+                a.undo();
+                merge(a, b);
+                expect(text(a)).toBe('First peer Second');
+                expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
 
     it.each(['edit', 'format', 'split', 'undo', 'redo', 'reopen', 'caret'])(
         'preserves independent joined flows through %s',
@@ -1281,7 +1352,7 @@ describe('our shared native document', () => {
         a.destroy();
         b.destroy();
     });
-    it.each([1, 3])('rejects incompatible shared protocol %s instead of misreading its text histories', (schema) => {
+    it.each([1, 2, 4])('rejects incompatible shared protocol %s instead of misreading its text histories', (schema) => {
         const a = create();
         try {
             a.ydoc.getMap('native').set('schema', schema);

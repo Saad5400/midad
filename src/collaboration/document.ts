@@ -12,7 +12,7 @@ import { readSharedDocument } from './shared/reader.js';
 import { variantScope } from './shared/variants.js';
 import { canonicalSharedJson } from './values.js';
 
-export const SHARED_DOCUMENT_SCHEMA = 2;
+export const SHARED_DOCUMENT_SCHEMA = 3;
 
 export interface SharedCaret {
     readonly block: string;

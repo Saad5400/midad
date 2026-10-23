@@ -142,7 +142,7 @@ The rendering kernel coordinates resource lifetime and caches shaped paragraphs.
 
 The sync client coordinates document synchronization and acknowledgement state. `sync/contracts.ts` defines the host protocol, `sync/requests.ts` owns deadlines and transport failures, `sync/selection.ts` captures and restores relative selections, and `sync/presence.ts` owns its peer cache, identity, heartbeat and disposal. These private modules never import the client coordinator. Existing public kernel and sync entrypoints re-export their original contracts for compatibility.
 
-`SharedNativeDocument` uses `SHARED_DOCUMENT_SCHEMA` for ephemeral live state. Protocol 2 preserves joined text histories and rejects incompatible binary states; the document JSON format is unchanged. Hosts must recover pending edits before reseeding a live session from saved JSON during a protocol upgrade.
+`SharedNativeDocument` uses `SHARED_DOCUMENT_SCHEMA` for ephemeral live state. Protocol 3 preserves joined text histories and paragraph-end affinity, and rejects incompatible binary states; the document JSON format is unchanged. Hosts must recover pending edits before reseeding a live session from saved JSON during a protocol upgrade.
 
 Each module owns its state explicitly. Collaboration composes a shared store and writer; the decoder reads that store without depending on the writer or public lifecycle. Clipboard codecs do not depend on selection extraction or insertion. Browser input, views and menus can be consumed independently and do not import one another.
 
