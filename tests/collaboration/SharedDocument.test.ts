@@ -939,6 +939,61 @@ describe('our shared native document', () => {
             b.destroy();
         }
     });
+    it('removes later metadata when restoring a deleted clause variant', () => {
+        const document = importDocument({ type: 'doc' }, 'deleted-variant-restore');
+        const body = (text: string) => ({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+        });
+        const clause = createNativeClause(document, 'Clause', {
+            uuid: 'library',
+            title: 'Clause',
+            variants: [
+                { uuid: 'a', body_content: body('First') },
+                { uuid: 'b', body_content: body('Second') },
+            ],
+        });
+        const a = SharedNativeDocument.create({ ...document, root: { ...document.root, children: [clause] } });
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id),
+            original = a.document();
+        try {
+            const id = nativeClauses(original)[0].id;
+            a.publish(
+                replaceBlockNode(a.document(), id, (node) => ({
+                    ...node,
+                    attributes: {
+                        ...node.attributes,
+                        variants: (
+                            node.attributes!.variants as Array<Record<string, import('@saad5400/midad/document').Json>>
+                        ).map((variant) =>
+                            variant.id === 'b'
+                                ? { ...variant, laterMetadata: 'Must not survive restoration' }
+                                : variant,
+                        ),
+                    },
+                })),
+            );
+            a.publish(
+                replaceBlockNode(a.document(), id, (node) => ({
+                    ...node,
+                    attributes: {
+                        ...node.attributes,
+                        variants: (
+                            node.attributes!.variants as Array<Record<string, import('@saad5400/midad/document').Json>>
+                        ).filter((variant) => variant.id !== 'b'),
+                    },
+                })),
+            );
+            merge(a, b);
+            a.publish({ ...original, revision: a.document().revision + 1 });
+            merge(a, b);
+            expect(exportDocument(a.document())).toEqual(exportDocument(original));
+            expect(exportDocument(b.document())).toEqual(exportDocument(original));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
 
     it.each([0, 3, 7].flatMap((offset) => [false, true].map((independent) => ({ offset, independent }))))(
         'keeps existing split siblings after splitting their joined prefix ($offset, $independent)',

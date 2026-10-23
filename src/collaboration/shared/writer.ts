@@ -9,7 +9,7 @@ import {
     type NativeNode,
 } from '../../document/model.js';
 import { blockText, isTextBlock } from '../../document/text.js';
-import { canonicalSharedJson, writeSharedAttributes } from '../values.js';
+import { canonicalSharedJson, readSharedAttributes, writeSharedAttributes } from '../values.js';
 import { syncSharedInline } from './inline.js';
 import { key } from './schema.js';
 import type { SharedStore } from './store.js';
@@ -415,14 +415,13 @@ export class SharedWriter {
         for (const variant of variants) {
             const old = oldById.get(variant.id),
                 variantAddress = JSON.stringify(['variant', address, variant.id]);
+            const attrs = this.store.attributes(variantAddress);
             const metadata = Object.fromEntries(Object.entries(variant).filter(([key]) => key !== 'bodyContent'));
-            const oldMetadata = Object.fromEntries(Object.entries(old ?? {}).filter(([key]) => key !== 'bodyContent'));
+            const oldMetadata = old
+                ? Object.fromEntries(Object.entries(old).filter(([key]) => key !== 'bodyContent'))
+                : readSharedAttributes(attrs);
             if (this.store.deleted.get(variantAddress)) this.store.deleted.set(variantAddress, false);
-            writeSharedAttributes(
-                this.store.attributes(variantAddress),
-                oldMetadata as Attributes,
-                metadata as Attributes,
-            );
+            writeSharedAttributes(attrs, oldMetadata as Attributes, metadata as Attributes);
             if (old && variant.id !== active && variant.id !== oldActive && old.bodyContent === variant.bodyContent)
                 continue;
             const variantScope = clauseVariantScope(scope, after.id, variant.id);
