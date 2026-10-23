@@ -1,5 +1,6 @@
 import type { CanvasKit } from 'canvaskit-wasm';
 import { chooseFont, scriptFontFiles } from '../../typography/fonts.js';
+import { symbolFontFiles } from '../../typography/font-fallbacks.js';
 import { point } from '../../typography/metrics.js';
 import { DEFAULT_TEXT_STYLE, type TextSpan, type TextStyle } from '../../typography/style.js';
 import { NATIVE_FONT_ID, type TextFonts } from './fonts.js';
@@ -57,6 +58,7 @@ export function shapeParagraph(
                 NATIVE_FONT_ID,
                 ...scriptFontFiles(span.text, span.style.bold),
                 chooseFont({ ...span.style, family: DEFAULT_TEXT_STYLE.family }).id,
+                ...symbolFontFiles(span.text, span.style.bold),
             ]),
         ].filter((id) => id !== choice.id);
         builder.pushStyle(
