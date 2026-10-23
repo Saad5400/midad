@@ -49,10 +49,14 @@ describe('three-peer structural convergence', () => {
                 peer.ydoc.clientID = 1001 + actor;
                 return peer;
             });
+            const initialState = process.env.MIDAD_FUZZ_ARTIFACTS
+                ? Buffer.from(source.state()).toString('base64')
+                : undefined;
             source.destroy();
             const expected = [...'A😀BبC'];
             let inserted = 0;
             const trace: string[] = [];
+            const history: Record<string, unknown>[] = [];
             let diagnostic: unknown;
             const synchronize = () => {
                 for (let round = 0; round < 2; round++)
@@ -77,9 +81,17 @@ describe('three-peer structural convergence', () => {
                     for (const character of text) offsets.push(offsets.at(-1)! + character.length);
                     const offset = offsets[next() % offsets.length];
                     const operation = blocks.length > 24 ? 3 : next() % 5;
+                    const entry: Record<string, unknown> = {
+                        actor,
+                        operation,
+                        blockId: block.id,
+                        offset,
+                        uuidStart: identity,
+                    };
                     let candidate = document;
                     if (operation === 0 || (blocks.length === 1 && operation >= 3)) {
                         const character = String.fromCodePoint(0xe000 + inserted++);
+                        entry.text = character;
                         expected.push(character);
                         candidate = replaceInlineText(document, {
                             blockId: block.id,
@@ -101,16 +113,20 @@ describe('three-peer structural convergence', () => {
                             to: offset,
                             expectedRevision: document.revision,
                         }).document;
+                        entry.newId = textBlocks(candidate.root).find(
+                            (node) => !blocks.some((old) => old.id === node.id),
+                        )?.id;
                     } else if (operation === 3) {
-                        candidate = joinPreviousTextBlock(document, blocks[Math.max(1, index)].id)!.document;
+                        entry.blockId = blocks[Math.max(1, index)].id;
+                        candidate = joinPreviousTextBlock(document, entry.blockId as string)!.document;
                     } else {
-                        candidate = moveBlock(
-                            document,
-                            block.id,
-                            blocks[(index + 1 + (next() % (blocks.length - 1))) % blocks.length].id,
-                            next() % 2 ? 'before' : 'after',
-                        );
+                        const target = blocks[(index + 1 + (next() % (blocks.length - 1))) % blocks.length].id;
+                        const placement = next() % 2 ? 'before' : 'after';
+                        entry.target = target;
+                        entry.placement = placement;
+                        candidate = moveBlock(document, block.id, target, placement);
                     }
+                    if (process.env.MIDAD_FUZZ_ARTIFACTS) history.push(entry);
                     trace.push(`${step}:${actor}:${operation}:${index}:${offset}`);
                     if (trace.length > 20) trace.shift();
                     const intended = textBlocks(candidate.root)
@@ -136,6 +152,8 @@ describe('three-peer structural convergence', () => {
                             operation,
                             index,
                             offset,
+                            initialState,
+                            history,
                             before: exportDocument(document),
                             intended: exportDocument(candidate),
                             actual: exportDocument(peer.document()),
@@ -152,7 +170,10 @@ describe('three-peer structural convergence', () => {
                         };
                     expect(characters(peer)).toBe(intended);
                     expect(textBlocks(peer.document().root).map(blockText).join('\n')).toBe(intendedOrder);
-                    if (next() % 4 === 0) synchronize();
+                    if (next() % 4 === 0) {
+                        entry.sync = true;
+                        synchronize();
+                    }
                 }
                 synchronize();
             } catch (error) {

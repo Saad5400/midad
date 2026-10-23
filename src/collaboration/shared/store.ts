@@ -9,6 +9,11 @@ interface FlowTrail {
     edge: string;
 }
 
+interface RelativeCache {
+    positions: Map<number, Y.RelativePosition>;
+    observe: (event: Y.YTextEvent) => void;
+}
+
 export class SharedStore {
     readonly registry: Y.Map<string>;
     readonly meta: Y.Map<Json>;
@@ -22,7 +27,9 @@ export class SharedStore {
     private edgeCache?: Map<string, Parent & { id: string }>;
     private parentCache?: Map<string, Parent & { id: string }>;
     private joinOwners = new Map<string, string>();
+    private readonly resolvedOwners = new Map<string, string>();
     private placementClock = 0;
+    private readonly relativeCache = new Map<Y.Text, RelativeCache>();
     placementReady = false;
 
     constructor(readonly ydoc: Y.Doc) {
@@ -33,6 +40,8 @@ export class SharedStore {
         this.deleted = ydoc.getMap('deleted');
     }
     clear(): void {
+        for (const [text, cache] of this.relativeCache) text.unobserve(cache.observe);
+        this.relativeCache.clear();
         this.types.clear();
         this.invalidateCaches();
     }
@@ -61,6 +70,7 @@ export class SharedStore {
     }
     invalidateCaches(): void {
         this.flowCache.clear();
+        this.resolvedOwners.clear();
         this.edgeCache = undefined;
         this.parentCache = undefined;
     }
@@ -116,9 +126,17 @@ export class SharedStore {
     joinedOwner(address: string): string {
         this.physicalEdges();
         const chain = new Map<string, Joined & { target: string }>();
+        const initial = address;
+        const finish = (owner: string): string => {
+            this.resolvedOwners.set(initial, owner);
+            for (const member of chain.keys()) this.resolvedOwners.set(member, owner);
+            return owner;
+        };
         while (true) {
+            const resolved = this.resolvedOwners.get(address);
+            if (resolved !== undefined) return finish(resolved);
             const entry = this.deleted.get(address);
-            if (!entry || typeof entry !== 'object') return address;
+            if (!entry || typeof entry !== 'object') return finish(address);
             if (chain.has(address)) {
                 const cycle: Array<Joined & { target: string }> = [];
                 const start = address;
@@ -131,7 +149,7 @@ export class SharedStore {
                     (a, b) =>
                         b.rank - a.rank || b.actor - a.actor || (a.edge === b.edge ? 0 : a.edge > b.edge ? -1 : 1),
                 );
-                return cycle[0].target;
+                return finish(cycle[0].target);
             }
             if (chain.size > 100000) throw new Error('Invalid shared join structure');
             const target = this.joinOwners.get(address) ?? entry.join;
@@ -157,6 +175,48 @@ export class SharedStore {
     inline(address: string): Y.Text {
         const source = this.source(address);
         return this.typed(`t:${source}`, () => this.ydoc.getText(`t:${source}`));
+    }
+    relativePosition(address: string, index: number): Y.RelativePosition {
+        const text = this.inline(address);
+        let cache = this.relativeCache.get(text);
+        if (!cache) {
+            const created: RelativeCache = {
+                positions: new Map(),
+                observe: (event) => {
+                    const delta = event.delta;
+                    if (!delta.some((part) => part.insert !== undefined || part.delete !== undefined)) return;
+                    const ranges: Array<{ start: number; end: number; shift: number }> = [];
+                    let previous = 0,
+                        current = 0;
+                    for (const part of delta) {
+                        if (part.retain) {
+                            ranges.push({ start: previous, end: previous + part.retain, shift: current - previous });
+                            previous += part.retain;
+                            current += part.retain;
+                        }
+                        if (part.delete) previous += part.delete;
+                        if (part.insert !== undefined)
+                            current += typeof part.insert === 'string' ? part.insert.length : 1;
+                    }
+                    ranges.push({ start: previous, end: Infinity, shift: current - previous });
+                    const positions = new Map<number, Y.RelativePosition>();
+                    for (const [offset, relative] of created.positions) {
+                        const range = ranges.find((entry) => offset >= entry.start && offset < entry.end);
+                        if (range) positions.set(offset + range.shift, relative);
+                    }
+                    created.positions = positions;
+                },
+            };
+            cache = created;
+            this.relativeCache.set(text, cache);
+            text.observe(cache.observe);
+        }
+        let relative = cache.positions.get(index);
+        if (!relative) {
+            relative = Y.createRelativePositionFromTypeIndex(text, index);
+            cache.positions.set(index, relative);
+        }
+        return relative;
     }
     bounds(address: string): { start: number; end: number } {
         const segment = this.flow(address);

@@ -12,6 +12,8 @@ import { readSharedDocument } from './shared/reader.js';
 import { variantScope } from './shared/variants.js';
 import { canonicalSharedJson } from './values.js';
 
+export const SHARED_DOCUMENT_SCHEMA = 2;
+
 export interface SharedCaret {
     readonly block: string;
     readonly position: Uint8Array;
@@ -47,7 +49,7 @@ export class SharedNativeDocument {
         if (state) {
             Y.applyUpdateV2(this.ydoc, state, REMOTE);
             if (
-                this.store.meta.get('schema') !== 1 ||
+                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
                 typeof this.store.meta.get('root') !== 'string' ||
                 typeof this.store.meta.get('epoch') !== 'string'
             )
@@ -56,7 +58,7 @@ export class SharedNativeDocument {
         } else {
             this.ydoc.transact(() => {
                 this.store.seeding = true;
-                this.store.meta.set('schema', 1);
+                this.store.meta.set('schema', SHARED_DOCUMENT_SCHEMA);
                 this.store.meta.set('epoch', crypto.randomUUID());
                 this.store.meta.set('root', key('', document.root.id));
                 this.writer.write(undefined, document);
@@ -142,7 +144,11 @@ export class SharedNativeDocument {
         this.ydoc.on('afterTransaction', observe);
         try {
             Y.applyUpdateV2(this.ydoc, update, REMOTE);
-            if (this.store.meta.get('schema') !== 1 || this.store.meta.get('root') !== root || this.epoch() !== epoch)
+            if (
+                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
+                this.store.meta.get('root') !== root ||
+                this.epoch() !== epoch
+            )
                 throw new Error('The shared document identity changed');
             if (changed) this.view = this.read(this.view.revision + 1);
             return this.view;

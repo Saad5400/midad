@@ -35,7 +35,7 @@ export function readSharedDocument(store: SharedStore, view: NativeDocument, rev
                     const attributes = (delta.attributes ?? {}) as Record<string, Json>,
                         raw = attributes.textAttributes;
                     const marks = nativeSharedMarks(attributes),
-                        relative = Y.createRelativePositionFromTypeIndex(store.inline(delta.source), offset);
+                        relative = store.relativePosition(delta.source, offset);
                     const textId = `shared-text:${encodeSharedBytes(Y.encodeRelativePosition(relative))}`;
                     const textAttrs = isRecord(raw)
                         ? {

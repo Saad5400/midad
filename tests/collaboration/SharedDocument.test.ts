@@ -885,6 +885,146 @@ describe('our shared native document', () => {
         }
     });
 
+    it.each(['plain', 'bilingual-table', 'list', 'clause'])(
+        'keeps consecutive Enter operations ahead of a suffix after concurrent moves and joins in %s',
+        (container) => {
+            const paragraphs = ['A😀', 'Bب', 'C'].map((text, index) => ({
+                type: 'paragraph',
+                attrs: { nativeId: `p-${index}` },
+                content: [{ type: 'text', text }],
+            }));
+            let content: unknown[] = paragraphs;
+            if (container === 'bilingual-table')
+                content = [
+                    {
+                        type: 'parallelRow',
+                        content: [
+                            {
+                                type: 'parallelCell',
+                                attrs: { direction: 'rtl' },
+                                content: [
+                                    {
+                                        type: 'table',
+                                        content: [
+                                            {
+                                                type: 'tableRow',
+                                                content: [
+                                                    { type: 'tableCell', content: paragraphs },
+                                                    {
+                                                        type: 'tableCell',
+                                                        content: [
+                                                            {
+                                                                type: 'paragraph',
+                                                                content: [{ type: 'text', text: 'جدول' }],
+                                                            },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            {
+                                type: 'parallelCell',
+                                attrs: { direction: 'ltr' },
+                                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'English' }] }],
+                            },
+                        ],
+                    },
+                ];
+            if (container === 'list')
+                content = [{ type: 'bulletList', content: [{ type: 'listItem', content: paragraphs }] }];
+            if (container === 'clause')
+                content = [
+                    {
+                        type: 'clause',
+                        content: [
+                            { type: 'clauseTitle', content: [{ type: 'text', text: 'عنوان البند' }] },
+                            { type: 'clauseBody', content: paragraphs },
+                        ],
+                    },
+                ];
+            const seed = SharedNativeDocument.create(importDocument({ type: 'doc', content }, 'concurrent-enter'));
+            const peers = [0, 1, 2].map((actor) => {
+                const peer = SharedNativeDocument.fromState(seed.state(), seed.document().id);
+                peer.ydoc.clientID = 1001 + actor;
+                return peer;
+            });
+            seed.destroy();
+            const ids = new Map([
+                ['A', 'p-0'],
+                ['B', 'p-1'],
+                ['C', 'p-2'],
+            ]);
+            const steps: Array<
+                [number, 'split' | 'type' | 'move' | 'join', string, number | string, string?, boolean?]
+            > = [
+                [0, 'split', 'C', 1, 'N1'],
+                [2, 'type', 'A', 0, 'X'],
+                [0, 'split', 'N1', 0, 'N2', true],
+                [2, 'split', 'N2', 0, 'N3'],
+                [2, 'split', 'N2', 0, 'N4'],
+                [1, 'type', 'A', 4, 'Y', true],
+                [2, 'type', 'N3', 0, 'Z', true],
+                [1, 'split', 'A', 4, 'N5', true],
+                [0, 'move', 'N5', 'N2', 'before', true],
+                [0, 'split', 'N3', 0, 'N6'],
+                [1, 'move', 'N3', 'N4', 'before'],
+                [0, 'split', 'N4', 0, 'N7', true],
+                [1, 'split', 'N6', 1, 'N8', true],
+                [0, 'move', 'N5', 'N6', 'after'],
+                [0, 'move', 'N6', 'N7', 'before'],
+                [2, 'move', 'N8', 'N2', 'after'],
+                [1, 'join', 'N3', 0, undefined, true],
+                [0, 'join', 'N5', 0, undefined, true],
+                [2, 'split', 'N8', 0, 'N9', true],
+                [2, 'split', 'N8', 0, 'N10'],
+            ];
+            const synchronize = () => {
+                for (let round = 0; round < 2; round++)
+                    for (const from of peers)
+                        for (const to of peers) if (from !== to) to.receive(from.state(to.vector()));
+            };
+            try {
+                for (const [actor, operation, alias, argument, value, sync] of steps) {
+                    const peer = peers[actor],
+                        document = peer.document(),
+                        id = ids.get(alias)!;
+                    let candidate = document;
+                    if (operation === 'split') {
+                        candidate = splitTextBlock(document, {
+                            blockId: id,
+                            from: argument as number,
+                            to: argument as number,
+                            expectedRevision: document.revision,
+                        }).document;
+                        const previous = new Set(textBlocks(document.root).map((block) => block.id));
+                        ids.set(value!, textBlocks(candidate.root).find((block) => !previous.has(block.id))!.id);
+                    } else if (operation === 'type') {
+                        candidate = replaceInlineText(document, {
+                            blockId: id,
+                            from: argument as number,
+                            to: argument as number,
+                            text: value!,
+                            expectedRevision: document.revision,
+                        });
+                    } else if (operation === 'move') {
+                        candidate = moveBlock(document, id, ids.get(argument as string)!, value as 'before' | 'after');
+                    } else candidate = joinPreviousTextBlock(document, id)!.document;
+                    peer.publish(candidate);
+                    expect(text(peer)).toBe(textBlocks(candidate.root).map(blockText).join('\n'));
+                    if (sync) synchronize();
+                }
+                synchronize();
+                for (const peer of peers)
+                    expect(exportDocument(peer.document())).toEqual(exportDocument(peers[0].document()));
+            } finally {
+                peers.forEach((peer) => peer.destroy());
+            }
+        },
+    );
+
     it('keeps peer suffix edits through several paragraph splits published together', () => {
         const a = create('ABCDEFGHIJ'),
             b = SharedNativeDocument.fromState(a.state(), a.document().id);
@@ -921,6 +1061,69 @@ describe('our shared native document', () => {
         expect(b.document()).toBe(before);
         a.destroy();
         b.destroy();
+    });
+    it('keeps text identities canonical through formatting, insertion, deletion and undo', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            content: [
+                                { type: 'text', attrs: { nativeId: 'original-text' }, text: 'Hello العربية world' },
+                            ],
+                        },
+                    ],
+                },
+                'canonical-text',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const verify = () => {
+            merge(a, b);
+            const fresh = SharedNativeDocument.fromState(a.state(), a.document().id);
+            try {
+                expect(exportDocument(a.document())).toEqual(exportDocument(fresh.document()));
+                expect(exportDocument(b.document())).toEqual(exportDocument(fresh.document()));
+            } finally {
+                fresh.destroy();
+            }
+        };
+        try {
+            for (const [from, to] of [
+                [1, 5],
+                [3, 8],
+                [0, 9],
+                [2, 6],
+            ]) {
+                const document = a.document(),
+                    block = textBlocks(document.root)[0];
+                a.publish(
+                    formatText(
+                        document,
+                        { blockId: block.id, from, to, expectedRevision: document.revision },
+                        { kind: 'toggle', mark: 'bold' },
+                    ),
+                );
+                verify();
+            }
+            a.stopCapturing();
+            edit(a, 0, 0, 'Prefix ');
+            verify();
+            a.stopCapturing();
+            edit(b, 8, 11, '😀');
+            verify();
+            a.undo();
+            verify();
+            a.redo();
+            verify();
+            b.undo();
+            verify();
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
     });
     it.each([false, true])('keeps one field after concurrent inline/floating moves and undo: %s', (reverse) => {
         const original = importDocument(
@@ -1071,12 +1274,23 @@ describe('our shared native document', () => {
     it('rejects updates that replace protocol identity and retains a recoverable document', () => {
         const { a, b } = peers(),
             before = a.document();
-        b.ydoc.getMap('native').set('schema', 2);
+        b.ydoc.getMap('native').set('schema', 999);
         expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
         expect(a.document()).toBe(before);
         expect(() => a.publish(before)).toThrow('closed');
         a.destroy();
         b.destroy();
+    });
+    it.each([1, 3])('rejects incompatible shared protocol %s instead of misreading its text histories', (schema) => {
+        const a = create();
+        try {
+            a.ydoc.getMap('native').set('schema', schema);
+            expect(() => SharedNativeDocument.fromState(a.state(), a.document().id)).toThrow(
+                'Unsupported shared document',
+            );
+        } finally {
+            a.destroy();
+        }
     });
     it('switches legacy variants with shared node ids without splitting their text a second time', () => {
         const paragraph = (id: string, text: string) => ({

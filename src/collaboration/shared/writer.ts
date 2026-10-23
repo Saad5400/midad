@@ -134,7 +134,7 @@ export class SharedWriter {
             const reordered = current
                 .map((node) => key(scope, node.id))
                 .filter((address) => addresses.includes(address));
-            const known = current.filter((node) => !splitting.has(node.id));
+            const known = current.filter((node) => !splitting.has(node.id) || anchor !== family);
             const positions = known.flatMap((node, index) => (addresses.includes(key(scope, node.id)) ? [index] : []));
             if (
                 reordered.some((address, index) => address !== addresses[index]) ||
@@ -146,6 +146,9 @@ export class SharedWriter {
         }
         for (const run of splitRuns) {
             const leftAddress = key(scope, run[0].id);
+            const origin = this.store.families.get(leftAddress);
+            if (origin && origin !== leftAddress && this.store.joinedOwner(origin) === leftAddress)
+                this.store.families.set(leftAddress, leftAddress);
             const offsets = [0];
             for (const node of run) offsets.push(offsets.at(-1)! + blockText(node).length);
             for (let index = run.length - 1; index > 0; index--) {
@@ -318,7 +321,10 @@ export class SharedWriter {
         )
             return;
         const attrs = this.store.attributes(address);
-        if (this.store.deleted.get(address)) this.store.deleted.set(address, false);
+        if (this.store.deleted.get(address)) {
+            this.store.deleted.set(address, false);
+            this.store.invalidateCaches();
+        }
         if (this.store.registry.get(address) !== after.kind) this.store.registry.set(address, after.kind);
         writeSharedAttributes(attrs, this.nodeAttributes(existed ? before : undefined), this.nodeAttributes(after));
         if (canonicalSharedJson(before?.marks) !== canonicalSharedJson(after.marks)) {
