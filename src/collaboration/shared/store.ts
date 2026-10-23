@@ -165,7 +165,7 @@ export class SharedStore {
         const point = this.endPoint(left);
         const placement = this.placement();
         this.deleted.set(right, { join: left, edge: placement.edge, rank: placement.rank!, actor: placement.actor! });
-        point.text.insertEmbed(point.index, { join: right, edge: placement.edge });
+        point.text.insertEmbed(this.flow(point.block).append, { join: right, edge: placement.edge });
         this.invalidateCaches();
     }
     placement(): Omit<Edge, 'id'> {
@@ -228,18 +228,25 @@ export class SharedStore {
         if (!flows) {
             flows = new Map();
             let offset = 0,
-                current: FlowSegment = { start: 0, end: 0, parts: [] };
+                current: FlowSegment = { start: 0, end: 0, append: 0, parts: [] },
+                ended = false;
             flows.set(source, current);
             for (const delta of this.inline(address).toDelta()) {
                 const length = typeof delta.insert === 'string' ? delta.insert.length : 1;
                 if (typeof delta.insert === 'object' && typeof delta.insert?.block === 'string') {
-                    current.end = offset;
-                    current = { start: offset + 1, end: offset + 1, parts: [] };
+                    current.append = offset;
+                    if (!ended) current.end = offset;
+                    current = { start: offset + 1, end: offset + 1, append: offset + 1, parts: [] };
+                    ended = false;
                     flows.set(delta.insert.block, current);
+                } else if (typeof delta.insert === 'object' && delta.insert?.end === true) {
+                    if (!ended) current.end = offset;
+                    ended = true;
                 } else current.parts.push({ ...delta, from: offset });
                 offset += length;
             }
-            current.end = offset;
+            current.append = offset;
+            if (!ended) current.end = offset;
             this.flowCache.set(source, flows);
         }
         const segment = flows.get(address);
@@ -358,11 +365,12 @@ export class SharedStore {
                     part.insert.edge === trail!.edge &&
                     typeof part.insert.join === 'string',
             );
-            if (!reference || reference.from + 1 >= range.end) continue;
+            if (!reference || reference.from + 1 >= range.append) continue;
             const address = key('', `shared-tail:${crypto.randomUUID()}`);
             this.flows.set(address, this.source(trail.block));
             this.families.set(address, this.families.get(trail.block) ?? trail.block);
             this.inline(trail.block).insertEmbed(reference.from + 1, { block: address });
+            this.inline(trail.block).insertEmbed(reference.from + 2, { end: true });
             this.invalidateCaches();
             this.join(suffix, address, this.length(suffix));
         }
@@ -374,6 +382,7 @@ export class SharedStore {
             range = this.bounds(address);
         let logical = 0;
         for (const part of this.flow(address).parts) {
+            if (text === source && position >= range.start && position <= part.from) return logical;
             if (typeof part.insert === 'object' && typeof part.insert.join === 'string') {
                 if (text === source && position >= part.from && position <= part.from + 1) return logical;
                 if (!this.activeJoin(part.insert)) continue;

@@ -162,7 +162,8 @@ export class SharedWriter {
                     address,
                     point.block === leftAddress ? (this.store.families.get(leftAddress) ?? leftAddress) : point.block,
                 );
-                point.text.insertEmbed(point.index, { block: address });
+                point.text.insertEmbed(point.index, { end: true });
+                point.text.insertEmbed(point.index + 1, { block: address });
                 this.store.invalidateCaches();
                 this.store.continueSplit(point.trail, address);
                 this.skipInline.add(address);

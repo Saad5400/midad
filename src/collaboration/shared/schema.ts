@@ -28,6 +28,7 @@ export interface FlowPart {
 export interface FlowSegment {
     start: number;
     end: number;
+    append: number;
     parts: FlowPart[];
 }
 export const key = (scope: string, id: string): string => JSON.stringify([scope, id]);
