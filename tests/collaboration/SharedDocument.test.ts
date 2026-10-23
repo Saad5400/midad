@@ -8,7 +8,9 @@ import {
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import {
     blockText,
+    deleteBlock,
     joinPreviousTextBlock,
+    moveBlock,
     replaceBlockNode,
     replaceInlineText,
     splitTextBlock,
@@ -55,6 +57,26 @@ function merge(a: SharedNativeDocument, b: SharedNativeDocument): void {
         fromB = b.state(a.vector());
     a.receive(fromB);
     b.receive(fromA);
+}
+function independentPeers() {
+    const seed = SharedNativeDocument.create(
+        importDocument(
+            {
+                type: 'doc',
+                content: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'First' }] },
+                    { type: 'horizontalRule', attrs: { nativeId: 'divider' } },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Second' }] },
+                ],
+            },
+            'independent-join',
+        ),
+    );
+    seed.publish(deleteBlock(seed.document(), 'divider')!.document, false);
+    const a = SharedNativeDocument.fromState(seed.state(), seed.document().id);
+    const b = SharedNativeDocument.fromState(seed.state(), seed.document().id);
+    seed.destroy();
+    return { a, b };
 }
 
 describe('our shared native document', () => {
@@ -491,6 +513,547 @@ describe('our shared native document', () => {
         a.destroy();
         b.destroy();
     });
+    it('keeps concurrent typing when joining paragraphs from independent text flows', () => {
+        const { a, b } = independentPeers();
+        try {
+            const right = textBlocks(a.document().root)[1];
+            a.publish(joinPreviousTextBlock(a.document(), right.id)!.document);
+            b.publish(
+                replaceInlineText(b.document(), {
+                    blockId: right.id,
+                    from: 0,
+                    to: 0,
+                    text: 'Peer ',
+                    expectedRevision: b.document().revision,
+                }),
+            );
+            merge(a, b);
+            expect(text(a)).toBe('FirstPeer Second');
+            expect(text(b)).toBe(text(a));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each(['edit', 'format', 'split', 'undo', 'redo', 'reopen', 'caret'])(
+        'preserves independent joined flows through %s',
+        (operation) => {
+            const { a, b } = independentPeers();
+            try {
+                const right = textBlocks(a.document().root)[1];
+                const caret = b.caret({ blockId: right.id, offset: 2 })!;
+                a.publish(joinPreviousTextBlock(a.document(), right.id)!.document);
+                a.stopCapturing();
+                b.publish(
+                    replaceInlineText(b.document(), {
+                        blockId: right.id,
+                        from: 0,
+                        to: 0,
+                        text: 'Peer ',
+                        expectedRevision: b.document().revision,
+                    }),
+                );
+                merge(a, b);
+                let expected = 'FirstPeer Second';
+                const block = textBlocks(a.document().root)[0];
+                if (operation === 'edit') {
+                    edit(a, 5, 10, 'Local ');
+                    expected = 'FirstLocal Second';
+                } else if (operation === 'format') {
+                    a.publish(
+                        formatText(
+                            a.document(),
+                            { blockId: block.id, from: 2, to: 14, expectedRevision: a.document().revision },
+                            { kind: 'toggle', mark: 'bold' },
+                        ),
+                    );
+                } else if (operation === 'split') {
+                    a.publish(
+                        splitTextBlock(a.document(), {
+                            blockId: block.id,
+                            from: 8,
+                            to: 8,
+                            expectedRevision: a.document().revision,
+                        }).document,
+                    );
+                    expected = 'FirstPee\nr Second';
+                } else if (operation === 'undo' || operation === 'redo') {
+                    a.undo();
+                    expected = 'First\nPeer Second';
+                    if (operation === 'redo') {
+                        a.redo();
+                        expected = 'FirstPeer Second';
+                    }
+                } else if (operation === 'caret') {
+                    expect(a.resolve(caret)).toEqual({ blockId: block.id, offset: 12 });
+                }
+                merge(a, b);
+                expect(text(a)).toBe(expected);
+                expect(text(b)).toBe(expected);
+                expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+                const c = SharedNativeDocument.fromState(a.state(), a.document().id);
+                try {
+                    expect(text(c)).toBe(expected);
+                    expect(exportDocument(c.document())).toEqual(exportDocument(b.document()));
+                } finally {
+                    c.destroy();
+                }
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+
+    it('preserves all text when authors join the same paragraphs in opposite orders', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        { type: 'paragraph', attrs: { nativeId: 'one' }, content: [{ type: 'text', text: 'First' }] },
+                        { type: 'paragraph', attrs: { nativeId: 'two' }, content: [{ type: 'text', text: 'Second' }] },
+                    ],
+                },
+                'opposite-joins',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            a.publish(joinPreviousTextBlock(a.document(), 'two')!.document);
+            b.publish(moveBlock(b.document(), 'two', 'one', 'before'));
+            b.publish(joinPreviousTextBlock(b.document(), 'one')!.document);
+            merge(a, b);
+            expect([...text(a).replaceAll('\n', '')].sort().join('')).toBe([...'FirstSecond'].sort().join(''));
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each([false, true])('restores an earlier paragraph structure after independent joins (%s)', (reorder) => {
+        const { a, b } = independentPeers();
+        try {
+            const original = a.document();
+            const [left, right] = textBlocks(original.root);
+            if (reorder) a.publish(moveBlock(a.document(), right.id, left.id, 'before'));
+            const last = textBlocks(a.document().root)[1];
+            a.publish(joinPreviousTextBlock(a.document(), last.id)!.document);
+            a.stopCapturing();
+            merge(a, b);
+            a.publish({ ...original, revision: a.document().revision + 1 });
+            merge(a, b);
+            expect(text(a)).toBe('First\nSecond');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            const c = SharedNativeDocument.fromState(a.state(), a.document().id);
+            try {
+                expect(text(c)).toBe('First\nSecond');
+            } finally {
+                c.destroy();
+            }
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it('moves the full original paragraph when another author splits it concurrently', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'original' },
+                            content: [{ type: 'text', text: 'ABCDEFGHIJ' }],
+                        },
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'target' },
+                            content: [{ type: 'text', text: 'Target' }],
+                        },
+                    ],
+                },
+                'split-move',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'original',
+                    from: 3,
+                    to: 3,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            b.publish(moveBlock(b.document(), 'original', 'target', 'after'));
+            merge(a, b);
+            expect(text(a)).toBe('Target\nABC\nDEFGHIJ');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each([0, 3, 7].flatMap((offset) => [false, true].map((independent) => ({ offset, independent }))))(
+        'keeps existing split siblings after splitting their joined prefix ($offset, $independent)',
+        ({ offset, independent }) => {
+            const pair = () => {
+                const a = SharedNativeDocument.create(
+                    importDocument(
+                        {
+                            type: 'doc',
+                            content: ['First', 'Second'].map((text) => ({
+                                type: 'paragraph',
+                                content: [{ type: 'text', text }],
+                            })),
+                        },
+                        'shared-prefix',
+                    ),
+                );
+                return { a, b: SharedNativeDocument.fromState(a.state(), a.document().id) };
+            };
+            const { a, b } = independent ? independentPeers() : pair();
+            try {
+                const [left, right] = textBlocks(a.document().root);
+                a.publish(
+                    splitTextBlock(a.document(), {
+                        blockId: right.id,
+                        from: 2,
+                        to: 2,
+                        expectedRevision: a.document().revision,
+                    }).document,
+                );
+                a.publish(joinPreviousTextBlock(a.document(), right.id)!.document);
+                expect(text(a)).toBe('FirstSe\ncond');
+                a.publish(
+                    splitTextBlock(a.document(), {
+                        blockId: left.id,
+                        from: offset,
+                        to: offset,
+                        expectedRevision: a.document().revision,
+                    }).document,
+                );
+                merge(a, b);
+                expect(text(a)).toBe('FirstSe'.slice(0, offset) + '\n' + 'FirstSe'.slice(offset) + '\ncond');
+                expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+
+    it('keeps split siblings after a paragraph containing an empty joined prefix is split', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        { type: 'paragraph', attrs: { nativeId: 'left' }, content: [] },
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'right' },
+                            content: [{ type: 'text', text: 'Second' }],
+                        },
+                    ],
+                },
+                'empty-joined-prefix',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'right',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            a.publish(joinPreviousTextBlock(a.document(), 'right')!.document);
+            edit(a, 0, 0, 'First');
+            expect(text(a)).toBe('First\nSecond');
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            merge(a, b);
+            expect(text(a)).toBe('\nFirst\nSecond');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each([false, true])('splits an empty joined paragraph before its known suffix (%s)', (independent) => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'left' },
+                            content: [{ type: 'text', text: 'FirstSecond' }],
+                        },
+                        ...(independent ? [{ type: 'horizontalRule', attrs: { nativeId: 'divider' } }] : []),
+                        { type: 'paragraph', attrs: { nativeId: 'right' }, content: [] },
+                    ],
+                },
+                'empty-joined-split',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            if (independent) a.publish(deleteBlock(a.document(), 'divider')!.document);
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 5,
+                    to: 5,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            a.publish(moveBlock(a.document(), 'right', 'left', 'after'));
+            a.publish(joinPreviousTextBlock(a.document(), 'right')!.document);
+            edit(a, 0, 5, '');
+            expect(text(a)).toBe('\nSecond');
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: 'left',
+                    from: 0,
+                    to: 0,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            merge(a, b);
+            expect(text(a)).toBe('\n\nSecond');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it('moves the remaining joined references into the suffix when splitting composed text', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: ['A', 'B', 'C'].map((text, i) => ({
+                        type: 'paragraph',
+                        attrs: { nativeId: `part-${i}` },
+                        content: [{ type: 'text', text }],
+                    })),
+                },
+                'composed-split',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            a.publish(joinPreviousTextBlock(a.document(), 'part-1')!.document);
+            b.publish(moveBlock(b.document(), 'part-2', 'part-0', 'after'));
+            b.publish(joinPreviousTextBlock(b.document(), 'part-2')!.document);
+            merge(a, b);
+            const before = text(a),
+                block = textBlocks(a.document().root)[0];
+            a.publish(
+                splitTextBlock(a.document(), {
+                    blockId: block.id,
+                    from: 2,
+                    to: 2,
+                    expectedRevision: a.document().revision,
+                }).document,
+            );
+            merge(a, b);
+            expect(text(a)).toBe(before.slice(0, 2) + '\n' + before.slice(2));
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
+    it.each(['plain', 'bilingual-table', 'list', 'clause'])(
+        'keeps consecutive Enter operations ahead of a suffix after concurrent moves and joins in %s',
+        (container) => {
+            const paragraphs = ['A😀', 'Bب', 'C'].map((text, index) => ({
+                type: 'paragraph',
+                attrs: { nativeId: `p-${index}` },
+                content: [{ type: 'text', text }],
+            }));
+            let content: unknown[] = paragraphs;
+            if (container === 'bilingual-table')
+                content = [
+                    {
+                        type: 'parallelRow',
+                        content: [
+                            {
+                                type: 'parallelCell',
+                                attrs: { direction: 'rtl' },
+                                content: [
+                                    {
+                                        type: 'table',
+                                        content: [
+                                            {
+                                                type: 'tableRow',
+                                                content: [
+                                                    { type: 'tableCell', content: paragraphs },
+                                                    {
+                                                        type: 'tableCell',
+                                                        content: [
+                                                            {
+                                                                type: 'paragraph',
+                                                                content: [{ type: 'text', text: 'جدول' }],
+                                                            },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            {
+                                type: 'parallelCell',
+                                attrs: { direction: 'ltr' },
+                                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'English' }] }],
+                            },
+                        ],
+                    },
+                ];
+            if (container === 'list')
+                content = [{ type: 'bulletList', content: [{ type: 'listItem', content: paragraphs }] }];
+            if (container === 'clause')
+                content = [
+                    {
+                        type: 'clause',
+                        content: [
+                            { type: 'clauseTitle', content: [{ type: 'text', text: 'عنوان البند' }] },
+                            { type: 'clauseBody', content: paragraphs },
+                        ],
+                    },
+                ];
+            const seed = SharedNativeDocument.create(importDocument({ type: 'doc', content }, 'concurrent-enter'));
+            const peers = [0, 1, 2].map((actor) => {
+                const peer = SharedNativeDocument.fromState(seed.state(), seed.document().id);
+                peer.ydoc.clientID = 1001 + actor;
+                return peer;
+            });
+            seed.destroy();
+            const ids = new Map([
+                ['A', 'p-0'],
+                ['B', 'p-1'],
+                ['C', 'p-2'],
+            ]);
+            const steps: Array<
+                [number, 'split' | 'type' | 'move' | 'join', string, number | string, string?, boolean?]
+            > = [
+                [0, 'split', 'C', 1, 'N1'],
+                [2, 'type', 'A', 0, 'X'],
+                [0, 'split', 'N1', 0, 'N2', true],
+                [2, 'split', 'N2', 0, 'N3'],
+                [2, 'split', 'N2', 0, 'N4'],
+                [1, 'type', 'A', 4, 'Y', true],
+                [2, 'type', 'N3', 0, 'Z', true],
+                [1, 'split', 'A', 4, 'N5', true],
+                [0, 'move', 'N5', 'N2', 'before', true],
+                [0, 'split', 'N3', 0, 'N6'],
+                [1, 'move', 'N3', 'N4', 'before'],
+                [0, 'split', 'N4', 0, 'N7', true],
+                [1, 'split', 'N6', 1, 'N8', true],
+                [0, 'move', 'N5', 'N6', 'after'],
+                [0, 'move', 'N6', 'N7', 'before'],
+                [2, 'move', 'N8', 'N2', 'after'],
+                [1, 'join', 'N3', 0, undefined, true],
+                [0, 'join', 'N5', 0, undefined, true],
+                [2, 'split', 'N8', 0, 'N9', true],
+                [2, 'split', 'N8', 0, 'N10'],
+            ];
+            const synchronize = () => {
+                for (let round = 0; round < 2; round++)
+                    for (const from of peers)
+                        for (const to of peers) if (from !== to) to.receive(from.state(to.vector()));
+            };
+            try {
+                for (const [actor, operation, alias, argument, value, sync] of steps) {
+                    const peer = peers[actor],
+                        document = peer.document(),
+                        id = ids.get(alias)!;
+                    let candidate = document;
+                    if (operation === 'split') {
+                        candidate = splitTextBlock(document, {
+                            blockId: id,
+                            from: argument as number,
+                            to: argument as number,
+                            expectedRevision: document.revision,
+                        }).document;
+                        const previous = new Set(textBlocks(document.root).map((block) => block.id));
+                        ids.set(value!, textBlocks(candidate.root).find((block) => !previous.has(block.id))!.id);
+                    } else if (operation === 'type') {
+                        candidate = replaceInlineText(document, {
+                            blockId: id,
+                            from: argument as number,
+                            to: argument as number,
+                            text: value!,
+                            expectedRevision: document.revision,
+                        });
+                    } else if (operation === 'move') {
+                        candidate = moveBlock(document, id, ids.get(argument as string)!, value as 'before' | 'after');
+                    } else candidate = joinPreviousTextBlock(document, id)!.document;
+                    peer.publish(candidate);
+                    expect(text(peer)).toBe(textBlocks(candidate.root).map(blockText).join('\n'));
+                    if (sync) synchronize();
+                }
+                synchronize();
+                for (const peer of peers)
+                    expect(exportDocument(peer.document())).toEqual(exportDocument(peers[0].document()));
+            } finally {
+                peers.forEach((peer) => peer.destroy());
+            }
+        },
+    );
+
+    it('keeps peer suffix edits through several paragraph splits published together', () => {
+        const a = create('ABCDEFGHIJ'),
+            b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        try {
+            const first = textBlocks(a.document().root)[0];
+            let branch = splitTextBlock(a.document(), {
+                blockId: first.id,
+                from: 3,
+                to: 3,
+                expectedRevision: a.document().revision,
+            }).document;
+            const right = textBlocks(branch.root)[1];
+            branch = splitTextBlock(branch, {
+                blockId: right.id,
+                from: 4,
+                to: 4,
+                expectedRevision: branch.revision,
+            }).document;
+            a.publish(branch);
+            edit(b, 8, 8, 'Peer');
+            merge(a, b);
+            expect(text(a)).toBe('ABC\nDEFG\nHPeerIJ');
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+
     it('does not create a new visible revision for a duplicate network update', () => {
         const { a, b } = peers();
         const before = b.document();
@@ -498,6 +1061,69 @@ describe('our shared native document', () => {
         expect(b.document()).toBe(before);
         a.destroy();
         b.destroy();
+    });
+    it('keeps text identities canonical through formatting, insertion, deletion and undo', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            content: [
+                                { type: 'text', attrs: { nativeId: 'original-text' }, text: 'Hello العربية world' },
+                            ],
+                        },
+                    ],
+                },
+                'canonical-text',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const verify = () => {
+            merge(a, b);
+            const fresh = SharedNativeDocument.fromState(a.state(), a.document().id);
+            try {
+                expect(exportDocument(a.document())).toEqual(exportDocument(fresh.document()));
+                expect(exportDocument(b.document())).toEqual(exportDocument(fresh.document()));
+            } finally {
+                fresh.destroy();
+            }
+        };
+        try {
+            for (const [from, to] of [
+                [1, 5],
+                [3, 8],
+                [0, 9],
+                [2, 6],
+            ]) {
+                const document = a.document(),
+                    block = textBlocks(document.root)[0];
+                a.publish(
+                    formatText(
+                        document,
+                        { blockId: block.id, from, to, expectedRevision: document.revision },
+                        { kind: 'toggle', mark: 'bold' },
+                    ),
+                );
+                verify();
+            }
+            a.stopCapturing();
+            edit(a, 0, 0, 'Prefix ');
+            verify();
+            a.stopCapturing();
+            edit(b, 8, 11, '😀');
+            verify();
+            a.undo();
+            verify();
+            a.redo();
+            verify();
+            b.undo();
+            verify();
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
     });
     it.each([false, true])('keeps one field after concurrent inline/floating moves and undo: %s', (reverse) => {
         const original = importDocument(
@@ -648,12 +1274,23 @@ describe('our shared native document', () => {
     it('rejects updates that replace protocol identity and retains a recoverable document', () => {
         const { a, b } = peers(),
             before = a.document();
-        b.ydoc.getMap('native').set('schema', 2);
+        b.ydoc.getMap('native').set('schema', 999);
         expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
         expect(a.document()).toBe(before);
         expect(() => a.publish(before)).toThrow('closed');
         a.destroy();
         b.destroy();
+    });
+    it.each([1, 3])('rejects incompatible shared protocol %s instead of misreading its text histories', (schema) => {
+        const a = create();
+        try {
+            a.ydoc.getMap('native').set('schema', schema);
+            expect(() => SharedNativeDocument.fromState(a.state(), a.document().id)).toThrow(
+                'Unsupported shared document',
+            );
+        } finally {
+            a.destroy();
+        }
     });
     it('switches legacy variants with shared node ids without splitting their text a second time', () => {
         const paragraph = (id: string, text: string) => ({

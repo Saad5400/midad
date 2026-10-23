@@ -14,16 +14,21 @@ import { syncSharedInline } from './inline.js';
 import { key } from './schema.js';
 import type { SharedStore } from './store.js';
 import { variantScope as clauseVariantScope, variantBody } from './variants.js';
+import { readSharedDocument } from './reader.js';
 
 export class SharedWriter {
     private readonly previousNodes = new Map<string, NativeNode>();
     private readonly skipInline = new Set<string>();
+    private readonly joined = new Set<string>();
+    private readonly refresh = new Set<string>();
 
     constructor(private readonly store: SharedStore) {}
 
     write(before: NativeDocument | undefined, document: NativeDocument): void {
         this.previousNodes.clear();
         this.skipInline.clear();
+        this.joined.clear();
+        this.refresh.clear();
         if (!before) {
             this.syncNode(undefined, document.root, '', undefined, document);
             return;
@@ -31,10 +36,23 @@ export class SharedWriter {
         this.indexNodes(before.root, '', before);
         const nextNodes = new Map<string, NativeNode>();
         this.indexNodes(document.root, '', document, nextNodes);
+        let detached = false;
+        for (const address of nextNodes.keys()) {
+            if (!this.previousNodes.has(address) && typeof this.store.deleted.get(address) === 'object') {
+                this.store.deleted.set(address, false);
+                detached = true;
+            }
+        }
+        if (detached) {
+            this.store.invalidateCaches();
+            before = readSharedDocument(this.store, before, before.revision);
+            this.previousNodes.clear();
+            this.indexNodes(before.root, '', before);
+        }
         this.planStructure(before.root, document.root, '');
         this.syncNode(before.root, document.root, '', before, document);
         for (const address of this.previousNodes.keys())
-            if (!nextNodes.has(address)) this.store.deleted.set(address, true);
+            if (!nextNodes.has(address) && !this.joined.has(address)) this.store.deleted.set(address, true);
     }
     private indexNodes(node: NativeNode, scope: string, document: NativeDocument, target = this.previousNodes): void {
         if (node.kind === 'text') return;
@@ -77,24 +95,83 @@ export class SharedWriter {
             byId = new Map(old.map((child) => [child.id, child]));
         const families = new Map<string, string[]>(),
             currentIds = new Set(current.map((node) => node.id));
+        const splitRuns: NativeNode[][] = [];
+        for (let index = 0; index < current.length; index++) {
+            const node = current[index],
+                previous = byId.get(node.id);
+            if (!previous || !isTextBlock(node)) continue;
+            const run = [node];
+            for (
+                let next = index + 1;
+                next < current.length && !byId.has(current[next].id) && isTextBlock(current[next]);
+                next++
+            )
+                run.push(current[next]);
+            if (run.length > 1 && blockText(previous) === run.map(blockText).join('')) splitRuns.push(run);
+        }
+        const splitting = new Set(splitRuns.flatMap((run) => run.slice(1).map((node) => node.id)));
         for (const child of old) {
             const address = key(scope, child.id),
                 family = this.store.families.get(address) ?? address;
             if (currentIds.has(child.id)) families.set(family, [...(families.get(family) ?? []), address]);
         }
-        for (const addresses of families.values()) {
+        for (const [family, addresses] of families) {
+            if (old.length === current.length && old.every((node, index) => node.id === current[index].id)) break;
+            const anchor = this.store.joinedOwner(family);
+            if (
+                !addresses.includes(anchor) &&
+                old.some((node) => key(scope, node.id) === anchor) &&
+                current.some((node) => key(scope, node.id) === anchor)
+            ) {
+                addresses.push(anchor);
+                addresses.sort(
+                    (a, b) =>
+                        old.findIndex((node) => key(scope, node.id) === a) -
+                        old.findIndex((node) => key(scope, node.id) === b),
+                );
+            }
             if (addresses.length < 2) continue;
             const reordered = current
                 .map((node) => key(scope, node.id))
                 .filter((address) => addresses.includes(address));
-            if (reordered.some((address, index) => address !== addresses[index]))
-                for (const address of addresses) this.store.families.set(address, address);
+            const known = current.filter((node) => !splitting.has(node.id) || anchor !== family);
+            const positions = known.flatMap((node, index) => (addresses.includes(key(scope, node.id)) ? [index] : []));
+            if (
+                reordered.some((address, index) => address !== addresses[index]) ||
+                positions.at(-1)! - positions[0] + 1 !== positions.length
+            )
+                for (const address of addresses)
+                    if ((this.store.families.get(address) ?? address) === family)
+                        this.store.families.set(address, address);
+        }
+        for (const run of splitRuns) {
+            const leftAddress = key(scope, run[0].id);
+            const origin = this.store.families.get(leftAddress);
+            if (origin && origin !== leftAddress && this.store.joinedOwner(origin) === leftAddress)
+                this.store.families.set(leftAddress, leftAddress);
+            const offsets = [0];
+            for (const node of run) offsets.push(offsets.at(-1)! + blockText(node).length);
+            for (let index = run.length - 1; index > 0; index--) {
+                const address = key(scope, run[index].id);
+                const point =
+                    offsets[index] > 0 && offsets[index] === this.store.length(leftAddress)
+                        ? this.store.endPoint(leftAddress)
+                        : this.store.point(leftAddress, offsets[index]);
+                this.store.flows.set(address, point.source);
+                this.store.families.set(
+                    address,
+                    point.block === leftAddress ? (this.store.families.get(leftAddress) ?? leftAddress) : point.block,
+                );
+                point.text.insertEmbed(point.index, { block: address });
+                this.store.invalidateCaches();
+                this.store.continueSplit(point.trail, address);
+                this.skipInline.add(address);
+            }
+            this.skipInline.add(leftAddress);
         }
         for (let index = 0; index < current.length; index++) {
             const node = current[index],
-                previous = byId.get(node.id),
-                left = current[index - 1],
-                oldLeft = left && byId.get(left.id);
+                previous = byId.get(node.id);
             if (
                 after.kind === 'clause' &&
                 before.kind === 'clause' &&
@@ -102,24 +179,6 @@ export class SharedWriter {
                 activeClauseVariant(before) !== activeClauseVariant(after)
             )
                 continue;
-            if (
-                !previous &&
-                isTextBlock(node) &&
-                left &&
-                oldLeft &&
-                isTextBlock(left) &&
-                blockText(oldLeft) === blockText(left) + blockText(node)
-            ) {
-                const leftAddress = key(scope, left.id),
-                    address = key(scope, node.id),
-                    text = this.store.inline(leftAddress);
-                this.store.flows.set(address, this.store.source(leftAddress));
-                this.store.families.set(address, this.store.families.get(leftAddress) ?? leftAddress);
-                text.insertEmbed(this.store.physicalOffset(leftAddress, blockText(left).length), { block: address });
-                this.store.invalidateCaches();
-                this.skipInline.add(leftAddress);
-                this.skipInline.add(address);
-            }
             if (previous && isTextBlock(node)) {
                 const oldIndex = old.findIndex((child) => child.id === node.id),
                     right = old[oldIndex + 1];
@@ -131,14 +190,10 @@ export class SharedWriter {
                 ) {
                     const address = key(scope, node.id),
                         rightAddress = key(scope, right.id);
-                    if (
-                        this.store.source(address) === this.store.source(rightAddress) &&
-                        this.store.bounds(address).end + 1 === this.store.bounds(rightAddress).start
-                    ) {
-                        this.store.inline(address).delete(this.store.bounds(rightAddress).start - 1, 1);
-                        this.store.invalidateCaches();
-                        this.skipInline.add(address);
-                    }
+                    this.store.join(address, rightAddress, blockText(previous).length);
+                    this.joined.add(rightAddress);
+                    this.refresh.add(address);
+                    this.skipInline.add(address);
                 }
             }
             if (previous)
@@ -163,10 +218,39 @@ export class SharedWriter {
         }
         if (
             before.length === after.length &&
-            before.every((id, index) => id === after[index] && this.store.effectiveParent(id)?.container === container)
+            before.every(
+                (id, index) =>
+                    !this.refresh.has(id) &&
+                    id === after[index] &&
+                    this.store.effectiveParent(id)?.container === container,
+            )
         )
             return;
         const array = this.store.children(container);
+        let original = new Map(before.map((id) => [id, this.store.physicalParent(id)]));
+        const present = before.filter((id) => original.get(id)?.container === container);
+        const physical = array
+            .toArray()
+            .filter((entry) => original.get(entry.id)?.edge === entry.edge && present.includes(entry.id))
+            .map((entry) => entry.id);
+        if (physical.length === present.length && physical.some((id, index) => id !== present[index])) {
+            array.insert(
+                array.length,
+                present.map((id) => {
+                    const parent = original.get(id)!;
+                    const [base, generation] = parent.edge.split(':');
+                    const next = (Number.parseInt(generation ?? '0', 16) + 1).toString(16).padStart(16, '0');
+                    return {
+                        id,
+                        edge: `${base}:${next}:${crypto.randomUUID()}`,
+                        rank: parent.rank,
+                        actor: parent.actor,
+                    };
+                }),
+            );
+            this.store.invalidateCaches();
+            original = new Map(before.map((id) => [id, this.store.physicalParent(id)]));
+        }
         const changes = diffArrays([...before], [...after], { timeout: 100, maxEditLength: 4000 }) ?? [
             { removed: true, added: false, value: [...before] },
             { added: true, removed: false, value: [...after] },
@@ -180,12 +264,23 @@ export class SharedWriter {
                         ? array.toArray().findIndex((entry) => entry.edge === parent.edge && entry.id === id)
                         : -1;
                 if (change.removed) {
-                    if (index >= 0) {
+                    if (this.joined.has(id)) continue;
+                    const old = original.get(id);
+                    const previousIndex =
+                        old?.container === container
+                            ? array.toArray().findIndex((entry) => entry.id === id && entry.edge === old.edge)
+                            : -1;
+                    if (previousIndex >= 0) {
+                        array.delete(previousIndex, 1);
+                        this.store.invalidateCaches();
+                        if (previousIndex < cursor) cursor--;
+                    }
+                } else if (change.added || index < 0 || this.refresh.has(id)) {
+                    if (!change.added && index >= 0) {
                         array.delete(index, 1);
                         this.store.invalidateCaches();
                         if (index < cursor) cursor--;
                     }
-                } else if (change.added || index < 0) {
                     const placement = this.store.placement();
                     array.insert(Math.min(cursor, array.length), [{ id, ...placement }]);
                     this.store.invalidateCaches();
@@ -216,7 +311,7 @@ export class SharedWriter {
         const address = key(scope, after.id);
         const existed = this.store.registry.has(address);
         before ??= this.previousNodes.get(address);
-        if (!existed || this.store.deleted.get(address)) before = undefined;
+        if (!existed || this.store.deleted.get(address) === true) before = undefined;
         if (
             before === after ||
             (before?.kind === after.kind &&
@@ -226,7 +321,10 @@ export class SharedWriter {
         )
             return;
         const attrs = this.store.attributes(address);
-        if (this.store.deleted.get(address)) this.store.deleted.set(address, false);
+        if (this.store.deleted.get(address)) {
+            this.store.deleted.set(address, false);
+            this.store.invalidateCaches();
+        }
         if (this.store.registry.get(address) !== after.kind) this.store.registry.set(address, after.kind);
         writeSharedAttributes(attrs, this.nodeAttributes(existed ? before : undefined), this.nodeAttributes(after));
         if (canonicalSharedJson(before?.marks) !== canonicalSharedJson(after.marks)) {

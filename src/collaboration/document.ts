@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { activeClauseVariant } from '../content/clauses/queries.js';
-import { importDocument } from '../document/codec.js';
+import { exportDocument, importDocument } from '../document/codec.js';
 import { persistNativeIdentities } from '../document/identities.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { textBlocks } from '../document/text.js';
@@ -10,6 +10,9 @@ import { SharedStore } from './shared/store.js';
 import { SharedWriter } from './shared/writer.js';
 import { readSharedDocument } from './shared/reader.js';
 import { variantScope } from './shared/variants.js';
+import { canonicalSharedJson } from './values.js';
+
+export const SHARED_DOCUMENT_SCHEMA = 2;
 
 export interface SharedCaret {
     readonly block: string;
@@ -46,21 +49,23 @@ export class SharedNativeDocument {
         if (state) {
             Y.applyUpdateV2(this.ydoc, state, REMOTE);
             if (
-                this.store.meta.get('schema') !== 1 ||
+                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
                 typeof this.store.meta.get('root') !== 'string' ||
                 typeof this.store.meta.get('epoch') !== 'string'
             )
                 throw new Error('Unsupported shared document');
             this.view = this.read(document.revision);
-        } else
+        } else {
             this.ydoc.transact(() => {
                 this.store.seeding = true;
-                this.store.meta.set('schema', 1);
+                this.store.meta.set('schema', SHARED_DOCUMENT_SCHEMA);
                 this.store.meta.set('epoch', crypto.randomUUID());
                 this.store.meta.set('root', key('', document.root.id));
                 this.writer.write(undefined, document);
                 this.store.seeding = false;
             }, SEED);
+            this.view = this.read(document.revision);
+        }
         this.store.registerTypes(this.undoManager);
     }
     static create(document: NativeDocument): SharedNativeDocument {
@@ -117,11 +122,15 @@ export class SharedNativeDocument {
                 },
                 history ? LOCAL : SEED,
             );
+            const projected = this.read(document.revision);
+            this.view =
+                canonicalSharedJson(exportDocument(projected)) === canonicalSharedJson(exportDocument(before))
+                    ? before
+                    : projected;
         } catch (error) {
             this.destroy();
             throw error;
         }
-        this.view = document;
         return this.state(vector);
     }
     receive(update: Uint8Array): NativeDocument {
@@ -135,7 +144,11 @@ export class SharedNativeDocument {
         this.ydoc.on('afterTransaction', observe);
         try {
             Y.applyUpdateV2(this.ydoc, update, REMOTE);
-            if (this.store.meta.get('schema') !== 1 || this.store.meta.get('root') !== root || this.epoch() !== epoch)
+            if (
+                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
+                this.store.meta.get('root') !== root ||
+                this.epoch() !== epoch
+            )
                 throw new Error('The shared document identity changed');
             if (changed) this.view = this.read(this.view.revision + 1);
             return this.view;
@@ -161,17 +174,12 @@ export class SharedNativeDocument {
     caret(caret: TextCaret, association: -1 | 0 = 0): SharedCaret | null {
         const address = this.addressFor(caret.blockId);
         if (!address) return null;
-        const text = this.store.inline(address);
-        if (caret.offset < 0 || caret.offset > this.store.logicalOffset(address, this.store.bounds(address).end))
-            return null;
+        if (caret.offset < 0 || caret.offset > this.store.length(address)) return null;
+        const point = this.store.point(address, caret.offset);
         return {
             block: address,
             position: Y.encodeRelativePosition(
-                Y.createRelativePositionFromTypeIndex(
-                    text,
-                    this.store.physicalOffset(address, caret.offset),
-                    association,
-                ),
+                Y.createRelativePositionFromTypeIndex(point.text, point.index, association),
             ),
         };
     }
@@ -181,16 +189,14 @@ export class SharedNativeDocument {
             this.ydoc,
         );
         if (!position) return null;
-        const source = this.store.source(caret.block),
-            candidates = textBlocks(this.view.root)
-                .map((block) => this.addressFor(block.id))
-                .filter((address): address is string => !!address && this.store.source(address) === source);
-        const address = candidates.find((address) => {
-            const range = this.store.bounds(address);
-            return position.index >= range.start && position.index <= range.end;
-        });
-        if (!address) return null;
-        return { blockId: identity(address), offset: this.store.logicalOffset(address, position.index) };
+        const candidates = textBlocks(this.view.root)
+            .map((block) => this.addressFor(block.id))
+            .filter((address): address is string => !!address);
+        for (const address of candidates) {
+            const offset = this.store.locate(address, position.type as Y.Text, position.index);
+            if (offset !== undefined) return { blockId: identity(address), offset };
+        }
+        return null;
     }
     destroy(): void {
         if (this.closed) return;
