@@ -729,6 +729,48 @@ describe('our shared native document', () => {
             b.destroy();
         }
     });
+    it.each(['plain', 'table'].flatMap((container) => ['first', 'second'].map((removed) => ({ container, removed }))))(
+        'restores deleted paragraph text and attributes from a snapshot ($container, $removed)',
+        ({ container, removed }) => {
+            const paragraphs = ['First', 'Second'].map((text, index) => ({
+                type: 'paragraph',
+                attrs: { nativeId: index ? 'second' : 'first' },
+                content: [{ type: 'text', text }],
+            }));
+            const content =
+                container === 'table'
+                    ? [
+                          {
+                              type: 'table',
+                              content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: paragraphs }] }],
+                          },
+                      ]
+                    : paragraphs;
+            const a = SharedNativeDocument.create(
+                importDocument({ type: 'doc', content }, 'deleted-paragraph-restore'),
+            );
+            const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+            const original = a.document();
+            try {
+                a.publish(
+                    replaceBlockNode(a.document(), removed, (node) => ({
+                        ...node,
+                        attributes: { ...node.attributes, textAlign: 'center' },
+                    })),
+                );
+                a.publish(deleteBlock(a.document(), removed)!.document);
+                merge(a, b);
+                a.publish({ ...original, revision: a.document().revision + 1 });
+                merge(a, b);
+                expect(text(a)).toBe('First\nSecond');
+                expect(exportDocument(a.document())).toEqual(exportDocument(original));
+                expect(exportDocument(b.document())).toEqual(exportDocument(original));
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
 
     it('moves the full original paragraph when another author splits it concurrently', () => {
         const a = SharedNativeDocument.create(
