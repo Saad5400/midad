@@ -1,5 +1,5 @@
 import type { NativeNode } from '../document/model.js';
-import { point } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import { blockTextStyle, DEFAULT_TEXT_STYLE, inlineSpans, numericAttribute } from '../typography/style.js';
 import { blank, shiftBand, type Band } from './bands.js';
 import { scope, type LayoutContext as Context } from './context.js';

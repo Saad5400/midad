@@ -1,4 +1,5 @@
-import { point, type ShapedRun } from '../rendering/kernel.js';
+import type { ShapedRun } from '../rendering/text/model.js';
+import { point } from '../typography/metrics.js';
 import type { TextReading } from './scene.js';
 
 export function readingRun(group: string, run: ShapedRun, top: number, height: number, x = 0): readonly TextReading[] {

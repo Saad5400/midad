@@ -1,6 +1,7 @@
 import { IMAGE_FIELD_TYPES, nativeFields, type NativeField } from '../content/fields/queries.js';
 import { copyJson, type Attributes, type NativeDocument } from '../document/model.js';
-import type { NativeTextKernel, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 import { fieldAppearancePage, type FieldAppearance, type FrozenFieldBox } from './field-appearance.js';
 
 export class FrozenFieldSession {

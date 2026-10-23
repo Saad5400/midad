@@ -1,7 +1,8 @@
 import type { Attributes } from '../document/model.js';
 import { fieldPaintCommands } from '../layout/fields.js';
 import type { FieldCommand, ScenePage } from '../layout/scene.js';
-import type { NativeTextKernel, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 
 export interface FrozenFieldBox {
     readonly id: string;

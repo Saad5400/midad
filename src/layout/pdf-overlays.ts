@@ -1,7 +1,8 @@
 import { floatingFieldPlacement } from '../content/fields/geometry.js';
 import { fieldSettings } from '../content/fields/queries.js';
 import { isRecord, type Attributes, type NativeDocument } from '../document/model.js';
-import type { NativeTextKernel, ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 import { fieldPaintCommands } from './fields.js';
 import { finalizePages } from './finalize.js';
 import type { DocumentScene, PaintCommand } from './scene.js';

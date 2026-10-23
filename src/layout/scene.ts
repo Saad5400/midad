@@ -1,6 +1,6 @@
 import type { Affinity } from 'canvaskit-wasm';
 import type { Attributes, NativeDocument } from '../document/model.js';
-import type { ShapedParagraph } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
 import type { Color } from '../typography/style.js';
 
 export interface GlyphCommand {

@@ -1,6 +1,8 @@
 import { fieldDisplayValue, fieldSettings, fieldStyle, IMAGE_FIELD_TYPES } from '../content/fields/queries.js';
 import type { Attributes } from '../document/model.js';
-import { NativeTextKernel, point, type ShapedParagraph } from '../rendering/kernel.js';
+import type { NativeTextKernel } from '../rendering/kernel.js';
+import type { ShapedParagraph } from '../rendering/text/model.js';
+import { point } from '../typography/metrics.js';
 import { DEFAULT_TEXT_STYLE, type TextStyle } from '../typography/style.js';
 import type { FieldCommand, PaintCommand } from './scene.js';
 import { readingRun } from './text-reading.js';

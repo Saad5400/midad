@@ -1,5 +1,5 @@
 import type { NativeNode } from '../document/model.js';
-import { point } from '../rendering/kernel.js';
+import { point } from '../typography/metrics.js';
 import { flowTracks, shiftBand, type Band } from './bands.js';
 import type { LayoutContext, MeasureBlocks } from './context.js';
 
