@@ -111,6 +111,8 @@ view.dispose();
 
 `findText` and `DocumentSearch` in `/editing` search literal text across rich runs and nested blocks, preserve UTF-16 selection offsets, support case and whole-word options, and navigate matches with wrapping. Hosts can pass rendered block IDs to scope results to visible document content. `matchSelection` turns a result into a native selection. `searchRectangles` in `/browser/view` maps matches onto page geometry; pass visible page indices to avoid painting offscreen results. `FindShortcut` in `/browser/input` routes Ctrl/Cmd+F to the focused available editor and releases its listener on disposal. These APIs do not change document content or PDF output.
 
+`NativeSyncClient` in `/collaboration` pauses automatic retries after a rejected draft or malformed sync reply while retaining the local document and undo history. `flush()` explicitly retries the retained request; background focus/reconnect handlers should use `flush(false)`. A corrected rejected draft creates a new request, while retrying unchanged content retains its request ID so an accepted save is not duplicated. Hosts should expose retry and draft-backup actions for error states.
+
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
 ## Source organization

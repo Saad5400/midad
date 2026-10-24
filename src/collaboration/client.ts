@@ -1,3 +1,4 @@
+import { decodeStateVector } from 'yjs';
 import { exportDocument } from '../document/codec.js';
 import type { NativeDocument } from '../document/model.js';
 import type { NativeSelection } from '../editing/selection.js';
@@ -27,9 +28,20 @@ export class NativeSyncClient {
     private status: SyncState['status'] = 'loading';
     private reason?: string;
     private invalidLocal = false;
+    private invalidReply = false;
     private readonly presence: SyncPresence;
-    private outbound?: { input: Parameters<SyncTransport['write']>[0]; sent: number };
-    private inbound?: { reply: SyncReply; sent: number; dirty: boolean };
+    private outbound?: {
+        input: Parameters<SyncTransport['write']>[0];
+        sent: number;
+        document: NativeDocument;
+    };
+    private rejected?: { sequence: number; document: NativeDocument };
+    private inbound?: {
+        reply: SyncReply;
+        sent: number;
+        dirty: boolean;
+        applyRequired?: boolean;
+    };
 
     constructor(
         private readonly id: string,
@@ -105,7 +117,7 @@ export class NativeSyncClient {
         this.schedule();
         if (this.writable && this.state().dirty) {
             clearTimeout(this.delay);
-            this.delay = setTimeout(() => void this.flush(), 0);
+            this.delay = setTimeout(() => void this.flush(false), 0);
         }
         this.presence.start();
     }
@@ -117,15 +129,22 @@ export class NativeSyncClient {
         if (!this.active) this.status = 'pending';
         this.publish();
         clearTimeout(this.delay);
-        this.delay = setTimeout(() => void this.flush(), 350);
+        this.delay = setTimeout(() => void this.flush(false), 350);
     }
-    flush(): Promise<boolean> {
+    flush(retryRejected = true): Promise<boolean> {
         clearTimeout(this.delay);
         clearTimeout(this.poll);
         if (this.closed || !this.shared || this.status === 'conflict' || this.status === 'forbidden')
             return Promise.resolve(false);
+        if (this.invalidReply && !retryRejected) {
+            this.status = 'error';
+            this.reason = 'invalid_shared_state';
+            this.publish();
+            return Promise.resolve(false);
+        }
+        this.invalidReply = false;
         if (this.active) return this.active;
-        this.active = this.synchronize().finally(() => {
+        this.active = this.synchronize(retryRejected).finally(() => {
             this.active = undefined;
             this.schedule();
         });
@@ -169,7 +188,7 @@ export class NativeSyncClient {
         } finally {
             this.editor.unlock();
         }
-        void this.flush();
+        void this.flush(false);
     }
     private async local(deadline: number): Promise<boolean> {
         while (this.pending && !this.closed) {
@@ -269,6 +288,8 @@ export class NativeSyncClient {
                 this.acknowledged = 0;
                 this.outbound = undefined;
                 this.inbound = undefined;
+                this.rejected = undefined;
+                this.invalidReply = false;
                 this.presence.replace(fresh.peers ?? reply.peers ?? []);
                 this.presence.reset();
                 this.status = this.state().dirty ? 'pending' : 'saved';
@@ -282,10 +303,23 @@ export class NativeSyncClient {
             candidate?.destroy();
         }
     }
-    private async synchronize(): Promise<boolean> {
+    private async synchronize(retryRejected: boolean): Promise<boolean> {
         const deadline = Date.now() + 5000;
         try {
             if (!(await this.local(deadline)) || !this.shared) return false;
+            if (this.rejected) {
+                const unchanged =
+                    canonicalSharedJson(exportDocument(this.shared.document())) ===
+                    canonicalSharedJson(exportDocument(this.rejected.document));
+                if (unchanged && !retryRejected) {
+                    this.rejected.sequence = this.sequence;
+                    this.status = 'error';
+                    this.publish();
+                    return false;
+                }
+                if (!unchanged) this.outbound = undefined;
+                this.rejected = undefined;
+            }
             let iterations = 0;
             do {
                 if (Date.now() >= deadline) throw new SyncDeadline();
@@ -296,6 +330,7 @@ export class NativeSyncClient {
                 if (dirty && !this.outbound && !this.inbound)
                     this.outbound = {
                         sent,
+                        document: this.shared.document(),
                         input: {
                             epoch: this.shared!.epoch(),
                             update: encodeSharedBytes(this.shared.state(this.acknowledgedVector)),
@@ -326,9 +361,8 @@ export class NativeSyncClient {
                               deadline,
                           ));
                 sent = this.inbound?.sent ?? this.outbound?.sent ?? sent;
-                this.inbound = { reply, sent, dirty };
+                this.inbound ??= { reply, sent, dirty };
                 this.presence.replace(reply.peers);
-                this.outbound = undefined;
                 if (this.closed) return false;
                 if (reply.writable !== undefined && reply.writable !== this.writable) {
                     this.status = 'forbidden';
@@ -350,7 +384,19 @@ export class NativeSyncClient {
                     this.publish();
                     return false;
                 }
-                if (reply.update) this.shadow!.receive(decodeSharedBytes(reply.update));
+                let update: Uint8Array | undefined, vector: Uint8Array | undefined;
+                try {
+                    update = reply.update ? decodeSharedBytes(reply.update) : undefined;
+                    vector = reply.vector ? decodeSharedBytes(reply.vector) : undefined;
+                    if (vector) decodeStateVector(vector);
+                    if (update) this.shadow!.receive(update);
+                } catch (error) {
+                    this.shadow!.destroy();
+                    this.shadow = SharedNativeDocument.fromState(this.shared.state(), this.id);
+                    this.inbound = undefined;
+                    this.invalidReply = true;
+                    throw error;
+                }
                 if (!(await this.local(deadline))) return false;
                 await withinDeadline(this.editor.preview(this.shadow!.document()), deadline);
                 while (this.pending) {
@@ -377,19 +423,21 @@ export class NativeSyncClient {
                 const anchors = captureSelection(this.shared, selection);
                 try {
                     const before = this.shared.document();
-                    if (reply.update) this.shared.receive(decodeSharedBytes(reply.update));
+                    if (update) this.shared.receive(update);
                     const ownAcknowledgement = this.shared.document() === before;
+                    this.inbound.applyRequired ||= dirty || !ownAcknowledgement;
+                    if (this.inbound.applyRequired)
+                        await this.editor.apply(this.shadow!.document(), resolveSelection(this.shared, anchors));
                     this.number = reply.number;
-                    if (reply.vector) this.acknowledgedVector = decodeSharedBytes(reply.vector);
+                    if (vector) this.acknowledgedVector = vector;
                     if (dirty) {
                         this.acknowledged = sent;
                         this.restoredFrom = undefined;
                     }
-                    if (dirty || this.shared.document() !== before)
-                        await this.editor.apply(this.shadow!.document(), resolveSelection(this.shared, anchors));
                     if (ownAcknowledgement || (this.acknowledged === this.sequence && !this.pending))
                         this.base = this.number;
                     this.inbound = undefined;
+                    this.outbound = undefined;
                 } finally {
                     this.editor.unlock();
                 }
@@ -407,7 +455,11 @@ export class NativeSyncClient {
             }
             const original = error instanceof SyncTransportFailure ? error.original : error;
             if (!(error instanceof SyncTransportFailure)) this.editor.failure?.(original);
-            const response = (original as { response?: { status?: number; data?: { reason?: string } } }).response;
+            const response = (
+                original as {
+                    response?: { status?: number; data?: { reason?: string } };
+                }
+            ).response;
             this.status =
                 response?.status === 409
                     ? 'conflict'
@@ -418,9 +470,20 @@ export class NativeSyncClient {
                         : error instanceof SyncTransportFailure && !response
                           ? 'offline'
                           : 'error';
-            if (response?.status === 422) this.outbound = undefined;
+            if (response?.status === 422 && this.shared)
+                this.rejected = {
+                    sequence: this.outbound?.sent ?? this.sequence,
+                    document: this.outbound?.document ?? this.shared.document(),
+                };
             this.reason =
-                response?.data?.reason ?? (error instanceof SyncTransportFailure ? undefined : 'invalid_shared_state');
+                response?.data?.reason ??
+                (response?.status === 422
+                    ? this.outbound
+                        ? 'invalid_content'
+                        : 'invalid_request'
+                    : error instanceof SyncTransportFailure
+                      ? undefined
+                      : 'invalid_shared_state');
             this.publish();
             return false;
         }
@@ -431,7 +494,12 @@ export class NativeSyncClient {
     private schedule(): void {
         clearTimeout(this.poll);
         if (this.closed || this.status === 'conflict' || this.status === 'forbidden') return;
-        this.poll = setTimeout(() => void this.flush(), this.status === 'offline' ? 2000 : this.interval);
+        if (this.invalidReply || this.invalidLocal) return;
+        if (this.rejected && !this.pending && this.sequence === this.rejected.sequence) return;
+        this.poll = setTimeout(
+            () => void this.flush(false),
+            this.rejected ? 0 : this.status === 'offline' ? 2000 : this.interval,
+        );
     }
     destroy(): void {
         this.closed = true;
@@ -439,6 +507,8 @@ export class NativeSyncClient {
         clearTimeout(this.poll);
         this.shared?.destroy();
         this.shadow?.destroy();
+        this.rejected = undefined;
+        this.outbound = undefined;
         this.presence.destroy();
     }
 }

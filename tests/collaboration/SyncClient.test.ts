@@ -19,7 +19,15 @@ afterEach(() => {
 });
 const document = () =>
     importDocument(
-        { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original العربية' }] }] },
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Original العربية' }],
+                },
+            ],
+        },
         'sync-test',
     );
 function server() {
@@ -34,14 +42,18 @@ function server() {
             number,
             changed: input.since_number !== number,
             ...(input.vector && (!input.epoch || input.epoch === shared.epoch())
-                ? { update: encodeSharedBytes(shared.state(decodeSharedBytes(input.vector))) }
+                ? {
+                      update: encodeSharedBytes(shared.state(decodeSharedBytes(input.vector))),
+                  }
                 : { state: encodeSharedBytes(shared.state()) }),
             vector: encodeSharedBytes(shared.vector()),
             persisted: true,
         }),
         write: async (input) => {
             if (input.epoch !== shared.epoch())
-                throw { response: { status: 409, data: { reason: 'content_changed' } } };
+                throw {
+                    response: { status: 409, data: { reason: 'content_changed' } },
+                };
             writes++;
             if (!requests.has(input.request_id)) {
                 const before = JSON.stringify(exportDocument(shared.document()));
@@ -143,12 +155,239 @@ function editor(transport: SyncTransport, writable = true) {
 }
 
 describe('native synchronization client', () => {
+    it('pauses automatic retries of a rejected draft and resumes after a real correction', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        let rejected = true;
+        const write = vi.fn(async (input: Parameters<SyncTransport['write']>[0]) => {
+            if (rejected)
+                throw {
+                    response: { status: 422, data: { reason: 'invalid_content' } },
+                };
+            return backend.transport.write(input);
+        });
+        const a = editor({ ...backend.transport, write });
+        await a.client.start();
+        a.edit(0, 0, 'Rejected ');
+        expect(await a.client.flush()).toBe(false);
+        expect(a.client.state()).toMatchObject({
+            status: 'error',
+            dirty: true,
+            canUndo: true,
+        });
+        await vi.advanceTimersByTimeAsync(180000);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(a.text()).toBe('Rejected Original العربية');
+        rejected = false;
+        a.edit(0, 9, 'Corrected ');
+        await vi.advanceTimersByTimeAsync(350);
+        expect(write).toHaveBeenCalledTimes(2);
+        expect(write.mock.calls[1][0].request_id).not.toBe(write.mock.calls[0][0].request_id);
+        expect(a.text()).toBe('Corrected Original العربية');
+        expect(a.client.state()).toMatchObject({ status: 'saved', dirty: false });
+    });
+    it('keeps the rejected request identity for an explicit retry of the same draft', async () => {
+        const backend = server();
+        const write = vi.fn(async (input: Parameters<SyncTransport['write']>[0]) => {
+            if (write.mock.calls.length === 1) throw { response: { status: 422 } };
+            return backend.transport.write(input);
+        });
+        const a = editor({ ...backend.transport, write });
+        await a.client.start();
+        a.edit(0, 0, 'Retry ');
+        expect(await a.client.flush()).toBe(false);
+        expect(await a.client.flush()).toBe(true);
+        expect(write.mock.calls[1][0]).toEqual(write.mock.calls[0][0]);
+        expect(a.text()).toBe('Retry Original العربية');
+    });
+    it.each(['update', 'encoding', 'vector'] as const)(
+        'recovers from malformed %s in a write acknowledgement without duplicating the accepted save',
+        async (corruption) => {
+            vi.useFakeTimers();
+            const backend = server();
+            const write = vi.fn(async (input: Parameters<SyncTransport['write']>[0]) => {
+                const reply = await backend.transport.write(input);
+                return write.mock.calls.length === 1
+                    ? {
+                          ...reply,
+                          ...(corruption === 'vector'
+                              ? { vector: encodeSharedBytes(Uint8Array.of(255)) }
+                              : {
+                                    update:
+                                        corruption === 'encoding' ? 'invalid!' : encodeSharedBytes(Uint8Array.of(255)),
+                                }),
+                      }
+                    : reply;
+            });
+            const a = editor({ ...backend.transport, write });
+            await a.client.start();
+            a.edit(0, 0, 'Mine ');
+            expect(await a.client.flush()).toBe(false);
+            expect(a.client.state()).toMatchObject({
+                status: 'error',
+                reason: 'invalid_shared_state',
+                canUndo: true,
+            });
+            await vi.advanceTimersByTimeAsync(180000);
+            expect(write).toHaveBeenCalledTimes(1);
+            expect(await a.client.flush()).toBe(true);
+            expect(write.mock.calls[1][0]).toEqual(write.mock.calls[0][0]);
+            expect(backend.version()).toBe(2);
+            expect(a.text()).toBe('Mine Original العربية');
+            await a.client.undo();
+            await a.client.flush();
+            expect(a.text()).toBe('Original العربية');
+        },
+    );
+    it('retains local undo after a malformed remote read and recovers the peer text', async () => {
+        const backend = server();
+        let corrupt = false;
+        const a = editor({
+            ...backend.transport,
+            read: async (input) => {
+                const reply = await backend.transport.read(input);
+                return corrupt ? { ...reply, update: encodeSharedBytes(Uint8Array.of(255)) } : reply;
+            },
+        });
+        await a.client.start();
+        a.edit(0, 0, 'Mine ');
+        await a.client.flush();
+        const b = editor(backend.transport);
+        await b.client.start();
+        b.edit(b.text().length, b.text().length, ' Theirs');
+        await b.client.flush();
+        corrupt = true;
+        expect(await a.client.flush()).toBe(false);
+        expect(a.client.state().canUndo).toBe(true);
+        await a.client.undo();
+        expect(a.text()).toBe('Original العربية');
+        corrupt = false;
+        expect(await a.client.flush()).toBe(true);
+        expect(a.text()).toBe('Original العربية Theirs');
+        expect(a.client.state().canRedo).toBe(true);
+    });
+    it('sends a correction queued while a rejected write is still in flight', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        let release!: () => void;
+        const waiting = new Promise<void>((resolve) => (release = resolve));
+        const write = vi.fn(async (input: Parameters<SyncTransport['write']>[0]) => {
+            if (write.mock.calls.length === 1) {
+                await waiting;
+                throw { response: { status: 422 } };
+            }
+            return backend.transport.write(input);
+        });
+        const a = editor({ ...backend.transport, write });
+        await a.client.start();
+        a.edit(0, 0, 'Rejected ');
+        const saving = a.client.flush();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(write).toHaveBeenCalledTimes(1);
+        a.edit(0, 9, 'Corrected ');
+        await vi.advanceTimersByTimeAsync(350);
+        release();
+        expect(await saving).toBe(false);
+        await vi.advanceTimersByTimeAsync(350);
+        expect(write).toHaveBeenCalledTimes(2);
+        expect(a.client.state()).toMatchObject({ status: 'saved', dirty: false });
+        expect(a.text()).toBe('Corrected Original العربية');
+    });
+    it('waits for another edit when a rejected draft correction cannot be prepared', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        const write = vi.fn(async () => {
+            throw { response: { status: 422 } };
+        });
+        const a = editor({ ...backend.transport, write });
+        await a.client.start();
+        a.edit(0, 0, 'Rejected ');
+        expect(await a.client.flush()).toBe(false);
+        a.edit(0, 9, 'Invalid ');
+        a.invalid(true);
+        expect(await a.client.flush(false)).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(a.client.state()).toMatchObject({ status: 'error', dirty: true, canUndo: true });
+    });
+    it('does not retry when the same rejected content is queued again', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        const write = vi.fn(async () => {
+            throw { response: { status: 422 } };
+        });
+        const a = editor({ ...backend.transport, write });
+        await a.client.start();
+        a.edit(0, 0, 'Rejected ');
+        expect(await a.client.flush()).toBe(false);
+        a.client.queue(a.document());
+        await vi.advanceTimersByTimeAsync(180000);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(a.client.state()).toMatchObject({
+            status: 'error',
+            dirty: true,
+            canUndo: true,
+        });
+    });
+    it('pauses a rejected read until an explicit retry without losing edit history', async () => {
+        vi.useFakeTimers();
+        const backend = server();
+        let reject = false;
+        const read = vi.fn(async (input: Parameters<SyncTransport['read']>[0]) => {
+            if (reject) throw { response: { status: 422 } };
+            return backend.transport.read(input);
+        });
+        const a = editor({ ...backend.transport, read });
+        await a.client.start();
+        a.edit(0, 0, 'Mine ');
+        await a.client.flush();
+        reject = true;
+        expect(await a.client.flush()).toBe(false);
+        expect(a.client.state()).toMatchObject({
+            status: 'error',
+            reason: 'invalid_request',
+            dirty: false,
+            canUndo: true,
+        });
+        await vi.advanceTimersByTimeAsync(180000);
+        expect(read).toHaveBeenCalledTimes(2);
+        reject = false;
+        expect(await a.client.flush()).toBe(true);
+        await a.client.undo();
+        await a.client.flush();
+        expect(a.text()).toBe('Original العربية');
+    });
+    it('retries applying a received peer edit after the editor fails once', async () => {
+        const backend = server();
+        const a = editor(backend.transport),
+            b = editor(backend.transport);
+        await a.client.start();
+        await b.client.start();
+        b.edit(0, 0, 'Theirs ');
+        await b.client.flush();
+        const apply = a.adapter.apply;
+        let fail = true;
+        a.adapter.apply = async (...input) => {
+            if (fail) {
+                fail = false;
+                throw new Error('Paint failed');
+            }
+            return apply(...input);
+        };
+        expect(await a.client.flush()).toBe(false);
+        expect(a.text()).toBe('Original العربية');
+        expect(await a.client.flush()).toBe(true);
+        expect(a.text()).toBe('Theirs Original العربية');
+    });
     it('persists an initial native revision immediately instead of waiting for the polling interval', async () => {
         vi.useFakeTimers();
         const backend = server();
         const a = editor({
             ...backend.transport,
-            read: async (input) => ({ ...(await backend.transport.read(input)), persisted: false }),
+            read: async (input) => ({
+                ...(await backend.transport.read(input)),
+                persisted: false,
+            }),
         });
         await a.client.start();
         expect(a.client.state().status).toBe('pending');
@@ -172,7 +411,10 @@ describe('native synchronization client', () => {
         const a = editor(
             {
                 ...backend.transport,
-                read: async (input) => ({ ...(await backend.transport.read(input)), persisted: false }),
+                read: async (input) => ({
+                    ...(await backend.transport.read(input)),
+                    persisted: false,
+                }),
             },
             false,
         );
@@ -190,7 +432,10 @@ describe('native synchronization client', () => {
         const report = (current.adapter.failure = vi.fn());
         backend.replace('Remote change');
         expect(await current.client.flush()).toBe(false);
-        expect(current.client.state()).toMatchObject({ status: 'error', reason: 'invalid_shared_state' });
+        expect(current.client.state()).toMatchObject({
+            status: 'error',
+            reason: 'invalid_shared_state',
+        });
         expect(report).toHaveBeenCalledWith(failure);
     });
 
@@ -208,7 +453,9 @@ describe('native synchronization client', () => {
             write: async (input) => {
                 bases.push(input.base_number);
                 if (input.base_number < barrier)
-                    throw { response: { status: 409, data: { reason: 'content_changed' } } };
+                    throw {
+                        response: { status: 409, data: { reason: 'content_changed' } },
+                    };
                 const reply = await backend.transport.write(input);
                 if (first) {
                     first = false;
@@ -341,7 +588,10 @@ describe('native synchronization client', () => {
         let writable = true;
         const writer = editor({
             ...backend.transport,
-            read: async (input) => ({ ...(await backend.transport.read(input)), writable }),
+            read: async (input) => ({
+                ...(await backend.transport.read(input)),
+                writable,
+            }),
         });
         await writer.client.start();
         writable = false;
@@ -360,7 +610,10 @@ describe('native synchronization client', () => {
                 await initial(document);
                 return {
                     ...document,
-                    root: { ...document.root, attributes: { ...document.root.attributes, normalized: true } },
+                    root: {
+                        ...document.root,
+                        attributes: { ...document.root.attributes, normalized: true },
+                    },
                 };
             };
         }
@@ -379,7 +632,10 @@ describe('native synchronization client', () => {
             await initial(document);
             return {
                 ...document,
-                root: { ...document.root, attributes: { ...document.root.attributes, normalized: true } },
+                root: {
+                    ...document.root,
+                    attributes: { ...document.root.attributes, normalized: true },
+                },
             };
         };
         await again.client.start();
@@ -605,7 +861,10 @@ describe('native synchronization client', () => {
         const a = editor({ ...backend.transport, presence });
         a.adapter.selection = () => {
             const block = textBlocks(a.document().root)[0];
-            return { anchor: { blockId: block.id, offset: 0 }, focus: { blockId: block.id, offset: 1 } };
+            return {
+                anchor: { blockId: block.id, offset: 0 },
+                focus: { blockId: block.id, offset: 1 },
+            };
         };
         await a.client.start();
         await vi.advanceTimersByTimeAsync(0);
@@ -616,7 +875,10 @@ describe('native synchronization client', () => {
         a.edit(0, 0, 'Local ');
         await vi.advanceTimersByTimeAsync(250);
         expect(presence).toHaveBeenCalledTimes(2);
-        expect(presence.mock.calls[1][0]).toMatchObject({ anchor: null, focus: null });
+        expect(presence.mock.calls[1][0]).toMatchObject({
+            anchor: null,
+            focus: null,
+        });
         await a.client.flush();
         await vi.advanceTimersByTimeAsync(250);
         expect(presence).toHaveBeenCalledTimes(3);
