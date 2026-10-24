@@ -43,7 +43,7 @@ export interface SyncEditor {
     initial(document: NativeDocument): Promise<NativeDocument | void>;
     prepare(document: NativeDocument): Promise<NativeDocument>;
     preview(document: NativeDocument): Promise<void>;
-    lock(): NativeSelection | null | false;
+    lock(purpose?: 'history'): NativeSelection | null | false;
     apply(document: NativeDocument, selection: NativeSelection | null): Promise<void>;
     unlock(): void;
     undoLocal(): Promise<void>;

@@ -1,8 +1,13 @@
+import {
+    decodeSharedBytes,
+    encodeSharedBytes,
+    NativeSyncClient,
+    SharedNativeDocument,
+    type SyncEditor,
+    type SyncTransport,
+} from '@saad5400/midad/collaboration';
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import { blockText, replaceInlineText, textBlocks } from '@saad5400/midad/editing';
-import { SharedNativeDocument } from '@saad5400/midad/collaboration';
-import { decodeSharedBytes, encodeSharedBytes } from '@saad5400/midad/collaboration';
-import { NativeSyncClient, type SyncEditor, type SyncTransport } from '@saad5400/midad/collaboration';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const clients: NativeSyncClient[] = [],
@@ -498,6 +503,22 @@ describe('native synchronization client', () => {
         await b.client.flush();
         expect(a.text()).toBe('Original العربية Theirs');
         expect(b.text()).toBe(a.text());
+    });
+    it('performs undo and redo from an active input queue without permitting remote locks', async () => {
+        const backend = server(),
+            a = editor(backend.transport);
+        await a.client.start();
+        a.edit(0, 0, 'Mine ');
+        await a.client.flush();
+        const lock = a.adapter.lock.bind(a.adapter);
+        a.adapter.lock = (purpose) => (purpose === 'history' ? lock() : false);
+        expect(a.adapter.lock()).toBe(false);
+        await a.client.undo();
+        expect(a.text()).toBe('Original العربية');
+        await a.client.flush();
+        await a.client.redo();
+        expect(a.text()).toBe('Mine Original العربية');
+        expect(a.adapter.lock()).toBe(false);
     });
     it('lets readers receive changes without publishing edits', async () => {
         const backend = server(),
