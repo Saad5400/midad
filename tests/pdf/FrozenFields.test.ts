@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import { fieldAppearancePage } from '@saad5400/midad/pdf';
+import { writeScenePdf } from '@saad5400/midad/pdf';
 import { FrozenFieldSession } from '@saad5400/midad/pdf';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { paintPage } from '@saad5400/midad/rendering';
@@ -8,6 +9,8 @@ import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { LAB_IMAGE } from '../fixtures/migrationCorpus';
+import { verifyScenePdf } from '../fixtures/pdfGeometry';
 
 const require = createRequire(import.meta.url);
 const create = () =>
@@ -59,8 +62,9 @@ describe('frozen PDF field sessions', () => {
         kernel = await NativeTextKernel.withAssets(
             await CanvasKitInit(options as NonNullable<Parameters<typeof CanvasKitInit>[0]>),
             async (font) => new Uint8Array(await readFile(`assets/fonts/${font}.ttf`)),
-            async () => {
-                throw new Error('Unexpected image');
+            async (source) => {
+                if (!source.startsWith('data:image/png;base64,')) throw new Error('Unexpected image');
+                return { bytes: new Uint8Array(Buffer.from(source.slice(source.indexOf(',') + 1), 'base64')) };
             },
         );
     });
@@ -112,6 +116,94 @@ describe('frozen PDF field sessions', () => {
         expect(actual.page.commands).toEqual(expected.commands);
         expect(actual.field).toEqual(boxes[0]);
         expect(actual.page.commands.some((command) => command.kind === 'clipStart')).toBe(true);
+    });
+    it('retains an immutable pending document until values change', () => {
+        const session = new FrozenFieldSession(create(), boxes, pages, ['mine']);
+        session.setValue('mine', 'First');
+        const first = session.previewDocument();
+        expect(session.previewDocument()).toBe(first);
+        expect(Object.isFrozen(first.root.children![0].children)).toBe(true);
+        session.setValue('mine', 'Second');
+        const second = session.previewDocument();
+        expect(second.revision).toBeGreaterThan(first.revision);
+        expect(first.root.children![0].children![0].attributes!.value).toBe('First');
+        expect(second.root.children![0].children![0].attributes!.value).toBe('Second');
+    });
+    it.each([[], [{ width: NaN, height: 800 }], [{ width: 600, height: 0 }]].map((geometry) => ({ geometry })))(
+        'rejects invalid source page geometry %#',
+        ({ geometry }) => {
+            expect(() => new FrozenFieldSession(create(), [], geometry, [])).toThrow('page geometry');
+        },
+    );
+    it('places only pending appearances on their original pages and rejects stale revisions', async () => {
+        const session = new FrozenFieldSession(create(), boxes, pages, ['mine', 'other']);
+        session.setValue('mine', 'Pending قيمة');
+        session.setValue('other', 'Other');
+        await kernel.prepare(session.previewDocument());
+        const local = session.appearance('mine', kernel, new Set());
+        const scene = session.pendingScene(kernel);
+        expect(scene.pages).toHaveLength(2);
+        expect(scene.fontHash).toBe(kernel.fontHashFor(session.previewDocument()));
+        expect(scene.revision).toBe(session.previewDocument().revision);
+        expect(Object.isFrozen(scene.pages[0].commands)).toBe(true);
+        const before = local.page.commands.find((command) => 'glyphs' in command)!;
+        const after = scene.pages[0].commands.find((command) => 'glyphs' in command)!;
+        if (!('glyphs' in before) || !('glyphs' in after)) throw new Error('Missing text');
+        expect(after.glyphs).toEqual(before.glyphs);
+        expect(after.positions).toEqual(before.positions.map((value, index) => value + (index % 2 ? 40 : 30)));
+        expect(
+            scene.pages[1].commands.some((command) => 'glyphs' in command && command.text.join('').includes('Other')),
+        ).toBe(true);
+        expect(
+            scene.pages
+                .flatMap((page) => page.commands)
+                .some((command) => 'glyphs' in command && command.text.join('').includes('Fixed')),
+        ).toBe(false);
+        session.setValue('mine', 'Updated');
+        await expect(writeScenePdf(scene, kernel, () => session.previewDocument())).rejects.toThrow();
+    });
+    it('exports pending images and marked Arabic without redrawing baked values', async () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                attrs: {
+                    blockVariables: [
+                        {
+                            id: 'text',
+                            type: 'text',
+                            settings: {
+                                fontFamily: 'Amiri',
+                                fontSize: '20px',
+                                direction: 'rtl',
+                                color: '#123456',
+                                underline: true,
+                            },
+                        },
+                        { id: 'image', type: 'stamp', reference_id: 'SOURCE-REFERENCE' },
+                        { id: 'baked', type: 'text', value: 'Already in the source PDF' },
+                    ],
+                },
+                content: [{ type: 'paragraph' }],
+            },
+            'frozen-print',
+        );
+        const session = new FrozenFieldSession(
+            document,
+            [
+                { id: 'text', page: 1, x: 30, y: 40, width: 360, height: 70 },
+                { id: 'image', page: 2, x: 80, y: 90, width: 180, height: 60 },
+                { id: 'baked', page: 1, x: 30, y: 180, width: 180, height: 40 },
+            ],
+            pages,
+            ['text', 'image'],
+        );
+        session.setValue('text', 'قِيمَةٌ عَرَبِيَّةٌ ABC 123');
+        session.setValue('image', LAB_IMAGE, true);
+        await kernel.prepare(session.previewDocument());
+        const scene = session.pendingScene(kernel);
+        expect(scene.glyphCount).toBeGreaterThan(0);
+        expect(scene.pages[1].commands.some((command) => command.kind === 'image')).toBe(true);
+        await verifyScenePdf(session.previewDocument(), scene, kernel, 'frozen-pending-print');
     });
     it('shows the uploaded attachment filename instead of its label', () => {
         const document = importDocument(

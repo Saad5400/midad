@@ -1,5 +1,8 @@
 import { IMAGE_FIELD_TYPES, nativeFields, type NativeField } from '../content/fields/queries.js';
 import { copyJson, type Attributes, type NativeDocument } from '../document/model.js';
+import { shiftCommand } from '../layout/bands.js';
+import { finalizePages } from '../layout/finalize.js';
+import type { DocumentScene, PaintCommand } from '../layout/scene.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
 import { fieldAppearancePage, type FieldAppearance, type FrozenFieldBox } from './field-appearance.js';
@@ -11,6 +14,9 @@ export class FrozenFieldSession {
     private readonly values = new Map<string, string>();
     private readonly locked: ReadonlySet<string>;
     private readonly framed = new Set<string>();
+    private readonly pages: readonly { width: number; height: number }[];
+    private preview?: NativeDocument;
+    private pendingRevision = 0;
 
     constructor(
         readonly document: NativeDocument,
@@ -19,6 +25,12 @@ export class FrozenFieldSession {
         editableIds: readonly string[],
         lockedIds: readonly string[] = [],
     ) {
+        if (
+            !pages.length ||
+            pages.some((page) => ![page.width, page.height].every((size) => Number.isFinite(size) && size > 0))
+        )
+            throw new Error('Invalid frozen page geometry');
+        this.pages = Object.freeze(pages.map((page) => Object.freeze({ width: page.width, height: page.height })));
         for (const field of nativeFields(document)) {
             if (this.source.has(field.id)) throw new Error('Duplicate native field');
             this.source.set(field.id, field);
@@ -66,6 +78,8 @@ export class FrozenFieldSession {
         this.values.set(id, value);
         if (completeImage) this.framed.add(id);
         else this.framed.delete(id);
+        this.pendingRevision++;
+        this.preview = undefined;
     }
 
     attributes(id: string): Attributes {
@@ -97,24 +111,60 @@ export class FrozenFieldSession {
     }
 
     previewDocument(): NativeDocument {
+        if (this.preview) return this.preview;
         const entries = this.fields.filter((entry) => this.values.has(entry.box.id));
-        return {
+        return (this.preview = Object.freeze({
             ...this.document,
-            root: {
+            revision: this.document.revision + this.pendingRevision,
+            root: Object.freeze({
                 id: 'frozen-preview',
                 kind: 'doc',
-                children: [
-                    {
+                children: Object.freeze([
+                    Object.freeze({
                         id: 'frozen-preview-fields',
                         kind: 'paragraph',
-                        children: entries.map((entry) => ({
-                            id: entry.box.id,
-                            kind: 'variable',
-                            attributes: this.attributes(entry.box.id),
-                        })),
-                    },
-                ],
-            },
-        };
+                        children: Object.freeze(
+                            entries.map((entry) =>
+                                Object.freeze({
+                                    id: entry.box.id,
+                                    kind: 'variable',
+                                    attributes: this.attributes(entry.box.id),
+                                }),
+                            ),
+                        ),
+                    }),
+                ]),
+            }),
+        }));
+    }
+
+    pendingScene(kernel: NativeTextKernel): DocumentScene {
+        const document = this.previewDocument(),
+            fontHash = kernel.fontHashFor(document),
+            used = new Set<ShapedParagraph>();
+        const pages = this.pages.map((page) => ({ ...page, lines: [], commands: [] as PaintCommand[] }));
+        for (const id of this.values.keys()) {
+            const appearance = this.appearance(id, kernel, used),
+                box = appearance.field;
+            pages[box.page - 1].commands.push(
+                ...appearance.page.commands.map((command) => shiftCommand(command, box.x, box.y)),
+            );
+        }
+        return Object.freeze({
+            documentId: document.id,
+            revision: document.revision,
+            fontHash,
+            margin: 0,
+            glyphCount: pages.reduce(
+                (total, page) =>
+                    total +
+                    page.commands.reduce(
+                        (count, command) => count + ('glyphs' in command ? command.glyphs.length : 0),
+                        0,
+                    ),
+                0,
+            ),
+            pages: Object.freeze(finalizePages(pages)),
+        });
     }
 }
