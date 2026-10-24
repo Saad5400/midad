@@ -729,6 +729,51 @@ describe('our shared native document', () => {
             b.destroy();
         }
     });
+    it.each(['plain', 'table'].flatMap((container) => ['first', 'second'].map((removed) => ({ container, removed }))))(
+        'restores deleted paragraph text and attributes from a snapshot ($container, $removed)',
+        ({ container, removed }) => {
+            const paragraphs = ['First', 'Second'].map((text, index) => ({
+                type: 'paragraph',
+                attrs: { nativeId: index ? 'second' : 'first' },
+                content: [{ type: 'text', text }],
+            }));
+            const content =
+                container === 'table'
+                    ? [
+                          {
+                              type: 'table',
+                              content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: paragraphs }] }],
+                          },
+                      ]
+                    : paragraphs;
+            const a = SharedNativeDocument.create(
+                importDocument({ type: 'doc', content }, 'deleted-paragraph-restore'),
+            );
+            const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+            const original = a.document();
+            try {
+                const caret = a.caret({ blockId: removed, offset: 2 })!;
+                a.publish(
+                    replaceBlockNode(a.document(), removed, (node) => ({
+                        ...node,
+                        attributes: { ...node.attributes, textAlign: 'center' },
+                    })),
+                );
+                a.publish(deleteBlock(a.document(), removed)!.document);
+                merge(a, b);
+                a.publish({ ...original, revision: a.document().revision + 1 });
+                merge(a, b);
+                expect(text(a)).toBe('First\nSecond');
+                expect(exportDocument(a.document())).toEqual(exportDocument(original));
+                expect(exportDocument(b.document())).toEqual(exportDocument(original));
+                expect(a.resolve(caret)).toEqual({ blockId: removed, offset: 2 });
+                expect(b.resolve(caret)).toEqual({ blockId: removed, offset: 2 });
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
 
     it('moves the full original paragraph when another author splits it concurrently', () => {
         const a = SharedNativeDocument.create(
@@ -765,6 +810,185 @@ describe('our shared native document', () => {
             merge(a, b);
             expect(text(a)).toBe('Target\nABC\nDEFGHIJ');
             expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it.each(['blockquote', 'table', 'parallelRow', 'clause'])(
+        'restores a deleted %s and its nested text without retaining later formatting',
+        (kind) => {
+            const paragraphs = ['First', 'Second'].map((text, index) => ({
+                type: 'paragraph',
+                attrs: { nativeId: `nested-${index}` },
+                content: [{ type: 'text', text }],
+            }));
+            const container = {
+                type: kind,
+                attrs: { nativeId: 'removed-container' },
+                content:
+                    kind === 'table'
+                        ? [{ type: 'tableRow', content: [{ type: 'tableCell', content: paragraphs }] }]
+                        : kind === 'parallelRow'
+                          ? [{ type: 'parallelCell', content: paragraphs }]
+                          : kind === 'clause'
+                            ? [
+                                  { type: 'clauseTitle', content: [{ type: 'text', text: 'Title' }] },
+                                  { type: 'clauseBody', content: paragraphs },
+                              ]
+                            : paragraphs,
+            };
+            const a = SharedNativeDocument.create(
+                importDocument(
+                    {
+                        type: 'doc',
+                        content: [container, { type: 'paragraph', content: [{ type: 'text', text: 'Survivor' }] }],
+                    },
+                    'deleted-container-restore',
+                ),
+            );
+            const b = SharedNativeDocument.fromState(a.state(), a.document().id),
+                original = a.document();
+            try {
+                a.publish(
+                    replaceBlockNode(a.document(), 'nested-0', (node) => ({
+                        ...node,
+                        attributes: { ...node.attributes, textAlign: 'center' },
+                    })),
+                );
+                a.publish(deleteBlock(a.document(), 'removed-container')!.document);
+                merge(a, b);
+                a.publish({ ...original, revision: a.document().revision + 1 });
+                merge(a, b);
+                expect(exportDocument(a.document())).toEqual(exportDocument(original));
+                expect(exportDocument(b.document())).toEqual(exportDocument(original));
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+
+    it.each([false, true])('restores deleted field attributes from the snapshot (floating %s)', (floating) => {
+        const attrs = {
+            id: 'restored-field',
+            type: 'text',
+            name: 'Original field',
+            value: 'Original value',
+            width: 120,
+            height: 24,
+        };
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    ...(floating ? { attrs: { blockVariables: [attrs] } } : {}),
+                    content: [
+                        {
+                            type: 'paragraph',
+                            attrs: { nativeId: 'field-line' },
+                            content: [
+                                { type: 'text', text: 'First' },
+                                ...(!floating ? [{ type: 'variable', attrs }] : []),
+                            ],
+                        },
+                    ],
+                },
+                'deleted-field-restore',
+            ),
+        );
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id),
+            original = a.document();
+        try {
+            if (floating) {
+                const changed = { ...attrs, name: 'Later field', placeholder: 'Later placeholder' };
+                a.publish({
+                    ...a.document(),
+                    root: {
+                        ...a.document().root,
+                        attributes: { ...a.document().root.attributes, blockVariables: [changed] },
+                    },
+                });
+                a.publish({
+                    ...a.document(),
+                    root: { ...a.document().root, attributes: { ...a.document().root.attributes, blockVariables: [] } },
+                });
+            } else {
+                a.publish(
+                    replaceBlockNode(a.document(), attrs.id, (node) => ({
+                        ...node,
+                        attributes: { ...node.attributes, name: 'Later field', placeholder: 'Later placeholder' },
+                    })),
+                );
+                const document = a.document(),
+                    block = textBlocks(document.root)[0];
+                a.publish(
+                    replaceBlockNode(document, block.id, (node) => ({
+                        ...node,
+                        children: node.children!.filter((child) => child.id !== attrs.id),
+                    })),
+                );
+            }
+            merge(a, b);
+            a.publish({ ...original, revision: a.document().revision + 1 });
+            merge(a, b);
+            expect(exportDocument(a.document())).toEqual(exportDocument(original));
+            expect(exportDocument(b.document())).toEqual(exportDocument(original));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('removes later metadata when restoring a deleted clause variant', () => {
+        const document = importDocument({ type: 'doc' }, 'deleted-variant-restore');
+        const body = (text: string) => ({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+        });
+        const clause = createNativeClause(document, 'Clause', {
+            uuid: 'library',
+            title: 'Clause',
+            variants: [
+                { uuid: 'a', body_content: body('First') },
+                { uuid: 'b', body_content: body('Second') },
+            ],
+        });
+        const a = SharedNativeDocument.create({ ...document, root: { ...document.root, children: [clause] } });
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id),
+            original = a.document();
+        try {
+            const id = nativeClauses(original)[0].id;
+            a.publish(
+                replaceBlockNode(a.document(), id, (node) => ({
+                    ...node,
+                    attributes: {
+                        ...node.attributes,
+                        variants: (
+                            node.attributes!.variants as Array<Record<string, import('@saad5400/midad/document').Json>>
+                        ).map((variant) =>
+                            variant.id === 'b'
+                                ? { ...variant, laterMetadata: 'Must not survive restoration' }
+                                : variant,
+                        ),
+                    },
+                })),
+            );
+            a.publish(
+                replaceBlockNode(a.document(), id, (node) => ({
+                    ...node,
+                    attributes: {
+                        ...node.attributes,
+                        variants: (
+                            node.attributes!.variants as Array<Record<string, import('@saad5400/midad/document').Json>>
+                        ).filter((variant) => variant.id !== 'b'),
+                    },
+                })),
+            );
+            merge(a, b);
+            a.publish({ ...original, revision: a.document().revision + 1 });
+            merge(a, b);
+            expect(exportDocument(a.document())).toEqual(exportDocument(original));
+            expect(exportDocument(b.document())).toEqual(exportDocument(original));
         } finally {
             a.destroy();
             b.destroy();
