@@ -1,0 +1,21 @@
+export interface DependencyLock {
+    packages?: Record<
+        string,
+        {
+            version?: string;
+            integrity?: string;
+            dependencies?: Record<string, string>;
+            optionalDependencies?: Record<string, string>;
+        }
+    >;
+}
+export interface DependencyRoot {
+    name: string;
+    parent?: string;
+    optional?: boolean;
+}
+export function dependencyIdentity(lock: DependencyLock, roots: readonly DependencyRoot[]): string;
+export function renderingIdentity(
+    directory: string,
+    entries: readonly string[],
+): { fingerprint: string; packages: string[]; files: string[] };

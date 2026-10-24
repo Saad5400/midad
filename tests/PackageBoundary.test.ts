@@ -4,9 +4,9 @@ import { getDefaultVariableSettings } from '@saad5400/midad/content/fields';
 import { NATIVE_RENDERER_VERSION } from '@saad5400/midad/rendering';
 import { fontAssets } from '@saad5400/midad/typography';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('standalone package entrypoints', () => {
@@ -81,6 +81,21 @@ describe('standalone package entrypoints', () => {
     it('identifies its renderer without an application build definition', () => {
         expect(NATIVE_RENDERER_VERSION).toMatch(/^[a-f0-9]{64}$/);
     });
+    it('keeps UI, search and collaboration modules outside the rendering code fingerprint', async () => {
+        const { renderingIdentity } = await import('@saad5400/midad/build');
+        const metadata = JSON.parse(await readFile('package.json', 'utf8'));
+        const identity = renderingIdentity(process.cwd(), metadata.midad.layoutEntries);
+        expect(identity.files).toContain('src/rendering/canvas.ts');
+        expect(identity.files).toContain('src/pdf/document.ts');
+        expect(
+            identity.files.some(
+                (file) =>
+                    file.startsWith('src/browser/') ||
+                    file.startsWith('src/collaboration/') ||
+                    file === 'src/editing/search.ts',
+            ),
+        ).toBe(false);
+    });
     it('edits stored document content through its public API without a CLM loader', () => {
         const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'عقد ABC' }] }] };
         const document = importDocument(content, 'standalone');
@@ -93,8 +108,32 @@ describe('standalone package entrypoints', () => {
         try {
             await cp('build.mjs', join(directory, 'build.mjs'));
             await mkdir(join(directory, 'src'));
+            await symlink(resolve('node_modules'), join(directory, 'node_modules'));
+            await writeFile(
+                join(directory, 'src/render.ts'),
+                'import { metric } from "./metric"; import { version } from "./rendering/version.js"; export const layout = metric + version;',
+            );
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
+            await mkdir(join(directory, 'src/rendering'));
+            await writeFile(
+                join(directory, 'src/rendering/version.ts'),
+                'export { BUILD_LAYOUT_VERSION as version } from "./build-version.js";',
+            );
             await mkdir(join(directory, 'assets'));
-            await writeFile(join(directory, 'package.json'), '{}');
+            await writeFile(
+                join(directory, 'package.json'),
+                JSON.stringify({
+                    version: '1',
+                    midad: { layoutVersion: 1, layoutGolden: '1'.repeat(64), layoutEntries: ['src/render.ts'] },
+                    dependencies: { 'canvaskit-wasm': '1' },
+                }),
+            );
+            await writeFile(
+                join(directory, 'package-lock.json'),
+                JSON.stringify({
+                    packages: { 'node_modules/canvaskit-wasm': { version: '1', integrity: 'wasm-one' } },
+                }),
+            );
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             await writeFile(join(directory, 'assets/font.ttf'), 'font-one');
             await mkdir(join(directory, 'dist'));
@@ -104,14 +143,37 @@ describe('standalone package entrypoints', () => {
                 return readFile(join(directory, 'src/rendering/build-version.ts'), 'utf8');
             };
             const original = await build();
+            const layout = (output: string) => output.match(/BUILD_LAYOUT_ID = '([^']+)'/)![1];
             await expect(readFile(join(directory, 'dist/removed-module.js'))).rejects.toThrow();
             expect(await build()).toBe(original);
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 2;');
-            expect(await build()).not.toBe(original);
+            const updated = await build();
+            expect(updated).not.toBe(original);
+            expect(layout(updated)).toBe(layout(original));
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             expect(await build()).toBe(original);
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 2;');
+            expect(layout(await build())).not.toBe(layout(original));
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
             await writeFile(join(directory, 'assets/font.ttf'), 'font-two');
-            expect(await build()).not.toBe(original);
+            expect(layout(await build())).not.toBe(layout(original));
+            await writeFile(join(directory, 'assets/font.ttf'), 'font-one');
+            await writeFile(
+                join(directory, 'package.json'),
+                JSON.stringify({
+                    version: '2',
+                    midad: { layoutVersion: 1, layoutGolden: '1'.repeat(64), layoutEntries: ['src/render.ts'] },
+                    dependencies: { 'canvaskit-wasm': '1', yjs: '2' },
+                }),
+            );
+            expect(layout(await build())).toBe(layout(original));
+            await writeFile(
+                join(directory, 'package-lock.json'),
+                JSON.stringify({
+                    packages: { 'node_modules/canvaskit-wasm': { version: '2', integrity: 'wasm-two' } },
+                }),
+            );
+            expect(layout(await build())).not.toBe(layout(original));
         } finally {
             await rm(directory, { recursive: true, force: true });
         }

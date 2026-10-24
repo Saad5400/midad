@@ -1,0 +1,798 @@
+{
+    "type": "doc",
+    "attrs": {
+        "pageLayout": {
+            "orientation": "portrait",
+            "margins": {
+                "top": 96,
+                "bottom": 96,
+                "left": 96,
+                "right": 96
+            }
+        },
+        "blockVariables": [],
+        "floatingImages": []
+    },
+    "content": [
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-0",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-1",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-1-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-1-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-1-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-1-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-1-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-1-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-2",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-2-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-2-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-2-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-2-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-2-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-2-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-3",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-3-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-3-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-3-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-3-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-3-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-3-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-4",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-4-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-4-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-4-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-4-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-4-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-4-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-5",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-5-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-5-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-5-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-5-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-5-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-5-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-6",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-6-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-6-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-6-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-6-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-6-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-6-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-7",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-7-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-7-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-7-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-7-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-7-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-7-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-8",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-8-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-8-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-8-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-8-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-8-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-8-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-9",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-9-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-9-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-9-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-9-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-9-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-9-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
