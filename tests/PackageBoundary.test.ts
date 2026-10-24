@@ -109,7 +109,8 @@ describe('standalone package entrypoints', () => {
             await cp('build.mjs', join(directory, 'build.mjs'));
             await mkdir(join(directory, 'src'));
             await symlink(resolve('node_modules'), join(directory, 'node_modules'));
-            await writeFile(join(directory, 'src/render.ts'), 'export const layout = 1;');
+            await writeFile(join(directory, 'src/render.ts'), 'import { metric } from "./metric"; export const layout = metric;');
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
             await mkdir(join(directory, 'assets'));
             await writeFile(
                 join(directory, 'package.json'),
@@ -143,9 +144,9 @@ describe('standalone package entrypoints', () => {
             expect(layout(updated)).toBe(layout(original));
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             expect(await build()).toBe(original);
-            await writeFile(join(directory, 'src/render.ts'), 'export const layout = 2;');
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 2;');
             expect(layout(await build())).not.toBe(layout(original));
-            await writeFile(join(directory, 'src/render.ts'), 'export const layout = 1;');
+            await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
             await writeFile(join(directory, 'assets/font.ttf'), 'font-two');
             expect(layout(await build())).not.toBe(layout(original));
             await writeFile(join(directory, 'assets/font.ttf'), 'font-one');

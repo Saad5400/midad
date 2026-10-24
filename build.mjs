@@ -134,8 +134,14 @@ export function renderingIdentity(directory, entries) {
                       : undefined;
             if (specifier && ts.isStringLiteral(specifier)) {
                 if (specifier.text.startsWith('.')) {
-                    const target = resolve(dirname(file), specifier.text);
-                    visit(target.endsWith('.js') ? target.slice(0, -3) + '.ts' : target);
+                    const resolved = ts.resolveModuleName(
+                        specifier.text,
+                        file,
+                        { moduleResolution: ts.ModuleResolutionKind.Bundler, resolveJsonModule: true, allowJs: true },
+                        ts.sys,
+                    ).resolvedModule;
+                    if (!resolved) throw new Error(`The rendering module ${specifier.text} is missing`);
+                    visit(resolved.resolvedFileName);
                 } else
                     packages.add(
                         specifier.text.startsWith('@')
