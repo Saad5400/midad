@@ -1,8 +1,8 @@
 import { copyJson, type Attributes, type NativeMark, type NativeNode } from '../../document/model.js';
 import { chooseFont } from '../../typography/fonts.js';
 import { DEFAULT_TEXT_STYLE, color, lineHeight, textSize } from '../../typography/style.js';
-import { customBlocks, textKinds, limit, type NativeFragment } from './model.js';
 import { safeLink } from './html-policy.js';
+import { customBlocks, limit, textKinds, type NativeFragment } from './model.js';
 
 export function parseHtmlFragment(source: string): NativeFragment {
     if (source.length > limit) throw new Error('The clipboard content is too large');
@@ -173,9 +173,10 @@ export function parseHtmlFragment(source: string): NativeFragment {
         return Array.from(element.childNodes).flatMap((child) => inline(child, marks(element, inherited), depth + 1));
     };
     const blockTags = /^(P|DIV|H[1-6]|PRE|BLOCKQUOTE|UL|OL|LI|TABLE|HR|SECTION|ARTICLE)$/;
+    const blockSelector = 'p,div,h1,h2,h3,h4,h5,h6,pre,blockquote,ul,ol,li,table,hr,section,article';
     const attributes = (element: HTMLElement, inherited: Attributes): Attributes => {
         const attrs = { ...scope(inherited), ...metadata(element) };
-        const direction = element.getAttribute('dir') || element.style.direction;
+        const direction = (element.getAttribute('dir') || element.style.direction).trim().toLowerCase();
         if (direction === 'rtl' || direction === 'ltr') attrs.dir = direction;
         if (['left', 'right', 'center', 'justify'].includes(element.style.textAlign))
             attrs.textAlign = element.style.textAlign;
@@ -197,13 +198,15 @@ export function parseHtmlFragment(source: string): NativeFragment {
             pending = [];
         };
         for (const child of Array.from(parent.childNodes)) {
-            if (child.nodeType !== 1 || !blockTags.test((child as HTMLElement).tagName)) {
+            const element = child.nodeType === 1 ? (child as HTMLElement) : undefined;
+            if (element && ignored.has(element.tagName)) continue;
+            const nestedBlocks = element?.querySelector(blockSelector);
+            if (!element || (!blockTags.test(element.tagName) && !nestedBlocks)) {
                 pending.push(...inline(child, inherited, depth + 1));
                 continue;
             }
             flush();
-            const element = child as HTMLElement,
-                tag = element.tagName,
+            const tag = element.tagName,
                 nextAttrs = attributes(element, attrs),
                 nextMarks = marks(element, inherited);
             if (ignored.has(tag)) continue;
@@ -296,7 +299,7 @@ export function parseHtmlFragment(source: string): NativeFragment {
                         { ...nextAttrs, level: Number(tag[1]) },
                     ),
                 );
-            else if (tag === 'P' || !Array.from(element.children).some((child) => blockTags.test(child.tagName)))
+            else if (tag === 'P' || !nestedBlocks)
                 output.push(
                     node(
                         'paragraph',

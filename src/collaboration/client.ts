@@ -2,13 +2,13 @@ import { exportDocument } from '../document/codec.js';
 import type { NativeDocument } from '../document/model.js';
 import type { NativeSelection } from '../editing/selection.js';
 import { SharedNativeDocument } from './document.js';
-import { canonicalSharedJson, decodeSharedBytes, encodeSharedBytes } from './values.js';
-import type { SyncReply, SyncState, SyncEditor, SyncTransport } from './sync/contracts.js';
+import type { SyncEditor, SyncReply, SyncState, SyncTransport } from './sync/contracts.js';
 import { SyncPresence } from './sync/presence.js';
-import { SyncDeadline, SyncTransportFailure, withinDeadline, transfer } from './sync/requests.js';
-import { captureSelection, resolveSelection, clampSelection } from './sync/selection.js';
+import { SyncDeadline, SyncTransportFailure, transfer, withinDeadline } from './sync/requests.js';
+import { captureSelection, clampSelection, resolveSelection } from './sync/selection.js';
+import { canonicalSharedJson, decodeSharedBytes, encodeSharedBytes } from './values.js';
 
-export type { SyncReply, PresencePeer, NativePeer, SyncState, SyncEditor, SyncTransport } from './sync/contracts.js';
+export type { NativePeer, PresencePeer, SyncEditor, SyncReply, SyncState, SyncTransport } from './sync/contracts.js';
 
 export class NativeSyncClient {
     private shared?: SharedNativeDocument;
@@ -155,7 +155,7 @@ export class NativeSyncClient {
         await this.history('redo');
     }
     private async history(direction: 'undo' | 'redo'): Promise<void> {
-        const locked = this.editor.lock();
+        const locked = this.editor.lock('history');
         if (locked === false || !this.shared) return;
         const anchors = captureSelection(this.shared, locked);
         try {

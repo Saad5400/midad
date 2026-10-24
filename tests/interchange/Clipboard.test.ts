@@ -1,3 +1,5 @@
+import { findNode, importDocument, type NativeNode } from '@saad5400/midad/document';
+import { blockText, selectNodeText } from '@saad5400/midad/editing';
 import {
     clipboardPayload,
     fragmentHtml,
@@ -8,9 +10,6 @@ import {
     readClipboard,
     selectionFragment,
 } from '@saad5400/midad/interchange';
-import { findNode, importDocument, type NativeNode } from '@saad5400/midad/document';
-import { blockText } from '@saad5400/midad/editing';
-import { selectNodeText } from '@saad5400/midad/editing';
 import { nodeTextStyle } from '@saad5400/midad/typography';
 import { describe, expect, it } from 'vitest';
 
@@ -21,6 +20,42 @@ const paragraph = (id: string, text: string) => ({
 });
 
 describe('native clipboard', () => {
+    it('preserves paragraphs and explicit normal weight inside a Google Docs bold wrapper', () => {
+        const fragment = parseHtmlFragment(
+            '<b id="docs-internal-guid-fixture" style="font-weight:normal"><p dir="RTL">فقرة أولى</p><p><strong>Second</strong> paragraph</p></b>',
+        );
+        expect(fragment.blocks.map(blockText)).toEqual(['فقرة أولى', 'Second paragraph']);
+        expect(fragment.blocks[0].attributes?.dir).toBe('rtl');
+        expect(nodeTextStyle(fragment.blocks[0].children![0]).bold).toBe(false);
+        expect(nodeTextStyle(fragment.blocks[1].children![0]).bold).toBe(true);
+    });
+    it('keeps list and merged table structure through nested inline clipboard wrappers', () => {
+        const fragment = parseHtmlFragment(
+            '<span dir="RTL"><em><ol start="4"><li>أول</li><li><span><p dir="LTR">Second</p><p>ثالث</p></span></li></ol><table><tr><td colspan="2" dir="LTR"><span><p>Cell A</p><p>Cell B</p></span></td></tr></table></em></span>',
+        );
+        expect(fragment.blocks.map((node) => node.kind)).toEqual(['orderedList', 'table']);
+        expect(fragment.blocks[0].attributes).toMatchObject({ start: 4, dir: 'rtl' });
+        const items = fragment.blocks[0].children!;
+        expect(items[1].children!.map(blockText)).toEqual(['Second', 'ثالث']);
+        expect(items[1].children!.map((node) => node.attributes?.dir)).toEqual(['ltr', 'rtl']);
+        const cell = fragment.blocks[1].children![0].children![0];
+        expect(cell.attributes).toMatchObject({ colspan: 2, dir: 'ltr' });
+        expect(cell.children!.map(blockText)).toEqual(['Cell A', 'Cell B']);
+        expect(nodeTextStyle(cell.children![0].children![0]).italic).toBe(true);
+    });
+    it.each(['RTL', 'rTl', ' RTL '])('normalizes imported HTML direction %s', (dir) => {
+        const fragment = parseHtmlFragment(`<div dir="${dir}"><p>عربي</p><ul><li>عنصر</li></ul></div>`);
+        expect(fragment.blocks.every((node) => node.attributes?.dir === 'rtl')).toBe(true);
+    });
+    it('unwraps block content without importing executable content or bypassing depth limits', () => {
+        const fragment = parseHtmlFragment(
+            '<div><b><p>Before</p><iframe><p>Hidden</p></iframe><script>hidden()</script><p>After</p></b></div>',
+        );
+        expect(fragment.blocks.map(blockText)).toEqual(['Before', 'After']);
+        expect(() => parseHtmlFragment('<span>'.repeat(70) + '<p>Deep</p>' + '</span>'.repeat(70))).toThrow(
+            'too large',
+        );
+    });
     it('keeps relative font sizes relative to the inherited size', () => {
         const fragment = parseHtmlFragment(
             '<p style="font-size:18pt"><span style="font-size:150%">Relative</span></p>',
