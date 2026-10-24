@@ -379,6 +379,42 @@ describe('native synchronization client', () => {
         expect(await a.client.flush()).toBe(true);
         expect(a.text()).toBe('Theirs Original العربية');
     });
+    it('keeps a rejected local shared mutation editable and saves a later correction', async () => {
+        const backend = server(),
+            a = editor(backend.transport);
+        await a.client.start();
+        a.edit(0, 0, 'Saved ');
+        expect(await a.client.flush()).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 550));
+        const prepare = a.adapter.prepare;
+        let reject = true;
+        a.adapter.prepare = async (document) => {
+            if (!reject) return prepare(document);
+            let nested: import('@saad5400/midad/document').Json = true;
+            for (let index = 0; index < 40; index++) nested = { nested };
+            return {
+                ...document,
+                root: { ...document.root, attributes: { ...document.root.attributes, invalid: nested } },
+            };
+        };
+        a.edit(0, 0, 'Rejected ');
+        expect(await a.client.flush()).toBe(false);
+        expect(a.client.state()).toMatchObject({
+            status: 'error',
+            reason: 'invalid_content',
+            dirty: true,
+            canUndo: true,
+        });
+        expect(a.text()).toBe('Rejected Saved Original العربية');
+        expect(textBlocks(backend.shared.document().root).map(blockText).join('')).toBe('Saved Original العربية');
+        reject = false;
+        a.edit(0, 9, 'Corrected ');
+        expect(await a.client.flush()).toBe(true);
+        expect(a.text()).toBe('Corrected Saved Original العربية');
+        await a.client.undo();
+        await a.client.flush();
+        expect(a.text()).toBe('Saved Original العربية');
+    });
     it('persists an initial native revision immediately instead of waiting for the polling interval', async () => {
         vi.useFakeTimers();
         const backend = server();

@@ -113,6 +113,8 @@ view.dispose();
 
 `NativeSyncClient` in `/collaboration` pauses automatic retries after a rejected draft or malformed sync reply while retaining the local document and undo history. `flush()` explicitly retries the retained request; background focus/reconnect handlers should use `flush(false)`. A corrected rejected draft creates a new request, while retrying unchanged content retains its request ID so an accepted save is not duplicated. Hosts should expose retry and draft-backup actions for error states.
 
+`SharedNativeDocument.publish` and `receive` validate changes in an isolated model before committing to the existing live `Y.Doc` and undo manager. Rejected changes preserve the live state, history, author identity and observers. Unresolved updates stay quarantined until their dependencies produce a valid document; a local edit discards unresolved validation data, and subsequent vector-based synchronization can resend missing peer changes. The validation copy is reused and disposed with the document. `fromState` requires a complete, supported snapshot. Direct mutation through the exposed `ydoc` bypasses these guards.
+
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
 ## Source organization

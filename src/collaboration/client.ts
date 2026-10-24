@@ -208,12 +208,16 @@ export class NativeSyncClient {
                 this.publish();
                 return false;
             }
+            if (this.closed) return false;
             if (this.pending !== document) continue;
             try {
                 this.shadow!.receive(this.shared!.publish(prepared));
             } catch {
-                this.status = 'conflict';
-                this.reason = 'invalid_merge';
+                this.shadow!.destroy();
+                this.shadow = SharedNativeDocument.fromState(this.shared!.state(), this.id);
+                this.invalidLocal = true;
+                this.status = 'error';
+                this.reason = 'invalid_content';
                 this.publish();
                 return false;
             }
