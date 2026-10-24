@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const require = createRequire(import.meta.url);
 
 const root = dirname(fileURLToPath(import.meta.url));
 const files = (directory) =>
@@ -62,12 +65,14 @@ function buildPackage(directory = root) {
     )
         throw new Error('The layout compatibility contract is missing');
     const lock = JSON.parse(readFileSync(join(directory, 'package-lock.json'), 'utf8'));
-    const names = ['canvaskit-wasm', '@pdf-lib/fontkit', 'pdf-lib', 'color'].filter(
-        (name) => metadata.dependencies?.[name],
-    );
+    const rendering = renderingIdentity(directory, compatibility.layoutEntries);
+    const names = [...new Set(['canvaskit-wasm', ...rendering.packages])]
+        .sort()
+        .filter((name) => metadata.dependencies?.[name]);
     const layout = createHash('sha256').update(
         JSON.stringify([compatibility.layoutVersion, compatibility.layoutGolden]),
     );
+    layout.update(rendering.fingerprint);
     layout.update(
         dependencyIdentity(
             lock,
@@ -97,6 +102,63 @@ function buildPackage(directory = root) {
         join(directory, 'src/rendering/build-version.ts'),
         `export const BUILD_RENDERER_VERSION = '${artifact.digest('hex')}';\nexport const BUILD_LAYOUT_VERSION = ${compatibility.layoutVersion};\nexport const BUILD_LAYOUT_ID = '${layout.digest('hex')}';\n`,
     );
+}
+
+export function renderingIdentity(directory, entries) {
+    if (!Array.isArray(entries) || !entries.length) throw new Error('Rendering entrypoints are missing');
+    const ts = require('typescript'),
+        seen = new Map(),
+        packages = new Set();
+    const visit = (file) => {
+        if (seen.has(file) || file.endsWith('/rendering/version.ts') || file.endsWith('/rendering/build-version.ts'))
+            return;
+        const source = readFileSync(file, 'utf8');
+        const code = file.endsWith('.json')
+            ? JSON.stringify(JSON.parse(source))
+            : ts.transpileModule(source, {
+                  compilerOptions: {
+                      target: ts.ScriptTarget.ES2023,
+                      module: ts.ModuleKind.ESNext,
+                      removeComments: true,
+                  },
+              }).outputText;
+        seen.set(file, code);
+        if (file.endsWith('.json')) return;
+        const ast = ts.createSourceFile(file, code, ts.ScriptTarget.ES2023, true, ts.ScriptKind.JS);
+        const walk = (node) => {
+            const specifier =
+                ts.isImportDeclaration(node) || ts.isExportDeclaration(node)
+                    ? node.moduleSpecifier
+                    : ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
+                      ? node.arguments[0]
+                      : undefined;
+            if (specifier && ts.isStringLiteral(specifier)) {
+                if (specifier.text.startsWith('.')) {
+                    const target = resolve(dirname(file), specifier.text);
+                    visit(target.endsWith('.js') ? target.slice(0, -3) + '.ts' : target);
+                } else
+                    packages.add(
+                        specifier.text.startsWith('@')
+                            ? specifier.text.split('/').slice(0, 2).join('/')
+                            : specifier.text.split('/')[0],
+                    );
+            }
+            ts.forEachChild(node, walk);
+        };
+        walk(ast);
+    };
+    entries.forEach((entry) => visit(resolve(directory, entry)));
+    const hash = createHash('sha256');
+    const paths = [...seen.keys()].sort();
+    for (const file of paths) {
+        hash.update(relative(directory, file).split(sep).join('/'));
+        hash.update(seen.get(file));
+    }
+    return {
+        fingerprint: hash.digest('hex'),
+        packages: [...packages].sort(),
+        files: paths.map((file) => relative(directory, file).split(sep).join('/')),
+    };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) buildPackage();

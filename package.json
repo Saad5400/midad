@@ -403,6 +403,16 @@
     },
     "midad": {
         "layoutVersion": 1,
-        "layoutGolden": "3b792063f89187fc5d51ec40e2df346fd91832c13dce667f6038a1e6ad8417d7"
+        "layoutGolden": "3b792063f89187fc5d51ec40e2df346fd91832c13dce667f6038a1e6ad8417d7",
+        "layoutEntries": [
+            "src/document/codec.ts",
+            "src/layout/pages.ts",
+            "src/rendering/kernel.ts",
+            "src/rendering/canvas.ts",
+            "src/pdf/document.ts",
+            "src/pdf/field-appearance.ts",
+            "src/pdf/fill.ts",
+            "src/pdf/frozen-fields.ts"
+        ]
     }
 }

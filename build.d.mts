@@ -15,3 +15,7 @@ export interface DependencyRoot {
     optional?: boolean;
 }
 export function dependencyIdentity(lock: DependencyLock, roots: readonly DependencyRoot[]): string;
+export function renderingIdentity(
+    directory: string,
+    entries: readonly string[],
+): { fingerprint: string; packages: string[]; files: string[] };
