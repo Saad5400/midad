@@ -109,7 +109,10 @@ describe('standalone package entrypoints', () => {
             await cp('build.mjs', join(directory, 'build.mjs'));
             await mkdir(join(directory, 'src'));
             await symlink(resolve('node_modules'), join(directory, 'node_modules'));
-            await writeFile(join(directory, 'src/render.ts'), 'import { metric } from "./metric"; export const layout = metric;');
+            await writeFile(
+                join(directory, 'src/render.ts'),
+                'import { metric } from "./metric"; export const layout = metric;',
+            );
             await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
             await mkdir(join(directory, 'assets'));
             await writeFile(
