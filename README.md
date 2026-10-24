@@ -20,6 +20,10 @@ npm test
 npm pack
 ```
 
+With Poppler's `pdftocairo` available on `PATH`, run `npm run test:pdf-raster` for independent PDF rendering at 288 DPI. It builds the current source, exports fresh PDFs and compares them with fresh editor canvases; existing artifact images are never used as expected results. Missing Poppler fails this command. Poppler is a test tool, not an editor runtime dependency.
+
+The raster checks cover marked Arabic, tight page boundaries, mixed bilingual tables, colored paint and scaled transparent images. Text coordinates and colors are checked directly in the PDF; visible glyph cores must overlap the other raster's antialiased edges within one pixel (0.25 pt). Non-text paint compares local colors with the same spatial limit and accounts for edge blending. Deliberately missing marks and a page number moved by one point must fail. These tolerances account for different rasterizers; this is not a claim of identical antialiasing, complete production-corpus coverage or universal fidelity.
+
 The package is not published to npm yet. Versioned tarballs are attached to [GitHub releases](https://github.com/Saad5400/midad/releases); install a release artifact URL or build and install a local tarball. Applications do not need to commit the binary package to their source repository.
 
 ## Engine API
