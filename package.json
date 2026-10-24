@@ -1,6 +1,6 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.8.2",
+    "version": "0.9.0",
     "type": "module",
     "sideEffects": false,
     "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",
@@ -365,7 +365,7 @@
     "scripts": {
         "build": "node build.mjs && tsc -p tsconfig.json",
         "test": "npm run build && vitest run --no-file-parallelism",
-        "test:pdf-raster": "npm run build && NATIVE_PDF_RASTER=1 vitest run tests/layout/NestedLayout.test.ts tests/layout/PdfOverlays.test.ts tests/pdf/PdfRaster.test.ts tests/pdf/PdfFidelity.test.ts --testTimeout 60000 --no-file-parallelism",
+        "test:pdf-raster": "npm run build && NATIVE_PDF_RASTER=1 vitest run tests/layout/NestedLayout.test.ts tests/layout/PdfOverlays.test.ts tests/pdf/PdfRaster.test.ts tests/pdf/PdfFidelity.test.ts tests/rendering/DocumentFonts.test.ts --testTimeout 60000 --no-file-parallelism",
         "prepack": "npm run build"
     },
     "dependencies": {

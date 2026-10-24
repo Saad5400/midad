@@ -40,6 +40,7 @@ export function createDocumentScene(
     if (area < 36 || height - top - bottom < 36) throw new Error('Page margins leave no writable area');
     const ctx: Context = {
         kernel,
+        fontHash: kernel.fontHashFor(document),
         used: new Set(),
         numbers: clauseNumbers(document),
         measured: new Set(),
@@ -261,7 +262,7 @@ export function createDocumentScene(
     return Object.freeze({
         documentId: document.id,
         revision: document.revision,
-        fontHash: kernel.fontHash,
+        fontHash: ctx.fontHash,
         margin: left,
         glyphCount,
         coverPages,

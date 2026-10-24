@@ -99,7 +99,7 @@ export function layoutPdfOverlays(
     return Object.freeze({
         documentId: document.id,
         revision: document.revision,
-        fontHash: kernel.fontHash,
+        fontHash: kernel.fontHashFor(document),
         margin: 0,
         glyphCount: frozen.reduce(
             (total, page) =>

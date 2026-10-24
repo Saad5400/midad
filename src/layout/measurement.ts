@@ -48,7 +48,7 @@ export function measureBlocks(
         const key = JSON.stringify([
             width,
             scoped.direction,
-            parent.kernel.fontHash,
+            parent.fontHash,
             parent.availableHeight,
             parent.tableDepth ?? 0,
         ]);
