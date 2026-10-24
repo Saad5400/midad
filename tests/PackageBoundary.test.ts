@@ -111,9 +111,14 @@ describe('standalone package entrypoints', () => {
             await symlink(resolve('node_modules'), join(directory, 'node_modules'));
             await writeFile(
                 join(directory, 'src/render.ts'),
-                'import { metric } from "./metric"; export const layout = metric;',
+                'import { metric } from "./metric"; import { version } from "./rendering/version.js"; export const layout = metric + version;',
             );
             await writeFile(join(directory, 'src/metric.ts'), 'export const metric = 1;');
+            await mkdir(join(directory, 'src/rendering'));
+            await writeFile(
+                join(directory, 'src/rendering/version.ts'),
+                'export { BUILD_LAYOUT_VERSION as version } from "./build-version.js";',
+            );
             await mkdir(join(directory, 'assets'));
             await writeFile(
                 join(directory, 'package.json'),

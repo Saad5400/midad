@@ -106,12 +106,13 @@ function buildPackage(directory = root) {
 
 export function renderingIdentity(directory, entries) {
     if (!Array.isArray(entries) || !entries.length) throw new Error('Rendering entrypoints are missing');
+    directory = resolve(directory);
+    const generated = join(directory, 'src/rendering/build-version.ts');
     const ts = require('typescript'),
         seen = new Map(),
         packages = new Set();
     const visit = (file) => {
-        if (seen.has(file) || file.endsWith('/rendering/build-version.ts'))
-            return;
+        if (seen.has(file) || file === generated) return;
         const source = readFileSync(file, 'utf8');
         const code = file.endsWith('.json')
             ? JSON.stringify(JSON.parse(source))
@@ -134,6 +135,13 @@ export function renderingIdentity(directory, entries) {
                       : undefined;
             if (specifier && ts.isStringLiteral(specifier)) {
                 if (specifier.text.startsWith('.')) {
+                    const target = resolve(dirname(file), specifier.text);
+                    if (
+                        target === generated ||
+                        target === generated.slice(0, -3) + '.js' ||
+                        target === generated.slice(0, -3)
+                    )
+                        return;
                     const resolved = ts.resolveModuleName(
                         specifier.text,
                         file,
