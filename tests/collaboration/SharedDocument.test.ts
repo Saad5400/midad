@@ -1573,6 +1573,60 @@ describe('our shared native document', () => {
         expect((settings['__proto__'] as Record<string, unknown>).clmPolluted).toBe(true);
         doc.destroy();
     });
+    it('does not retransmit historical deletions in an unrelated insertion update', () => {
+        const a = create();
+        try {
+            const document = a.document(),
+                block = textBlocks(document.root)[0];
+            const removed = a.publish(
+                replaceInlineText(document, {
+                    blockId: block.id,
+                    from: 0,
+                    to: 5,
+                    text: '',
+                    expectedRevision: document.revision,
+                }),
+            );
+            const oldDeletes = Y.decodeUpdateV2(removed).ds;
+            const current = a.document(),
+                target = textBlocks(current.root)[0];
+            const inserted = a.publish(
+                replaceInlineText(current, {
+                    blockId: target.id,
+                    from: 0,
+                    to: 0,
+                    text: 'New ',
+                    expectedRevision: current.revision,
+                }),
+            );
+            const newDeletes = Y.decodeUpdateV2(inserted).ds;
+            expect(oldDeletes.clients.size).toBeGreaterThan(0);
+            for (const [client, ranges] of oldDeletes.clients)
+                for (const old of ranges)
+                    for (const next of newDeletes.clients.get(client) ?? [])
+                        expect(next.clock < old.clock + old.len && old.clock < next.clock + next.len).toBe(false);
+        } finally {
+            a.destroy();
+        }
+    });
+    it('does not repeat live transactions for an already integrated update', () => {
+        const { a, b } = peers();
+        try {
+            edit(b, 0, 0, 'Peer ');
+            const update = b.state(a.vector());
+            a.receive(update);
+            let transactions = 0;
+            a.ydoc.on('afterTransaction', () => {
+                transactions++;
+            });
+            a.receive(update);
+            expect(transactions).toBe(0);
+            expect(text(a)).toBe(text(b));
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
     it('retains its author identity and existing observers across validated edits and history', () => {
         const a = create(),
             actor = a.ydoc.clientID,

@@ -31,6 +31,8 @@ export class SharedNativeDocument {
     private validation?: SharedNativeDocument;
     private validationStale = false;
     private validationDeferred = false;
+    private mutated = false;
+    private delta?: Uint8Array;
 
     private constructor(
         document: NativeDocument,
@@ -129,6 +131,7 @@ export class SharedNativeDocument {
                 const candidate = this.candidate(),
                     before = candidate.document();
                 const update = candidate.publish(document, false);
+                if (!candidate.mutated) return update;
                 this.accept(
                     update,
                     candidate.document() !== before
@@ -142,25 +145,20 @@ export class SharedNativeDocument {
                 throw error;
             }
         }
-        const vector = this.vector(),
-            before = this.view;
-        try {
-            this.ydoc.transact(
-                () => {
-                    this.writer.write(before, document);
-                },
-                history ? LOCAL : SEED,
-            );
-            const projected = this.read(document.revision);
-            this.view =
-                canonicalSharedJson(exportDocument(projected)) === canonicalSharedJson(exportDocument(before))
-                    ? before
-                    : projected;
-        } catch (error) {
-            this.destroy();
-            throw error;
-        }
-        return this.state(vector);
+        const before = this.view;
+        return this.collect(() => {
+            try {
+                this.ydoc.transact(() => this.writer.write(before, document), history ? LOCAL : SEED);
+                const projected = this.read(document.revision);
+                this.view =
+                    canonicalSharedJson(exportDocument(projected)) === canonicalSharedJson(exportDocument(before))
+                        ? before
+                        : projected;
+            } catch (error) {
+                this.destroy();
+                throw error;
+            }
+        });
     }
     receive(update: Uint8Array): NativeDocument {
         this.assertOpen();
@@ -173,8 +171,9 @@ export class SharedNativeDocument {
                     this.validationDeferred = true;
                     return this.view;
                 }
+                if (!candidate.mutated && !this.validationDeferred) return this.view;
                 this.accept(
-                    this.validationDeferred ? candidate.state(this.vector()) : update,
+                    this.validationDeferred ? candidate.state(this.vector()) : candidate.delta!,
                     this.validationDeferred || candidate.document() !== before
                         ? { ...candidate.document(), revision: this.view.revision + 1 }
                         : undefined,
@@ -197,14 +196,16 @@ export class SharedNativeDocument {
         };
         this.ydoc.on('afterTransaction', observe);
         try {
-            this.applyUpdate(update, REMOTE, local);
-            if (
-                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
-                this.store.meta.get('root') !== root ||
-                this.epoch() !== epoch
-            )
-                throw new Error('The shared document identity changed');
-            if (changed) this.view = this.read(this.view.revision + 1);
+            this.collect(() => {
+                this.applyUpdate(update, REMOTE, local);
+                if (
+                    this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
+                    this.store.meta.get('root') !== root ||
+                    this.epoch() !== epoch
+                )
+                    throw new Error('The shared document identity changed');
+                if (changed) this.view = this.read(this.view.revision + 1);
+            });
             return this.view;
         } catch (error) {
             this.destroy();
@@ -259,6 +260,22 @@ export class SharedNativeDocument {
         this.undoManager.destroy();
         this.ydoc.destroy();
         this.store.clear();
+    }
+    private collect(operation: () => void): Uint8Array {
+        const updates: Uint8Array[] = [];
+        const capture = (update: Uint8Array): void => {
+            updates.push(update);
+        };
+        this.ydoc.on('updateV2', capture);
+        this.mutated = false;
+        try {
+            operation();
+            this.mutated = updates.length > 0;
+            this.delta = Y.mergeUpdatesV2(updates);
+            return this.delta;
+        } finally {
+            this.ydoc.off('updateV2', capture);
+        }
     }
     private candidate(): SharedNativeDocument {
         if (!this.validation) {
