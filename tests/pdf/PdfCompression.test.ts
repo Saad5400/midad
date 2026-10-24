@@ -19,7 +19,7 @@ import {
     decodePDFRawStream,
 } from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { makeNestedRichFixture } from '../fixtures/nativeDocument';
+import { makeNativeFixture, makeNestedRichFixture } from '../fixtures/nativeDocument';
 
 const require = createRequire(import.meta.url);
 describe('native PDF compression adapters', () => {
@@ -35,6 +35,25 @@ describe('native PDF compression adapters', () => {
         await kernel.prepare(document);
     });
     afterAll(() => kernel?.destroy());
+    it('exports a long document within five seconds without host tuning', async () => {
+        const long = importDocument(makeNativeFixture(300), 'default-pdf-performance');
+        await kernel.prepare(long);
+        const scene = layoutDocument(long, kernel);
+        expect(scene.pages.length).toBeGreaterThan(20);
+        const started = performance.now();
+        const bytes = await writeScenePdf(scene, kernel, () => long);
+        const milliseconds = performance.now() - started;
+        console.log(
+            JSON.stringify({
+                workload: 'Default SDK PDF export',
+                pages: scene.pages.length,
+                milliseconds,
+                bytes: bytes.length,
+            }),
+        );
+        expect(milliseconds).toBeLessThan(5000);
+        expect((await PDFDocument.load(bytes)).getPageCount()).toBe(scene.pages.length);
+    }, 60000);
     it('preserves every decoded object, font, page command and field with native compressed streams', async () => {
         const scene = layoutDocument(document, kernel);
         const original = await writeScenePdf(scene, kernel, () => document);
