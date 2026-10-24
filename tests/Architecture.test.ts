@@ -115,6 +115,7 @@ describe('source architecture', () => {
             'layout/pdf-overlays.ts': 3,
             'layout/finalize.ts': 1,
             'layout/table-borders.ts': 1,
+            'layout/table-flow.ts': 2,
             'layout/text.ts': 2,
             'layout/columns.ts': 2,
             'layout/tables.ts': 2,
