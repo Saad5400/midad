@@ -110,7 +110,7 @@ export function renderingIdentity(directory, entries) {
         seen = new Map(),
         packages = new Set();
     const visit = (file) => {
-        if (seen.has(file) || file.endsWith('/rendering/version.ts') || file.endsWith('/rendering/build-version.ts'))
+        if (seen.has(file) || file.endsWith('/rendering/build-version.ts'))
             return;
         const source = readFileSync(file, 'utf8');
         const code = file.endsWith('.json')
