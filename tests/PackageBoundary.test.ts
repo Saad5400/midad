@@ -94,7 +94,20 @@ describe('standalone package entrypoints', () => {
             await cp('build.mjs', join(directory, 'build.mjs'));
             await mkdir(join(directory, 'src'));
             await mkdir(join(directory, 'assets'));
-            await writeFile(join(directory, 'package.json'), '{}');
+            await writeFile(
+                join(directory, 'package.json'),
+                JSON.stringify({
+                    version: '1',
+                    midad: { layoutVersion: 1, layoutGolden: '1'.repeat(64) },
+                    dependencies: { 'canvaskit-wasm': '1' },
+                }),
+            );
+            await writeFile(
+                join(directory, 'package-lock.json'),
+                JSON.stringify({
+                    packages: { 'node_modules/canvaskit-wasm': { version: '1', integrity: 'wasm-one' } },
+                }),
+            );
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             await writeFile(join(directory, 'assets/font.ttf'), 'font-one');
             await mkdir(join(directory, 'dist'));
@@ -104,14 +117,34 @@ describe('standalone package entrypoints', () => {
                 return readFile(join(directory, 'src/rendering/build-version.ts'), 'utf8');
             };
             const original = await build();
+            const layout = (output: string) => output.match(/BUILD_LAYOUT_ID = '([^']+)'/)![1];
             await expect(readFile(join(directory, 'dist/removed-module.js'))).rejects.toThrow();
             expect(await build()).toBe(original);
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 2;');
-            expect(await build()).not.toBe(original);
+            const updated = await build();
+            expect(updated).not.toBe(original);
+            expect(layout(updated)).toBe(layout(original));
             await writeFile(join(directory, 'src/entry.ts'), 'export const value = 1;');
             expect(await build()).toBe(original);
             await writeFile(join(directory, 'assets/font.ttf'), 'font-two');
-            expect(await build()).not.toBe(original);
+            expect(layout(await build())).not.toBe(layout(original));
+            await writeFile(join(directory, 'assets/font.ttf'), 'font-one');
+            await writeFile(
+                join(directory, 'package.json'),
+                JSON.stringify({
+                    version: '2',
+                    midad: { layoutVersion: 1, layoutGolden: '1'.repeat(64) },
+                    dependencies: { 'canvaskit-wasm': '1', yjs: '2' },
+                }),
+            );
+            expect(layout(await build())).toBe(layout(original));
+            await writeFile(
+                join(directory, 'package-lock.json'),
+                JSON.stringify({
+                    packages: { 'node_modules/canvaskit-wasm': { version: '2', integrity: 'wasm-two' } },
+                }),
+            );
+            expect(layout(await build())).not.toBe(layout(original));
         } finally {
             await rm(directory, { recursive: true, force: true });
         }
