@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { emptyWritingPosition, NativeNavigation } from '@saad5400/midad/browser';
-import { exportDocument, importDocument, type Json } from '@saad5400/midad/document';
+import { exportDocument, importDocument, isRecord, type Json } from '@saad5400/midad/document';
+import { blockText, textBlocks } from '@saad5400/midad/editing';
 import { layoutDocument } from '@saad5400/midad/layout';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import interlocking from '../fixtures/layout-contract/interlocking.json';
+import { LAB_IMAGE } from '../fixtures/migrationCorpus';
 import { makeNestedRichFixture } from '../fixtures/nativeDocument';
 import { verifyScenePdf, writeRasterCanaries } from '../fixtures/pdfGeometry';
 
@@ -48,6 +51,198 @@ describe('native nested rich content layout', () => {
         );
     });
     afterAll(() => kernel.destroy());
+    it.each(
+        ['top', 'middle', 'bottom'].flatMap((alignment) =>
+            [0, 12, 20].flatMap((before) =>
+                ['portrait', 'landscape'].map((orientation) => ({ alignment, before, orientation })),
+            ),
+        ),
+    )(
+        'positions short text within an aligned multi-page merged cell ($alignment, $before, $orientation)',
+        async ({ alignment, before, orientation }) => {
+            const document = importDocument(
+                {
+                    type: 'doc',
+                    attrs: { dir: 'ltr', pageLayout: { orientation } },
+                    content: [
+                        ...Array.from({ length: before }, (_, index) => paragraph(`align-before-${index}`, 'Spacer')),
+                        {
+                            type: 'table',
+                            content: [
+                                {
+                                    type: 'tableRow',
+                                    content: [
+                                        {
+                                            type: 'tableCell',
+                                            content: [
+                                                columns(
+                                                    'align-columns',
+                                                    Array.from({ length: 60 }, (_, index) =>
+                                                        paragraph(`align-left-${index}`, 'Filling'),
+                                                    ),
+                                                    Array.from({ length: 40 }, (_, index) =>
+                                                        paragraph(`align-right-${index}`, 'Filling'),
+                                                    ),
+                                                ),
+                                            ],
+                                        },
+                                        {
+                                            type: 'tableCell',
+                                            attrs: { id: 'aligned-cell', rowspan: 2, verticalAlign: alignment },
+                                            content: [paragraph('aligned-target', 'Aligned')],
+                                        },
+                                    ],
+                                },
+                                {
+                                    type: 'tableRow',
+                                    content: [{ type: 'tableCell', content: [paragraph('align-final', 'Last row')] }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+                'aligned-flow',
+            );
+            await kernel.prepare(document);
+            const scene = layoutDocument(document, kernel);
+            const full = scene.pages[0].height - 144;
+            const boxes = scene.pages.flatMap((page, index) =>
+                (page.cells ?? [])
+                    .filter((cell) => cell.cellId === 'aligned-cell')
+                    .map((cell) => ({
+                        start: index * full + cell.y - 72,
+                        end: index * full + cell.y + cell.height - 72,
+                    })),
+            );
+            const line = scene.pages.flatMap((page, index) =>
+                page.lines
+                    .filter((line) => line.paragraphId === 'aligned-target')
+                    .map((line) => ({ top: index * full + line.top - 72, height: line.height })),
+            );
+            expect(line).toHaveLength(1);
+            const start = Math.min(...boxes.map((box) => box.start)) + 6;
+            const end = Math.max(...boxes.map((box) => box.end)) - 12 - line[0].height;
+            const target = alignment === 'top' ? start : alignment === 'bottom' ? end : (start + end) / 2;
+            const fits = (target % full) + line[0].height <= full;
+            if (fits) expect(line[0].top).toBeCloseTo(target, 2);
+            else expect(Math.abs(line[0].top - target)).toBeLessThanOrEqual(line[0].height);
+        },
+    );
+    it.each(
+        ['ltr', 'rtl'].flatMap((dir) =>
+            ['top', 'middle', 'bottom'].flatMap((alignment) =>
+                ['portrait', 'landscape'].flatMap((orientation) =>
+                    [false, true].map((nested) => ({ dir, alignment, orientation, nested })),
+                ),
+            ),
+        ),
+    )(
+        'contains aligned mixed content in continued merged cells ($dir, $alignment, $orientation, nested $nested)',
+        async ({ dir, alignment, orientation, nested }) => {
+            const source = structuredClone(interlocking) as Json;
+            const visit = (node: Json): void => {
+                if (!isRecord(node)) return;
+                const attrs = isRecord(node.attrs) ? node.attrs : {};
+                if (node.type === 'tableCell') attrs.verticalAlign = alignment;
+                if (attrs.id === 'd-ar-0')
+                    node.content = [
+                        ...(node.content as Json[]),
+                        { type: 'image', attrs: { id: 'flow-image', src: LAB_IMAGE, width: 24, height: 8 } },
+                        {
+                            type: 'variable',
+                            attrs: {
+                                id: 'flow-field',
+                                type: 'text',
+                                name: 'Flow field',
+                                value: 'X',
+                                display: 'inline',
+                                width: 18,
+                                height: 16,
+                                settings: { fontFamily: 'Arial', fontSize: 8 },
+                            },
+                        },
+                    ];
+                if (attrs.id === 'd' && nested) node.content = [table('flow-wrapper', node.content as Json[])];
+                node.attrs = attrs;
+                if (Array.isArray(node.content)) node.content.forEach(visit);
+            };
+            visit(source);
+            if (!isRecord(source) || !isRecord(source.attrs)) throw new Error('Invalid fixture');
+            source.attrs.dir = dir;
+            source.attrs.pageLayout = { orientation };
+            const document = importDocument(source, 'mixed-flow');
+            await kernel.prepare(document);
+            const scene = layoutDocument(document, kernel);
+            for (const page of scene.pages)
+                for (const line of page.lines) {
+                    expect(line.top, line.paragraphId).toBeGreaterThanOrEqual(72 - 0.002);
+                    expect(line.top + line.height, line.paragraphId).toBeLessThanOrEqual(page.height - 72 + 0.002);
+                    const row = line.shaped.lines.find((entry) => Math.abs(entry.top - line.originalTop) < 0.002)!;
+                    if (line.cellId)
+                        expect(
+                            page.cells?.some(
+                                (cell) =>
+                                    cell.cellId === line.cellId &&
+                                    line.top >= cell.y - 0.002 &&
+                                    line.top + line.height <= cell.y + cell.height + 0.002 &&
+                                    (line.left ?? 0) + row.left >= cell.x - 0.002 &&
+                                    (line.left ?? 0) + row.left + row.width <= cell.x + cell.width + 0.002,
+                            ),
+                            line.paragraphId,
+                        ).toBe(true);
+                }
+            for (const block of textBlocks(document.root)) {
+                const visible = scene.pages
+                    .flatMap((page) => page.lines)
+                    .filter((line) => line.paragraphId === block.id)
+                    .map((line) => {
+                        const row = line.shaped.lines.find((entry) => Math.abs(entry.top - line.originalTop) < 0.002)!;
+                        return line.shaped.text.slice(row.start, row.endWithBreak);
+                    })
+                    .join('');
+                expect(visible, block.id).toBe(blockText(block));
+            }
+            expect(
+                scene.pages.flatMap((page) => page.commands).filter((command) => command.kind === 'image'),
+            ).toHaveLength(1);
+            expect(
+                scene.pages.flatMap((page) => page.commands).filter((command) => command.kind === 'field'),
+            ).toHaveLength(1);
+            const fixture = dir === 'rtl' && alignment === 'bottom' && orientation === 'landscape' && nested;
+            if (fixture && process.env.NATIVE_FIDELITY_ARTIFACTS) {
+                await mkdir(process.env.NATIVE_FIDELITY_ARTIFACTS, { recursive: true });
+                await writeFile(
+                    `${process.env.NATIVE_FIDELITY_ARTIFACTS}/mixed-flow.fixture.json`,
+                    JSON.stringify(exportDocument(document)),
+                );
+            }
+            await verifyScenePdf(document, scene, kernel, fixture ? 'mixed-flow' : 'mixed-flow-case');
+        },
+    );
+    it.each(['ltr', 'rtl'].flatMap((dir) => [0, 10, 20, 30].map((before) => ({ dir, before }))))(
+        'uses available page space before continuing nested merged-cell columns ($dir, $before)',
+        async ({ dir, before }) => {
+            const source = structuredClone(interlocking);
+            const leading = source.content.filter((node) => node.attrs?.id?.startsWith('before-'));
+            source.attrs.dir = dir;
+            source.content = [
+                ...Array.from({ length: before }, (_, index) => ({
+                    ...structuredClone(leading[index % leading.length]),
+                    attrs: { ...leading[index % leading.length].attrs, id: `before-${index}`, dir },
+                })),
+                ...source.content.filter((node) => !node.attrs?.id?.startsWith('before-')),
+            ];
+            const document = importDocument(source as Json, 'nested-flow-space');
+            await kernel.prepare(document);
+            const scene = layoutDocument(document, kernel);
+            const first = scene.pages.findIndex((page) => page.lines.some((line) => line.paragraphId === 'd-ar-0'));
+            expect(first).toBeGreaterThanOrEqual(0);
+            if (!first) return;
+            const previous = scene.pages[first - 1];
+            const bottom = Math.max(...previous.lines.map((line) => line.top + line.height));
+            expect(previous.height - 72 - bottom).toBeLessThan(80);
+        },
+    );
     it.each(['Arial', 'Amiri'])('exports marked Arabic with every font treatment (%s)', async (family) => {
         const text = 'السَّلَامُ عَلَيْكُمْ بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ á ë ffi';
         const doc = importDocument(

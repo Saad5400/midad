@@ -117,7 +117,7 @@ view.dispose();
 
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
-Layout contract 2 closes continued table-cell borders and constrains feasible table/language columns by shaped glyph widths. Requested column proportions remain unchanged when the content fits. Resizing hosts should pass the current `SceneCell` as the optional sixth argument to `resizeTableColumns`, so edits use the displayed edges and minimum widths. Live editor sessions need a refresh when adopting a changed rendering contract; frozen PDF bytes remain authoritative.
+Layout contract 3 paginates oversized merged-cell groups using the remaining physical page space, including nested tables/columns and top/middle/bottom alignment. Continued borders stay closed, and feasible table/language columns respect shaped-glyph minimum widths. Requested column proportions remain unchanged when the content fits. Resizing hosts should pass the current `SceneCell` as the optional sixth argument to `resizeTableColumns`, so edits use the displayed edges and minimum widths. Live editor sessions need a refresh when adopting a changed rendering contract; frozen PDF bytes remain authoritative.
 
 Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.
 
@@ -165,6 +165,8 @@ content/
 ```
 
 The rendering kernel coordinates resource lifetime and caches shaped paragraphs. `text/fonts.ts` owns native typefaces, the font collection and fingerprints; `text/shaping.ts` converts styled spans into shared glyph geometry; `text/model.ts` defines that geometry without loading CanvasKit. Layout imports only those contracts and receives its kernel from the caller. Numerical rounding lives in `typography/metrics.ts`, so importing pagination or the canvas painter does not load the text engine, PDF writer or collaboration runtime.
+
+`layout/table-flow.ts` resolves oversized row-span groups against the available physical page space and preserves their nested flow, cell alignment and continuation geometry.
 
 The sync client coordinates document synchronization and acknowledgement state. `sync/contracts.ts` defines the host protocol, `sync/requests.ts` owns deadlines and transport failures, `sync/selection.ts` captures and restores relative selections, and `sync/presence.ts` owns its peer cache, identity, heartbeat and disposal. These private modules never import the client coordinator. Existing public kernel and sync entrypoints re-export their original contracts for compatibility.
 

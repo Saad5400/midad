@@ -5,6 +5,7 @@ import { color, type Color } from '../typography/style.js';
 import { flowSpace, flowTracks, materializeBands, shiftBand, type Band } from './bands.js';
 import { scope, type LayoutContext, type MeasureBlocks } from './context.js';
 import { fitWidths, minimumTableColumns } from './intrinsic.js';
+import { flowingTableBand } from './table-flow.js';
 
 interface TableCell {
     node: NativeNode;
@@ -136,6 +137,22 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                         }
                         return band;
                     }),
+                );
+                start = end;
+                continue;
+            }
+            if (group.some((cell) => cell.bands.some((band) => band.split))) {
+                result.push(
+                    flowingTableBand(
+                        node,
+                        width,
+                        ctx,
+                        group.map((cell) => ({ ...cell, row: cell.row - start })),
+                        end - start,
+                        edges,
+                        minimumColumnWidths,
+                        height,
+                    ),
                 );
                 start = end;
                 continue;
