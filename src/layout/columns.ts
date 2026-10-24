@@ -2,6 +2,7 @@ import type { NativeNode } from '../document/model.js';
 import { point } from '../typography/metrics.js';
 import { flowTracks, shiftBand, type Band } from './bands.js';
 import type { LayoutContext, MeasureBlocks } from './context.js';
+import { fitWidths, minimumWidth } from './intrinsic.js';
 
 export function parallelBands(node: NativeNode, width: number, ctx: LayoutContext, blocks: MeasureBlocks): Band[] {
     const cells = node.children ?? [];
@@ -22,12 +23,16 @@ export function parallelBands(node: NativeNode, width: number, ctx: LayoutContex
                   : 1
               : 1,
     );
-    const total = widths.reduce((sum, item) => sum + item, 0);
     const available = width - Math.max(0, cells.length - 1) * gap;
+    const fitted = fitWidths(
+        available,
+        widths,
+        cells.map((cell) => minimumWidth(cell, ctx)),
+    );
     const rtl = ctx.direction === 'rtl';
     let x = rtl ? width : 0;
     const measured = cells.map((cell, index) => {
-        const cellWidth = (available * widths[index]) / total;
+        const cellWidth = fitted[index];
         if (rtl) x -= cellWidth;
         const entry = { id: cell.id, x: point(x), width: point(cellWidth), bands: blocks([cell], cellWidth, ctx) };
         x += rtl ? -gap : cellWidth + gap;

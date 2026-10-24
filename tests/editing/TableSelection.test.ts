@@ -1,4 +1,3 @@
-import { clipboardPayload, parseNativeFragment, pasteFragment, plainTextFragment } from '@saad5400/midad/interchange';
 import {
     DocumentSession,
     exportDocument,
@@ -6,10 +5,22 @@ import {
     importDocument,
     type NativeDocument,
 } from '@saad5400/midad/document';
-import { blockText, textBlocks } from '@saad5400/midad/editing';
-import { replaceSelection, selectedText, selectionRanges, type NativeSelection } from '@saad5400/midad/editing';
-import { columnWeights, tableGrid, tableRectangle, type TableCellSelection } from '@saad5400/midad/editing';
-import { mergeTableCells, resizeTableColumns, splitTableCell } from '@saad5400/midad/editing';
+import {
+    blockText,
+    columnWeights,
+    mergeTableCells,
+    replaceSelection,
+    resizeTableColumns,
+    selectedText,
+    selectionRanges,
+    splitTableCell,
+    tableGrid,
+    tableRectangle,
+    textBlocks,
+    type NativeSelection,
+    type TableCellSelection,
+} from '@saad5400/midad/editing';
+import { clipboardPayload, parseNativeFragment, pasteFragment, plainTextFragment } from '@saad5400/midad/interchange';
 import { describe, expect, it } from 'vitest';
 
 const p = (id: string, text = id) => ({
@@ -192,6 +203,24 @@ describe('native table cell selection', () => {
         valid(pasted.document);
     });
 
+    it('resizes from the displayed column edges when content has redistributed the requested widths', () => {
+        const source = fixture();
+        const resized = resizeTableColumns(source, 'table', 1, 10, 500, {
+            columnEdges: [0, 70, 250, 500],
+            minimumColumnWidths: [50, 100, 100],
+        });
+        const weights = columnWeights(tableGrid(findNode(resized, 'table')!));
+        const sum = weights.reduce((total, value) => total + value, 0);
+        expect(weights.map((weight) => (weight * 500) / sum)).toEqual([80, 170, 250]);
+    });
+    it('does not jump an imported undersized column when attempting to shrink it further', () => {
+        const raw = JSON.parse(JSON.stringify(exportDocument(fixture()))) as {
+            content: Array<{ attrs: Record<string, unknown> }>;
+        };
+        raw.content[0].attrs.columnSize = '1,100,100';
+        const source = importDocument(raw, 'narrow-table');
+        expect(resizeTableColumns(source, 'table', 1, -1, 500)).toBe(source);
+    });
     it('resizes adjacent columns, preserves total table width, and clamps both minimum widths', () => {
         const source = fixture(),
             resized = resizeTableColumns(source, 'table', 1, 50, 500);

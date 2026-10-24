@@ -1,12 +1,14 @@
 import { point } from '../typography/metrics.js';
 import type { PaintCommand, RectCommand, SceneCell, SceneColumn, ScenePage } from './scene.js';
+import { tableBorders } from './table-borders.js';
 
 export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
-    return pages.map((entry) =>
-        Object.freeze({
+    return pages.map((entry) => {
+        const cells = coalesceCells(entry.cells ?? []);
+        return Object.freeze({
             ...entry,
             commands: Object.freeze(
-                layerTableBackgrounds(entry.commands).map((command) => {
+                layerTableBackgrounds(tableBorders(entry.commands, cells)).map((command) => {
                     if ('glyphs' in command) {
                         Object.freeze(command.glyphs);
                         Object.freeze(command.text);
@@ -25,11 +27,11 @@ export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
                 }),
             ),
             lines: Object.freeze(entry.lines.map((line) => Object.freeze(line))),
-            cells: coalesceCells(entry.cells ?? []),
+            cells,
             columns: coalesceColumns(entry.columns ?? []),
             blocks: coalesceColumns(entry.blocks ?? []),
-        }),
-    );
+        });
+    });
 }
 
 function coalesceColumns(columns: readonly SceneColumn[]): readonly SceneColumn[] {
@@ -78,6 +80,7 @@ function coalesceCells(cells: readonly SceneCell[]): readonly SceneCell[] {
     return Object.freeze(
         result.map((cell) => {
             Object.freeze(cell.columnEdges);
+            if (cell.minimumColumnWidths) Object.freeze(cell.minimumColumnWidths);
             return Object.freeze(cell);
         }),
     );

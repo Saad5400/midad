@@ -20,7 +20,8 @@ export function paintPage(
         paint = new ck.Paint();
         paint.setColor(ck.BLACK);
         paint.setAntiAlias(true);
-        for (const command of page.commands) {
+        for (let commandIndex = 0; commandIndex < page.commands.length; commandIndex++) {
+            const command = page.commands[commandIndex];
             if (command.kind === 'clipStart') {
                 canvas.save();
                 canvas.clipRect(
@@ -59,7 +60,35 @@ export function paintPage(
             if (command.kind === 'line') {
                 paint.setStyle(ck.PaintStyle.Stroke);
                 paint.setStrokeWidth(command.width);
-                canvas.drawLine(command.x, command.y, command.toX, command.toY, paint);
+                if (command.tableBorder === undefined)
+                    canvas.drawLine(command.x, command.y, command.toX, command.toY, paint);
+                else {
+                    const builder = new ck.PathBuilder();
+                    try {
+                        let line = command;
+                        while (true) {
+                            builder.moveTo(line.x, line.y).lineTo(line.toX, line.toY);
+                            const next = page.commands[commandIndex + 1];
+                            if (
+                                next?.kind !== 'line' ||
+                                next.tableBorder !== command.tableBorder ||
+                                next.width !== command.width ||
+                                !next.color.every((value, index) => value === color[index])
+                            )
+                                break;
+                            line = next;
+                            commandIndex++;
+                        }
+                        const path = builder.detach();
+                        try {
+                            canvas.drawPath(path, paint);
+                        } finally {
+                            path.delete();
+                        }
+                    } finally {
+                        builder.delete();
+                    }
+                }
                 continue;
             }
             const font = new ck.Font(kernel.font(command.fontId).typeface, command.size);
