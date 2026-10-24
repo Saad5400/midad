@@ -1,5 +1,5 @@
 import CanvasKitInit, { type CanvasKit, type Surface } from 'canvaskit-wasm';
-import type { NativeDocument } from '../document/model.js';
+import type { NativeDocument, NativeNode } from '../document/model.js';
 import { chooseFont } from '../typography/fonts.js';
 import { DEFAULT_TEXT_STYLE, type TextSpan } from '../typography/style.js';
 import { DocumentImages, type ImageReader, type MediaResolver } from './assets.js';
@@ -20,12 +20,12 @@ let loading: Promise<CanvasKit> | undefined;
 export class NativeTextKernel {
     private cache = new Map<string, ShapedParagraph>();
     private retained = new Map<ShapedParagraph, number>();
+    private documentFonts = new WeakMap<NativeNode, string>();
     private readonly fonts: TextFonts;
     private preparing: Promise<void> = Promise.resolve();
     private disposed = false;
     readonly provider;
     readonly images;
-    fontHash = '';
 
     private constructor(
         readonly ck: CanvasKit,
@@ -84,20 +84,35 @@ export class NativeTextKernel {
         this.preparing = this.preparing
             .catch(() => undefined)
             .then(async () => {
-                await Promise.all([
+                const [fonts, media] = await Promise.allSettled([
                     this.loadFonts(neededFontFiles(document)),
-                    ...(images ? [this.images.prepare(document)] : []),
-                ]);
+                    images ? this.images.prepare(document) : Promise.resolve(),
+                ] as const);
+                if (fonts.status === 'rejected') throw fonts.reason;
+                if (media.status === 'rejected') throw media.reason;
+                this.documentFonts.set(document.root, fonts.value);
             });
         await this.preparing;
     }
 
-    private async loadFonts(files: ReadonlySet<string>): Promise<void> {
-        this.fontHash = await this.fonts.load(files);
+    private async loadFonts(files: ReadonlySet<string>): Promise<string> {
+        return this.fonts.load(files);
+    }
+
+    fontHashFor(document: NativeDocument): string {
+        if (this.disposed) throw new Error('The document renderer has been disposed');
+        const cached = this.documentFonts.get(document.root);
+        if (cached) return cached;
+        const fingerprint = this.fonts.preparedFingerprint(neededFontFiles(document));
+        this.documentFonts.set(document.root, fingerprint);
+        return fingerprint;
     }
 
     async fontFingerprint(document: NativeDocument): Promise<string> {
-        return this.fonts.fingerprint(neededFontFiles(document));
+        if (this.disposed) throw new Error('The document renderer has been disposed');
+        const fingerprint = await this.fonts.fingerprint(neededFontFiles(document));
+        this.documentFonts.set(document.root, fingerprint);
+        return fingerprint;
     }
 
     font(id: string): NativeFontAsset {
@@ -120,7 +135,7 @@ export class NativeTextKernel {
         heightMultiplier?: number,
     ): ShapedParagraph {
         if (this.disposed) throw new Error('The document renderer has been disposed');
-        const key = JSON.stringify([spans, width, direction, alignment, heightMultiplier, this.fontHash]);
+        const key = JSON.stringify([spans, width, direction, alignment, heightMultiplier]);
         const cached = this.cache.get(key);
         if (cached) return cached;
         const shaped = shapeParagraph(this.ck, this.fonts, spans, width, direction, alignment, heightMultiplier);
@@ -165,6 +180,7 @@ export class NativeTextKernel {
             .catch(() => undefined)
             .then(() => {
                 this.retained.clear();
+                this.documentFonts = new WeakMap();
                 this.clearUnused(new Set());
                 this.fonts.destroy();
                 this.images.destroy();

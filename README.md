@@ -28,6 +28,10 @@ The package is not published to npm yet. Versioned tarballs are attached to [Git
 
 ## Engine API
 
+Version 0.9 replaces the mutable `kernel.fontHash` property with `kernel.fontHashFor(document)`. Prepare each document before laying it out; its fingerprint remains valid when another document prepares or exports with the same kernel. `prepareFonts(document)` prepares only fonts, and `fontFingerprint(document)` asynchronously fingerprints an already loaded profile. A new combination of fonts requires preparation even if those font files were loaded for other documents. Host scene caches must compare against the document-specific fingerprint.
+
+When retaining multiple interactive layouts on one kernel, retain their shaped paragraphs with `kernel.retainParagraphs(...)` and release that lease when the layout is discarded. Font assets remain immutable for the kernel's lifetime; create another kernel to use different font bytes. Disposing a kernel waits for all pending preparation branches to settle before freeing native resources, including when one font or image fails.
+
 ```ts
 import { DocumentSession, importDocument, exportDocument } from '@saad5400/midad/document';
 

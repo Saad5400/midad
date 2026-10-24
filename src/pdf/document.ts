@@ -48,7 +48,8 @@ export async function writeScenePdf(
         objectsPerTick?: number;
     } = {},
 ): Promise<Uint8Array> {
-    assertSceneRevision(scene, latestDocument(), kernel.fontHash);
+    const document = latestDocument();
+    assertSceneRevision(scene, document, () => kernel.fontHashFor(document));
     const pdf = await PDFDocument.create();
     pdf.registerFontkit(fontkit);
     pdf.catalog.set(
@@ -328,6 +329,7 @@ export async function writeScenePdf(
         };
         bytes = await writer.serializeToBuffer();
     } else bytes = await pdf.save({ objectsPerTick: options.objectsPerTick });
-    assertSceneRevision(scene, latestDocument(), kernel.fontHash);
+    const latest = latestDocument();
+    assertSceneRevision(scene, latest, () => kernel.fontHashFor(latest));
     return bytes;
 }

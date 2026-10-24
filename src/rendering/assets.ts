@@ -45,7 +45,7 @@ export class DocumentImages {
             for (const image of floating)
                 if (image && typeof image === 'object' && !Array.isArray(image) && typeof image.src === 'string')
                     sources.add(image.src);
-        await Promise.all(
+        const results = await Promise.allSettled(
             [...sources].map(async (source) => {
                 if (this.bySource.has(source)) return;
                 const loaded = this.read ? await this.read(source) : await this.download(source);
@@ -95,6 +95,8 @@ export class DocumentImages {
                 this.byId.set(id, asset);
             }),
         );
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure) throw failure.reason;
     }
 
     private async download(source: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {

@@ -7,6 +7,7 @@ import type { Band } from './bands.js';
 export interface LayoutContext {
     used: Set<ShapedParagraph>;
     kernel: NativeTextKernel;
+    fontHash: string;
     numbers: ReadonlyMap<string, number>;
     direction: 'ltr' | 'rtl';
     measured: Set<NativeNode>;

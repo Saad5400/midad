@@ -155,10 +155,15 @@ export interface DocumentScene {
     readonly coverPages?: number;
 }
 
-export function assertSceneRevision(scene: DocumentScene, document: NativeDocument, fontHash: string): void {
+export function assertSceneRevision(
+    scene: DocumentScene,
+    document: NativeDocument,
+    fontHash: string | (() => string),
+): void {
     if (scene.documentId !== document.id || scene.revision !== document.revision)
         throw new Error('The displayed layout is stale');
-    if (scene.fontHash !== fontHash) throw new Error('The document font has changed');
+    if (scene.fontHash !== (typeof fontHash === 'function' ? fontHash() : fontHash))
+        throw new Error('The document font has changed');
 }
 
 export function hitTest(

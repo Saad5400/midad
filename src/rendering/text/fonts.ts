@@ -14,6 +14,7 @@ async function hash(bytes: Uint8Array): Promise<string> {
 export class TextFonts {
     private collection?: FontCollection;
     private assets = new Map<string, NativeFontAsset>();
+    private fingerprints = new Map<string, string>();
     readonly provider;
 
     constructor(
@@ -25,7 +26,7 @@ export class TextFonts {
 
     async load(files: ReadonlySet<string>): Promise<string> {
         const missing = [...files].filter((file) => !this.assets.has(file === 'amiri' ? NATIVE_FONT_ID : file));
-        await Promise.all(
+        const results = await Promise.allSettled(
             missing.map(async (file) => {
                 let load = this.readFont
                     ? this.readFont(file).then(async (bytes) => ({ bytes, hash: await hash(bytes) }))
@@ -72,6 +73,8 @@ export class TextFonts {
             this.collection?.delete();
             this.collection = undefined;
         }
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure) throw failure.reason;
         return this.fingerprint(files);
     }
 
@@ -90,17 +93,29 @@ export class TextFonts {
         return this.collection;
     }
 
-    async fingerprint(files: ReadonlySet<string>): Promise<string> {
-        return hash(
-            new TextEncoder().encode(
-                JSON.stringify(
-                    [...new Set(['amiri', ...files])]
-                        .map((file) => this.get(file === 'amiri' ? NATIVE_FONT_ID : file))
-                        .map((asset) => [asset.id, asset.hash])
-                        .sort(),
-                ),
-            ),
+    private profile(files: ReadonlySet<string>): string {
+        return JSON.stringify(
+            [...new Set(['amiri', ...files])]
+                .map((file) => this.get(file === 'amiri' ? NATIVE_FONT_ID : file))
+                .map((asset) => [asset.id, asset.hash])
+                .sort(),
         );
+    }
+
+    preparedFingerprint(files: ReadonlySet<string>): string {
+        const fingerprint = this.fingerprints.get(this.profile(files));
+        if (!fingerprint) throw new Error('The document font profile has not been prepared');
+        return fingerprint;
+    }
+
+    async fingerprint(files: ReadonlySet<string>): Promise<string> {
+        const profile = this.profile(files);
+        const cached = this.fingerprints.get(profile);
+        if (cached) return cached;
+        const fingerprint = await hash(new TextEncoder().encode(profile));
+        if (this.fingerprints.size >= 512) this.fingerprints.delete(this.fingerprints.keys().next().value!);
+        this.fingerprints.set(profile, fingerprint);
+        return fingerprint;
     }
 
     get(id: string): NativeFontAsset {
@@ -118,6 +133,7 @@ export class TextFonts {
         this.collection = undefined;
         for (const asset of this.assets.values()) asset.typeface.delete();
         this.assets.clear();
+        this.fingerprints.clear();
         this.provider.delete();
     }
 }

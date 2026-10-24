@@ -123,7 +123,7 @@ export async function fillNativePdf(
     const scene: DocumentScene = {
         documentId: document.id,
         revision: document.revision,
-        fontHash: kernel.fontHash,
+        fontHash: kernel.fontHashFor(document),
         glyphCount: 0,
         margin: 0,
         pages: pending.map(({ id, node, rect }) =>
