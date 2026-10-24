@@ -15,4 +15,3 @@ export interface DependencyRoot {
     optional?: boolean;
 }
 export function dependencyIdentity(lock: DependencyLock, roots: readonly DependencyRoot[]): string;
-export function buildPackage(directory?: string): void;

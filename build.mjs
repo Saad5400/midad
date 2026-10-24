@@ -52,7 +52,7 @@ export function dependencyIdentity(lock, roots) {
     );
 }
 
-export function buildPackage(directory = root) {
+function buildPackage(directory = root) {
     const metadata = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
     const compatibility = metadata.midad;
     if (
