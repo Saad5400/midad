@@ -1,10 +1,12 @@
 import fontkit from '@pdf-lib/fontkit';
 import {
+    PDFBool,
     PDFDocument,
     PDFFlateStream,
     PDFHexString,
     PDFName,
     PDFNumber,
+    PDFRawStream,
     PDFStreamWriter,
     PDFString,
     typedArrayFor,
@@ -85,8 +87,16 @@ export async function writeScenePdf(
     const images = new Map<string, PDFImage>();
     for (const source of scene.pages)
         for (const command of source.commands) {
-            if (command.kind === 'image' && !images.has(command.assetId))
-                images.set(command.assetId, await pdf.embedPng(kernel.images.get(command.assetId).bytes));
+            if (command.kind === 'image' && !images.has(command.assetId)) {
+                const image = await pdf.embedPng(kernel.images.get(command.assetId).bytes);
+                await image.embed();
+                const stream = pdf.context.lookup(image.ref);
+                if (!(stream instanceof PDFRawStream)) throw new Error('Cannot embed the PDF image');
+                stream.dict.set(PDFName.of('Interpolate'), PDFBool.True);
+                const mask = pdf.context.lookup(stream.dict.get(PDFName.of('SMask')));
+                if (mask instanceof PDFRawStream) mask.dict.set(PDFName.of('Interpolate'), PDFBool.True);
+                images.set(command.assetId, image);
+            }
         }
     pdf.setTitle(options.title ?? scene.documentId);
     pdf.setCreator('Midad');

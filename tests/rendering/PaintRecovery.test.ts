@@ -25,7 +25,7 @@ describe('canvas command cleanup', () => {
             drawGlyphs: vi.fn(() => {
                 if (kind === 'glyphs') throw failure;
             }),
-            drawImageRect: vi.fn(() => {
+            drawImageRectOptions: vi.fn(() => {
                 if (kind === 'image') throw failure;
             }),
         };
@@ -41,6 +41,8 @@ describe('canvas command cleanup', () => {
                 setHinting() {}
             },
             PaintStyle: { Fill: 0 },
+            FilterMode: { Linear: 1 },
+            MipmapMode: { None: 0 },
             FontHinting: { None: 0 },
             ClipOp: { Intersect: 0 },
             XYWHRect: vi.fn(),

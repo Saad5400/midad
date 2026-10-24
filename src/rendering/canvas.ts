@@ -39,10 +39,12 @@ export function paintPage(
                 const asset = kernel.images.get(command.assetId);
                 paint.setColor(ck.WHITE);
                 paint.setStyle(ck.PaintStyle.Fill);
-                canvas.drawImageRect(
+                canvas.drawImageRectOptions(
                     asset.image,
                     ck.XYWHRect(0, 0, asset.width, asset.height),
                     ck.XYWHRect(command.x, command.y, command.width, command.height),
+                    ck.FilterMode.Linear,
+                    ck.MipmapMode.None,
                     paint,
                 );
                 continue;

@@ -5,7 +5,7 @@ import { emptyWritingPosition } from '@saad5400/midad/browser';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { layoutDocument } from '@saad5400/midad/layout';
 import { NativeNavigation } from '@saad5400/midad/browser';
-import { verifyScenePdf } from '../fixtures/pdfGeometry';
+import { verifyScenePdf, writeRasterCanaries } from '../fixtures/pdfGeometry';
 import { makeNestedRichFixture } from '../fixtures/nativeDocument';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
@@ -50,6 +50,39 @@ describe('native nested rich content layout', () => {
         );
     });
     afterAll(() => kernel.destroy());
+    it.each(['Arial', 'Amiri'])('exports marked Arabic with every font treatment (%s)', async (family) => {
+        const text = 'السَّلَامُ عَلَيْكُمْ بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ á ë ffi';
+        const doc = importDocument(
+            {
+                type: 'doc',
+                content: [[], ['bold'], ['italic'], ['bold', 'italic']].map((styles) => ({
+                    type: 'paragraph',
+                    attrs: { dir: 'rtl' },
+                    content: [
+                        {
+                            type: 'text',
+                            text,
+                            marks: [
+                                { type: 'textStyle', attrs: { fontFamily: family, fontSize: '32px' } },
+                                ...styles.map((type) => ({ type })),
+                            ],
+                        },
+                    ],
+                })),
+            },
+            `marked-${family}`,
+        );
+        await kernel.prepare(doc);
+        const result = layoutDocument(doc, kernel);
+        expect(
+            result.pages
+                .flatMap((page) => page.commands)
+                .filter((command) => 'glyphs' in command)
+                .some((command) => 'glyphs' in command && command.text.some((text) => !text)),
+        ).toBe(true);
+        await verifyScenePdf(doc, result, kernel, `marked-${family.toLowerCase()}`);
+        await writeRasterCanaries(doc, result, kernel, `marked-${family.toLowerCase()}`);
+    });
     it('reserves the same writable space for a missing table paragraph as an explicit empty paragraph', async () => {
         const content = {
             type: 'doc',
@@ -722,7 +755,7 @@ describe('native nested rich content layout', () => {
         'paginates the final text line at a tightly filled page boundary ($context, $extra pt)',
         async ({ context, extra }) => {
             const paragraphs = Array.from({ length: 28 }, (_, index) =>
-                paragraph(`tight-${index}`, 'Full page العربية'),
+                paragraph(`tight-${index}`, 'Full page العَرَبِيَّةُ'),
             );
             const content =
                 context === 'columns'
@@ -731,7 +764,7 @@ describe('native nested rich content layout', () => {
                               'tight-columns',
                               paragraphs,
                               Array.from({ length: 28 }, (_, index) =>
-                                  paragraph(`tight-peer-${index}`, 'Full page العربية'),
+                                  paragraph(`tight-peer-${index}`, 'Full page العَرَبِيَّةُ'),
                               ),
                           ),
                       ]
