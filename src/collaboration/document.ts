@@ -5,11 +5,11 @@ import { persistNativeIdentities } from '../document/identities.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
 import { textBlocks } from '../document/text.js';
 import type { TextCaret } from '../editing/text.js';
+import { readSharedDocument } from './shared/reader.js';
 import { identity, key } from './shared/schema.js';
 import { SharedStore } from './shared/store.js';
-import { SharedWriter } from './shared/writer.js';
-import { readSharedDocument } from './shared/reader.js';
 import { variantScope } from './shared/variants.js';
+import { SharedWriter } from './shared/writer.js';
 import { canonicalSharedJson } from './values.js';
 
 export const SHARED_DOCUMENT_SCHEMA = 3;
@@ -28,45 +28,56 @@ export class SharedNativeDocument {
     private readonly writer: SharedWriter;
     private view: NativeDocument;
     private closed = false;
+    private validation?: SharedNativeDocument;
+    private validationStale = false;
+    private validationDeferred = false;
 
-    private constructor(document: NativeDocument, state?: Uint8Array) {
+    private constructor(
+        document: NativeDocument,
+        state?: Uint8Array,
+        private readonly isolated = false,
+    ) {
         this.ydoc = new Y.Doc();
         this.store = new SharedStore(this.ydoc);
         this.writer = new SharedWriter(this.store);
-        this.undoManager = new Y.UndoManager(
-            [this.store.registry, this.store.flows, this.store.families, this.store.deleted],
-            {
-                trackedOrigins: new Set([LOCAL]),
-                captureTimeout: 500,
-            },
-        );
+        this.undoManager = new Y.UndoManager(this.ydoc, {
+            trackedOrigins: new Set([LOCAL]),
+            captureTimeout: 500,
+        });
         this.view = document;
         this.ydoc.on('afterTransaction', (transaction) => {
+            this.validationStale = true;
             if (!transaction.changed.size) return;
             this.store.invalidateCaches();
             if (transaction.origin !== LOCAL && transaction.origin !== SEED) this.store.placementReady = false;
         });
-        if (state) {
-            Y.applyUpdateV2(this.ydoc, state, REMOTE);
-            if (
-                this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
-                typeof this.store.meta.get('root') !== 'string' ||
-                typeof this.store.meta.get('epoch') !== 'string'
-            )
-                throw new Error('Unsupported shared document');
-            this.view = this.read(document.revision);
-        } else {
-            this.ydoc.transact(() => {
-                this.store.seeding = true;
-                this.store.meta.set('schema', SHARED_DOCUMENT_SCHEMA);
-                this.store.meta.set('epoch', crypto.randomUUID());
-                this.store.meta.set('root', key('', document.root.id));
-                this.writer.write(undefined, document);
-                this.store.seeding = false;
-            }, SEED);
-            this.view = this.read(document.revision);
+        try {
+            if (state) {
+                Y.applyUpdateV2(this.ydoc, state, REMOTE);
+                if (this.ydoc.store.pendingStructs || this.ydoc.store.pendingDs)
+                    throw new Error('The shared document snapshot is incomplete');
+                if (
+                    this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
+                    typeof this.store.meta.get('root') !== 'string' ||
+                    typeof this.store.meta.get('epoch') !== 'string'
+                )
+                    throw new Error('Unsupported shared document');
+                this.view = this.read(document.revision);
+            } else {
+                this.ydoc.transact(() => {
+                    this.store.seeding = true;
+                    this.store.meta.set('schema', SHARED_DOCUMENT_SCHEMA);
+                    this.store.meta.set('epoch', crypto.randomUUID());
+                    this.store.meta.set('root', key('', document.root.id));
+                    this.writer.write(undefined, document);
+                    this.store.seeding = false;
+                }, SEED);
+                this.view = this.read(document.revision);
+            }
+        } catch (error) {
+            this.destroy();
+            throw error;
         }
-        this.store.registerTypes(this.undoManager);
     }
     static create(document: NativeDocument): SharedNativeDocument {
         return new SharedNativeDocument(persistNativeIdentities(document));
@@ -112,13 +123,31 @@ export class SharedNativeDocument {
                     attributes: { ...document.root.attributes, nativeId: this.view.root.id },
                 },
             };
+        if (!this.isolated) {
+            if (this.validationDeferred) this.discardValidation();
+            try {
+                const candidate = this.candidate(),
+                    before = candidate.document();
+                const update = candidate.publish(document, false);
+                this.accept(
+                    update,
+                    candidate.document() !== before
+                        ? { ...candidate.document(), revision: document.revision }
+                        : undefined,
+                    history ? LOCAL : SEED,
+                );
+                return update;
+            } catch (error) {
+                this.discardValidation();
+                throw error;
+            }
+        }
         const vector = this.vector(),
             before = this.view;
         try {
             this.ydoc.transact(
                 () => {
                     this.writer.write(before, document);
-                    this.store.registerTypes(this.undoManager);
                 },
                 history ? LOCAL : SEED,
             );
@@ -135,6 +164,31 @@ export class SharedNativeDocument {
     }
     receive(update: Uint8Array): NativeDocument {
         this.assertOpen();
+        if (!this.isolated) {
+            try {
+                const candidate = this.candidate(),
+                    before = candidate.document();
+                candidate.receive(update);
+                if (candidate.ydoc.store.pendingStructs || candidate.ydoc.store.pendingDs) {
+                    this.validationDeferred = true;
+                    return this.view;
+                }
+                this.accept(
+                    this.validationDeferred ? candidate.state(this.vector()) : update,
+                    this.validationDeferred || candidate.document() !== before
+                        ? { ...candidate.document(), revision: this.view.revision + 1 }
+                        : undefined,
+                    REMOTE,
+                );
+                return this.view;
+            } catch (error) {
+                this.discardValidation();
+                throw error;
+            }
+        }
+        return this.receiveIsolated(update);
+    }
+    private receiveIsolated(update: Uint8Array, local = false): NativeDocument {
         const root = this.store.meta.get('root'),
             epoch = this.epoch();
         let changed = false;
@@ -143,7 +197,7 @@ export class SharedNativeDocument {
         };
         this.ydoc.on('afterTransaction', observe);
         try {
-            Y.applyUpdateV2(this.ydoc, update, REMOTE);
+            this.applyUpdate(update, REMOTE, local);
             if (
                 this.store.meta.get('schema') !== SHARED_DOCUMENT_SCHEMA ||
                 this.store.meta.get('root') !== root ||
@@ -201,9 +255,44 @@ export class SharedNativeDocument {
     destroy(): void {
         if (this.closed) return;
         this.closed = true;
+        this.discardValidation();
         this.undoManager.destroy();
         this.ydoc.destroy();
         this.store.clear();
+    }
+    private candidate(): SharedNativeDocument {
+        if (!this.validation) {
+            this.validation = new SharedNativeDocument(
+                importDocument({ type: 'doc' }, this.view.id),
+                this.state(),
+                true,
+            );
+        } else if (this.validationStale) {
+            this.validation.receiveIsolated(this.state(this.validation.vector()), true);
+        }
+        this.validation.ydoc.clientID = this.ydoc.clientID;
+        this.validationStale = false;
+        return this.validation;
+    }
+    private accept(update: Uint8Array, document: NativeDocument | undefined, origin: symbol): void {
+        this.applyUpdate(update, origin, origin !== REMOTE);
+        if (document) this.view = document;
+        this.validationStale = false;
+        this.validationDeferred = false;
+    }
+    private applyUpdate(update: Uint8Array, origin: symbol, local: boolean): void {
+        this.ydoc.transact((transaction) => {
+            Y.applyUpdateV2(this.ydoc, update, origin);
+            // The validation copy and live document share one author identity.
+            if (local) transaction.local = true;
+        }, origin);
+        this.store.placementReady = false;
+    }
+    private discardValidation(): void {
+        this.validation?.destroy();
+        this.validation = undefined;
+        this.validationStale = false;
+        this.validationDeferred = false;
     }
     private assertOpen(): void {
         if (this.closed) throw new Error('The shared document is closed');
@@ -225,7 +314,6 @@ export class SharedNativeDocument {
     }
     private read(revision: number): NativeDocument {
         const document = readSharedDocument(this.store, this.view, revision);
-        this.store.registerTypes(this.undoManager);
         return document;
     }
 }

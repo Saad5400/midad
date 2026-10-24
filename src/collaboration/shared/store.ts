@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import type { Json } from '../../document/model.js';
-import type { Edge, Parent, SharedType, FlowSegment, FlowPart, Joined } from './schema.js';
+import type { Edge, FlowPart, FlowSegment, Joined, Parent, SharedType } from './schema.js';
 import { key } from './schema.js';
 
 interface FlowTrail {
@@ -21,7 +21,6 @@ export class SharedStore {
     readonly families: Y.Map<string>;
     readonly deleted: Y.Map<boolean | Joined>;
     private readonly types = new Map<string, SharedType>();
-    private unregistered: SharedType[] = [];
     seeding = false;
     private flowCache = new Map<string, Map<string, FlowSegment>>();
     private edgeCache?: Map<string, Parent & { id: string }>;
@@ -50,14 +49,8 @@ export class SharedStore {
         if (!type) {
             type = create();
             this.types.set(name, type);
-            this.unregistered.push(type);
         }
         return type as T;
-    }
-    registerTypes(undoManager: Y.UndoManager): void {
-        if (!this.unregistered.length) return;
-        undoManager.addToScope(this.unregistered);
-        this.unregistered = [];
     }
     attributes(address: string): Y.Map<Json> {
         return this.typed(`a:${address}`, () => this.ydoc.getMap<Json>(`a:${address}`));

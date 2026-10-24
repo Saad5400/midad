@@ -1,3 +1,4 @@
+import { readSharedAttributes, SharedNativeDocument } from '@saad5400/midad/collaboration';
 import {
     changeClauseVariant,
     createNativeClause,
@@ -5,29 +6,25 @@ import {
     persistClauseVariants,
     type LibraryClause,
 } from '@saad5400/midad/content/clauses';
+import { nativeFields } from '@saad5400/midad/content/fields';
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import {
     blockText,
     deleteBlock,
+    formatText,
     joinPreviousTextBlock,
+    mergeTableCells,
     moveBlock,
     replaceBlockNode,
     replaceInlineText,
-    splitTextBlock,
-    textBlocks,
-} from '@saad5400/midad/editing';
-import { nativeFields } from '@saad5400/midad/content/fields';
-import { formatText } from '@saad5400/midad/editing';
-import { SharedNativeDocument } from '@saad5400/midad/collaboration';
-import { readSharedAttributes } from '@saad5400/midad/collaboration';
-import { nodeTextStyle } from '@saad5400/midad/typography';
-import {
-    mergeTableCells,
     resizeTableColumns,
     splitTableCell,
+    splitTextBlock,
     tableCommand,
+    textBlocks,
     type TableCommand,
 } from '@saad5400/midad/editing';
+import { nodeTextStyle } from '@saad5400/midad/typography';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { makeNativeFixture, makeNestedRichFixture } from '../fixtures/nativeDocument';
@@ -266,7 +263,17 @@ describe('our shared native document', () => {
             expect(textBlocks(b.document().root)).toHaveLength(1600);
             expect(performance.now() - started).toBeLessThan(5000);
             const original = text(b);
+            const editStarted = performance.now();
             edit(b, 0, 0, 'Changed ');
+            const editMs = performance.now() - editStarted;
+            expect(editMs).toBeLessThan(5000);
+            const receiveStarted = performance.now();
+            a.receive(b.state(a.vector()));
+            const receiveMs = performance.now() - receiveStarted;
+            expect(receiveMs).toBeLessThan(5000);
+            expect(text(a)).toBe(`Changed ${original}`);
+            expect(a.canUndo).toBe(false);
+            console.log(JSON.stringify({ workload: '600-row nested shared model', editMs, receiveMs }));
             expect(b.canUndo).toBe(true);
             b.undo();
             expect(text(b)).toBe(original);
@@ -1566,13 +1573,244 @@ describe('our shared native document', () => {
         expect((settings['__proto__'] as Record<string, unknown>).clmPolluted).toBe(true);
         doc.destroy();
     });
+    it('retains its author identity and existing observers across validated edits and history', () => {
+        const a = create(),
+            actor = a.ydoc.clientID,
+            doc = a.ydoc,
+            undo = a.undoManager;
+        let transactions = 0;
+        const observe = () => {
+            transactions++;
+        };
+        a.ydoc.on('afterTransaction', observe);
+        try {
+            edit(a, 0, 0, 'First ');
+            expect(a.ydoc.clientID).toBe(actor);
+            a.stopCapturing();
+            edit(a, 0, 0, 'Second ');
+            a.undo();
+            a.redo();
+            edit(a, 0, 0, 'Third ');
+            expect(a.ydoc).toBe(doc);
+            expect(a.undoManager).toBe(undo);
+            expect(a.ydoc.clientID).toBe(actor);
+            expect(text(a)).toBe('Third Second First Hello العربية world');
+            expect(transactions).toBeGreaterThanOrEqual(5);
+        } finally {
+            a.ydoc.off('afterTransaction', observe);
+            a.destroy();
+        }
+    });
+    it('isolates malformed bytes without losing saved state or local undo', () => {
+        const a = create();
+        try {
+            edit(a, 0, 0, 'Mine ');
+            const before = a.document(),
+                state = a.state();
+            expect(() => a.receive(Uint8Array.of(255))).toThrow();
+            expect(a.document()).toBe(before);
+            expect(() => a.state()).not.toThrow();
+            expect(a.state()).toEqual(state);
+            expect(a.canUndo).toBe(true);
+            a.undo();
+            expect(text(a)).toBe('Hello العربية world');
+            a.redo();
+            expect(text(a)).toBe('Mine Hello العربية world');
+            edit(a, 0, 0, 'After ');
+            expect(text(a)).toBe('After Mine Hello العربية world');
+        } finally {
+            a.destroy();
+        }
+    });
+    it.each(['schema', 'root', 'epoch'] as const)(
+        'isolates a rejected %s update without changing the live vector or epoch',
+        (field) => {
+            const { a, b } = peers();
+            try {
+                edit(a, 0, 0, 'Mine ');
+                const state = a.state(),
+                    vector = a.vector(),
+                    epoch = a.epoch();
+                const original = b.ydoc.getMap('native').get(field);
+                b.ydoc.getMap('native').set(field, field === 'schema' ? 999 : 'Rejected identity');
+                expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
+                expect(() => a.state()).not.toThrow();
+                expect(a.state()).toEqual(state);
+                expect(a.vector()).toEqual(vector);
+                expect(a.epoch()).toBe(epoch);
+                a.undo();
+                expect(text(a)).toBe('Hello العربية world');
+                b.ydoc.getMap('native').set(field, original);
+                edit(b, 0, 0, 'Peer ');
+                a.receive(b.state(a.vector()));
+                expect(text(a)).toBe('Peer Hello العربية world');
+            } finally {
+                a.destroy();
+                b.destroy();
+            }
+        },
+    );
+    it('quarantines an unresolved update until its dependencies can be validated', () => {
+        const { a, b } = peers();
+        try {
+            const state = a.state(),
+                vector = a.vector();
+            edit(b, 0, 0, 'Dependency ');
+            const dependency = b.state(vector),
+                afterDependency = b.vector();
+            const source = [...b.ydoc.share.keys()].find((key) => key.startsWith('t:'))!;
+            b.ydoc.getText(source).insertEmbed(0, { invalid: true });
+            const unresolved = b.state(afterDependency);
+            a.receive(unresolved);
+            expect(a.state()).toEqual(state);
+            expect(a.vector()).toEqual(vector);
+            expect(() => a.receive(dependency)).toThrow('inline');
+            expect(a.state()).toEqual(state);
+            expect(a.vector()).toEqual(vector);
+            a.receive(dependency);
+            expect(text(a)).toBe('Dependency Hello العربية world');
+            edit(a, 0, 0, 'Recovered ');
+            expect(text(a)).toBe('Recovered Dependency Hello العربية world');
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('does not publish quarantined data with a subsequent local edit', () => {
+        const { a, b } = peers();
+        try {
+            const vector = a.vector();
+            edit(b, 0, 0, 'Peer ');
+            const dependency = b.state(vector),
+                first = b.vector();
+            const source = [...b.ydoc.share.keys()].find((key) => key.startsWith('t:'))!;
+            b.ydoc.getText(source).insertEmbed(0, { invalid: true });
+            a.receive(b.state(first));
+            edit(a, 0, 0, 'Local ');
+            a.receive(dependency);
+            expect(text(a)).toContain('Local ');
+            expect(text(a)).toContain('Peer ');
+            const fresh = SharedNativeDocument.fromState(a.state(), a.document().id);
+            try {
+                expect(text(fresh)).toBe(text(a));
+            } finally {
+                fresh.destroy();
+            }
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('rejects a snapshot with unresolved structs instead of retaining unvalidated state', () => {
+        const { a, b } = peers(),
+            raw = new Y.Doc();
+        try {
+            const vector = a.vector();
+            edit(b, 0, 0, 'Dependency ');
+            const afterDependency = b.vector();
+            edit(b, 0, 0, 'Unresolved ');
+            Y.applyUpdateV2(raw, a.state());
+            Y.applyUpdateV2(raw, b.state(afterDependency));
+            expect(() => SharedNativeDocument.fromState(Y.encodeStateAsUpdateV2(raw), a.document().id)).toThrow(
+                'incomplete',
+            );
+            expect(a.vector()).toEqual(vector);
+        } finally {
+            a.destroy();
+            b.destroy();
+            raw.destroy();
+        }
+    });
+    it('merges a valid unresolved update after its dependency arrives', () => {
+        const { a, b } = peers();
+        try {
+            const vector = a.vector();
+            edit(b, 0, 0, 'First ');
+            const dependency = b.state(vector),
+                first = b.vector();
+            edit(b, 0, 0, 'Second ');
+            a.receive(b.state(first));
+            expect(a.vector()).toEqual(vector);
+            a.receive(dependency);
+            expect(text(a)).toBe('Second First Hello العربية world');
+            expect(a.vector()).toEqual(b.vector());
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('isolates a valid Yjs update containing an invalid inline node and accepts its repair', () => {
+        const { a, b } = peers();
+        try {
+            edit(a, 0, 0, 'Mine ');
+            const state = a.state(),
+                vector = a.vector();
+            const source = [...b.ydoc.share.keys()].find((key) => key.startsWith('t:'))!;
+            b.ydoc.getText(source).insertEmbed(0, { invalid: true });
+            expect(() => a.receive(b.state(a.vector()))).toThrow('inline');
+            expect(a.state()).toEqual(state);
+            expect(a.vector()).toEqual(vector);
+            b.ydoc.getText(source).delete(0, 1);
+            edit(b, 0, 0, 'Peer ');
+            a.receive(b.state(a.vector()));
+            expect(text(a)).toContain('Mine ');
+            expect(text(a)).toContain('Peer ');
+            a.undo();
+            expect(text(a)).toBe('Peer Hello العربية world');
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    });
+    it('rejects a failing local mutation without retaining partial text or losing undo', () => {
+        const a = SharedNativeDocument.create(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        { type: 'paragraph', content: [{ type: 'text', text: 'First' }] },
+                        { type: 'paragraph', content: [{ type: 'text', text: 'Second' }] },
+                    ],
+                },
+                'shared-test',
+            ),
+        );
+        try {
+            edit(a, 0, 0, 'Mine ');
+            const before = a.document(),
+                state = a.state();
+            const block = textBlocks(before.root)[0];
+            const changed = replaceInlineText(before, {
+                blockId: block.id,
+                from: 0,
+                to: 0,
+                text: 'Partial ',
+                expectedRevision: before.revision,
+            });
+            let nested: import('@saad5400/midad/document').Json = true;
+            for (let index = 0; index < 40; index++) nested = { nested };
+            const children = [...changed.root.children!];
+            children[1] = { ...children[1], attributes: { ...children[1].attributes, invalid: nested } };
+            expect(() => a.publish({ ...changed, root: { ...changed.root, children } })).toThrow('deeply');
+            expect(a.document()).toBe(before);
+            expect(() => a.state()).not.toThrow();
+            expect(a.state()).toEqual(state);
+            expect(a.canUndo).toBe(true);
+            a.undo();
+            expect(text(a)).toBe('First\nSecond');
+            edit(a, 0, 0, 'Recovered ');
+            expect(text(a)).toBe('Recovered First\nSecond');
+        } finally {
+            a.destroy();
+        }
+    });
     it('rejects updates that replace protocol identity and retains a recoverable document', () => {
         const { a, b } = peers(),
             before = a.document();
         b.ydoc.getMap('native').set('schema', 999);
         expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
         expect(a.document()).toBe(before);
-        expect(() => a.publish(before)).toThrow('closed');
+        expect(() => a.publish(before)).not.toThrow();
         a.destroy();
         b.destroy();
     });
