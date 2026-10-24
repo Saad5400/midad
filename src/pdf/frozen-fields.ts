@@ -143,7 +143,7 @@ export class FrozenFieldSession {
             fontHash = kernel.fontHashFor(document),
             used = new Set<ShapedParagraph>();
         const pages = this.pages.map((page) => ({ ...page, lines: [], commands: [] as PaintCommand[] }));
-        for (const id of this.values.keys()) {
+        for (const id of Object.keys(this.valuesForSubmit())) {
             const appearance = this.appearance(id, kernel, used),
                 box = appearance.field;
             pages[box.page - 1].commands.push(

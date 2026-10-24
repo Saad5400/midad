@@ -205,6 +205,37 @@ describe('frozen PDF field sessions', () => {
         expect(scene.pages[1].commands.some((command) => command.kind === 'image')).toBe(true);
         await verifyScenePdf(session.previewDocument(), scene, kernel, 'frozen-pending-print');
     });
+    it('keeps overlapping integer-like field IDs in the same order as pending UI appearances', async () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                attrs: {
+                    blockVariables: [
+                        { id: '10', type: 'text' },
+                        { id: '2', type: 'text' },
+                    ],
+                },
+                content: [{ type: 'paragraph' }],
+            },
+            'frozen-order',
+        );
+        const session = new FrozenFieldSession(
+            document,
+            ['10', '2'].map((id) => ({ ...boxes[0], id })),
+            pages,
+            ['10', '2'],
+        );
+        session.setValue('10', 'ten');
+        session.setValue('2', 'two');
+        await kernel.prepare(session.previewDocument());
+        expect(Object.keys(session.valuesForSubmit())).toEqual(['2', '10']);
+        expect(
+            session
+                .pendingScene(kernel)
+                .pages[0].commands.filter((command) => 'glyphs' in command)
+                .map((command) => ('glyphs' in command ? command.text.join('') : '')),
+        ).toEqual(['two', 'ten']);
+    });
     it('shows the uploaded attachment filename instead of its label', () => {
         const document = importDocument(
             {
