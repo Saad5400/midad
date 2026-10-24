@@ -13,5 +13,19 @@
         "oversized": "e723c8b1db3351c3cb064b9bcb179a0cfb7e1654e8fee611d93a430b9be80bb3",
         "marked-Arial": "3dbf4c2201f3114708cddb65779ac6caee2ca0e113b0bbd104e54ae4e7e889e7",
         "marked-Amiri": "433ba11c9d5918737e8eb85d56ec1cf41bb327fe9ea9ef448ee01d62359133e8"
+    },
+    "documents": {
+        "arabic-1": "layout-contract/arabic-1.json",
+        "arabic-10": "layout-contract/arabic-10.json",
+        "tables-1": "layout-contract/tables-1.json",
+        "tables-10": "layout-contract/tables-10.json",
+        "parallel-1": "layout-contract/parallel-1.json",
+        "parallel-10": "layout-contract/parallel-10.json",
+        "mixed-1": "layout-contract/mixed-1.json",
+        "mixed-10": "layout-contract/mixed-10.json",
+        "nested": "layout-contract/nested.json",
+        "oversized": "layout-contract/oversized.json",
+        "marked-Arial": "layout-contract/marked-Arial.json",
+        "marked-Amiri": "layout-contract/marked-Amiri.json"
     }
 }

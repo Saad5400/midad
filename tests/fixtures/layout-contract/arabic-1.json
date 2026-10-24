@@ -1,0 +1,120 @@
+{
+    "type": "doc",
+    "attrs": {
+        "pageLayout": {
+            "orientation": "portrait",
+            "margins": {
+                "top": 96,
+                "bottom": 96,
+                "left": 96,
+                "right": 96
+            }
+        },
+        "blockVariables": [],
+        "floatingImages": []
+    },
+    "content": [
+        {
+            "type": "heading",
+            "attrs": {
+                "id": "heading-0",
+                "level": 2,
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "المادة 1"
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "arabic-0",
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "english-0",
+                "dir": "ltr"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "formatting-0",
+                "dir": "rtl",
+                "textAlign": "justify"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "تنسيق عربي ",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        },
+                        {
+                            "type": "italic"
+                        },
+                        {
+                            "type": "underline"
+                        },
+                        {
+                            "type": "strike"
+                        }
+                    ]
+                },
+                {
+                    "type": "text",
+                    "text": "نص ملوّن",
+                    "marks": [
+                        {
+                            "type": "textStyle",
+                            "attrs": {
+                                "fontFamily": "Amiri",
+                                "fontSize": "18px",
+                                "color": "#17355b",
+                                "backgroundColor": "#fff4cc",
+                                "lineHeight": "1.5"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "hardBreak",
+                    "attrs": {
+                        "id": "break-0"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "Contract reference",
+                    "marks": [
+                        {
+                            "type": "link",
+                            "attrs": {
+                                "href": "https://example.test/contract"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,1468 @@
+{
+    "type": "doc",
+    "attrs": {
+        "pageLayout": {
+            "orientation": "portrait",
+            "margins": {
+                "top": 96,
+                "bottom": 96,
+                "left": 96,
+                "right": 96
+            }
+        },
+        "blockVariables": [
+            {
+                "id": "field-signature",
+                "name": "حقل signature",
+                "type": "signature",
+                "display": "block",
+                "participant_id": "lab-participant",
+                "x": 100,
+                "y": 1035,
+                "width": 160,
+                "height": 70,
+                "settings": {
+                    "required": true
+                }
+            },
+            {
+                "id": "field-initials",
+                "name": "حقل initials",
+                "type": "initials",
+                "display": "block",
+                "participant_id": "lab-participant",
+                "x": 290,
+                "y": 1035,
+                "width": 160,
+                "height": 70,
+                "settings": {
+                    "required": true
+                }
+            },
+            {
+                "id": "field-stamp",
+                "name": "حقل stamp",
+                "type": "stamp",
+                "display": "block",
+                "participant_id": "lab-participant",
+                "x": 480,
+                "y": 1035,
+                "width": 160,
+                "height": 70,
+                "settings": {
+                    "required": true
+                }
+            }
+        ],
+        "floatingImages": [
+            {
+                "id": "floating-image",
+                "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAA8CAIAAABATAfQAAABWElEQVR4nO3b0Q0CMQwEUbpwJVRD/3UcDWCkA8e7tkaaAkB+P0l8j3i+iD72kP8Csg0clAYOSgMHpYGD0sBBaeCgNBmO67rkf56+p8SBD/PEOPDhnB4HPmyzwIEPz5SnFXyYJz7K4sM5/T0HPmzT4wh8uGaBI/BhmQuOwIdfRjgCH2Z54Qh8OGWHI/BhkyOOwIdHpjgCHwb54gh8qLPGEfiQ5o4j8KFrAI7Ah6gZOAIfiv7F0TknfDRXgAMfW6vBgY+VleHAx74qceBjWQWnFXxsreYoi4+Vld1z4GNflZdg+FhW8Q0pPjZVf32OjzUdeVvBx45OPbzhY0EHX2XxMb2zT/b4GN3xfQ58zK1j2QcfQ2vaBMPHxPrWBPExrtYdUtWQwPFb3QvGqiGB44cE2+eqIYHjbppPE1RDAsetxny3Qv2Bg9LAQWngoDRwUBo4KA0clAYOSnsDY9M4LdkvGbcAAAAASUVORK5CYII=",
+                "attachmentId": null,
+                "alt": "Synthetic logo",
+                "title": null,
+                "x": 96,
+                "y": 40,
+                "width": 180,
+                "height": 60,
+                "locked": true
+            }
+        ]
+    },
+    "content": [
+        {
+            "type": "heading",
+            "attrs": {
+                "id": "heading-0",
+                "level": 2,
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "المادة 1"
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "arabic-0",
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "english-0",
+                "dir": "ltr"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "formatting-0",
+                "dir": "rtl",
+                "textAlign": "justify"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "تنسيق عربي ",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        },
+                        {
+                            "type": "italic"
+                        },
+                        {
+                            "type": "underline"
+                        },
+                        {
+                            "type": "strike"
+                        }
+                    ]
+                },
+                {
+                    "type": "text",
+                    "text": "نص ملوّن",
+                    "marks": [
+                        {
+                            "type": "textStyle",
+                            "attrs": {
+                                "fontFamily": "Amiri",
+                                "fontSize": "18px",
+                                "color": "#17355b",
+                                "backgroundColor": "#fff4cc",
+                                "lineHeight": "1.5"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "hardBreak",
+                    "attrs": {
+                        "id": "break-0"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "Contract reference",
+                    "marks": [
+                        {
+                            "type": "link",
+                            "attrs": {
+                                "href": "https://example.test/contract"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "clause",
+            "attrs": {
+                "id": "variant-0-a",
+                "groupId": "group-0",
+                "activeVariantId": "variant-0-a",
+                "ordered": true,
+                "optional": true,
+                "optionalValue": true,
+                "variantCount": 2,
+                "variants": [
+                    {
+                        "id": "variant-0-a",
+                        "isDefault": true,
+                        "bodyContent": {
+                            "type": "clauseBody",
+                            "attrs": {
+                                "id": "clause-body-0"
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "clause-text-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "id": "variant-0-b",
+                        "isDefault": false,
+                        "description": "صيغة بديلة محفوظة",
+                        "bodyContent": {
+                            "type": "clauseBody",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "alternative-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "يُحفظ هذا البديل دون فقدان محتواه."
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "explanation": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "explanation-0",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "شرح البند"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            "content": [
+                {
+                    "type": "clauseTitle",
+                    "attrs": {
+                        "id": "clause-title-0"
+                    },
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "بند الخدمات 1"
+                        }
+                    ]
+                },
+                {
+                    "type": "clauseBody",
+                    "attrs": {
+                        "id": "clause-body-0"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "clause-text-0",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "parallel-0",
+                "widths": "even",
+                "gap": "sm",
+                "divider": true,
+                "show": null
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-ar",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "يَلْتَزِمُ الطرفُ الأوّل بتنفيذ الخدمات المتفق عليها، وفقًا لأحكام هذا العقد. تُسدَّد المستحقات خلال (30) يومًا من استلام الفاتورة رقم INV-2026/١٢٣، بقيمة 12,345.67 ريالًا. تُرسل الإشعارات إلى legal@example.test، وتُراجع المرفقات قبل التوقيع. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-en",
+                                "dir": "ltr"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "The parties agree to perform the services within thirty (30) days. Invoice INV-2026/123 includes SAR 12,345.67. Notices must identify the relevant clause and document revision. "
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "parallel-cell-0-ur",
+                        "lang": "ur"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "parallel-0-ur",
+                                "dir": "rtl"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "فریقین اس معاہدے کی شرائط پر عمل کرنے پر متفق ہیں۔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "table",
+            "attrs": {
+                "id": "table-0",
+                "borderColor": "#17355b"
+            },
+            "content": [
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-0"
+                    },
+                    "content": [
+                        {
+                            "type": "tableHeader",
+                            "attrs": {
+                                "id": "table-cell-0-0-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-0-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-0-0 البند 1"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableHeader",
+                            "attrs": {
+                                "id": "table-cell-0-0-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-0-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-0-1 البند 1"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableHeader",
+                            "attrs": {
+                                "id": "table-cell-0-0-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-0-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-0-2 البند 1"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-1"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-1-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-1-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-1-0 البند 2"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-1-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-1-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-1-1 البند 2"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-1-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-1-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-1-2 البند 2"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-2"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-2-0",
+                                "colspan": 2,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-2-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-2-0 البند 3"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-2-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-2-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-2-1 البند 3"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-3"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-3-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-3-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-3-0 البند 4"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-3-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-3-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-3-1 البند 4"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-3-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-3-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-3-2 البند 4"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-4"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-4-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-4-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-4-0 البند 5"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-4-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-4-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-4-1 البند 5"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-4-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-4-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-4-2 البند 5"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-5"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-5-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-5-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-5-0 البند 6"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-5-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-5-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-5-1 البند 6"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-5-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-5-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-5-2 البند 6"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-6"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-6-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-6-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-6-0 البند 7"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-6-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-6-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-6-1 البند 7"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-6-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-6-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-6-2 البند 7"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-7"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-7-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-7-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-7-0 البند 8"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-7-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-7-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-7-1 البند 8"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-7-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-7-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-7-2 البند 8"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-8"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-8-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-8-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-8-0 البند 9"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-8-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-8-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-8-1 البند 9"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-8-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-8-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-8-2 البند 9"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-9"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-9-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-9-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-9-0 البند 10"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-9-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-9-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-9-1 البند 10"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-9-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-9-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-9-2 البند 10"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-10"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-10-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-10-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-10-0 البند 11"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-10-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-10-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-10-1 البند 11"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-10-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-10-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-10-2 البند 11"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "row-0-11"
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-11-0",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-11-0",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-11-0 البند 12"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-11-1",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-11-1",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-11-1 البند 12"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "table-cell-0-11-2",
+                                "colspan": 1,
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "cell-0-11-2",
+                                        "dir": "rtl"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "R0-11-2 البند 12"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "field-paragraph",
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-text",
+                        "type": "text",
+                        "name": "حقل text",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "شركة الاختبار",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-0"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-date",
+                        "type": "date",
+                        "name": "حقل date",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-1"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-single",
+                        "type": "single",
+                        "name": "حقل single",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-2"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-multi",
+                        "type": "multi",
+                        "name": "حقل multi",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-3"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-attachment",
+                        "type": "attachment",
+                        "name": "حقل attachment",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-4"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": " "
+                },
+                {
+                    "type": "variable",
+                    "attrs": {
+                        "id": "field-choice",
+                        "type": "choice",
+                        "name": "حقل choice",
+                        "description": "بيانات اصطناعية للاختبار",
+                        "value": "",
+                        "participant_id": "lab-participant",
+                        "display": "inline",
+                        "width": 120,
+                        "height": 28,
+                        "settings": {
+                            "required": true,
+                            "options": [
+                                "الخيار الأول",
+                                "الخيار الثاني"
+                            ],
+                            "allowOther": true
+                        },
+                        "reference_id": "reference-5"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "image-paragraph"
+            },
+            "content": [
+                {
+                    "type": "image",
+                    "attrs": {
+                        "id": "inline-image",
+                        "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAA8CAIAAABATAfQAAABWElEQVR4nO3b0Q0CMQwEUbpwJVRD/3UcDWCkA8e7tkaaAkB+P0l8j3i+iD72kP8Csg0clAYOSgMHpYGD0sBBaeCgNBmO67rkf56+p8SBD/PEOPDhnB4HPmyzwIEPz5SnFXyYJz7K4sM5/T0HPmzT4wh8uGaBI/BhmQuOwIdfRjgCH2Z54Qh8OGWHI/BhkyOOwIdHpjgCHwb54gh8qLPGEfiQ5o4j8KFrAI7Ah6gZOAIfiv7F0TknfDRXgAMfW6vBgY+VleHAx74qceBjWQWnFXxsreYoi4+Vld1z4GNflZdg+FhW8Q0pPjZVf32OjzUdeVvBx45OPbzhY0EHX2XxMb2zT/b4GN3xfQ58zK1j2QcfQ2vaBMPHxPrWBPExrtYdUtWQwPFb3QvGqiGB44cE2+eqIYHjbppPE1RDAsetxny3Qv2Bg9LAQWngoDRwUBo4KA0clAYOSnsDY9M4LdkvGbcAAAAASUVORK5CYII=",
+                        "width": 180,
+                        "height": 60,
+                        "alt": "Synthetic logo"
+                    }
+                }
+            ]
+        }
+    ]
+}

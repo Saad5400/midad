@@ -1,0 +1,587 @@
+{
+    "type": "doc",
+    "content": [
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "nested-intro"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "اختبار المحتوى المتداخل Nested content regression"
+                }
+            ]
+        },
+        {
+            "type": "parallelRow",
+            "attrs": {
+                "id": "outer-split",
+                "widths": "narrow-end",
+                "gap": "lg"
+            },
+            "content": [
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "outer-ar",
+                        "lang": "ar"
+                    },
+                    "content": [
+                        {
+                            "type": "table",
+                            "attrs": {
+                                "id": "arabic-table"
+                            },
+                            "content": [
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableHeader",
+                                            "attrs": {
+                                                "id": "arabic-table-heading-cell",
+                                                "colspan": 2
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "heading",
+                                                    "attrs": {
+                                                        "id": "arabic-table-heading",
+                                                        "level": 2
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "جدول مختلط Complex table"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "arabic-table-merged",
+                                                "rowspan": 2,
+                                                "verticalAlign": "middle",
+                                                "backgroundColor": "#eaf4ff"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "paragraph",
+                                                    "attrs": {
+                                                        "id": "arabic-table-rich",
+                                                        "dir": "auto"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "نص عربي Arabic ",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "bold"
+                                                                },
+                                                                {
+                                                                    "type": "underline"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "rich content",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "italic"
+                                                                },
+                                                                {
+                                                                    "type": "textStyle",
+                                                                    "attrs": {
+                                                                        "color": "#123456",
+                                                                        "backgroundColor": "#fff4cc",
+                                                                        "fontSize": "22px"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "hardBreak"
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "A second line 123"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "table",
+                                                    "attrs": {
+                                                        "id": "arabic-table-nested-table"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "tableRow",
+                                                            "content": [
+                                                                {
+                                                                    "type": "tableCell",
+                                                                    "attrs": {
+                                                                        "id": "arabic-table-inner-cell-a"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "paragraph",
+                                                                            "attrs": {
+                                                                                "id": "arabic-table-inner-a"
+                                                                            },
+                                                                            "content": [
+                                                                                {
+                                                                                    "type": "text",
+                                                                                    "text": "داخل الجدول"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "type": "tableCell",
+                                                                    "attrs": {
+                                                                        "id": "arabic-table-inner-cell-b"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "paragraph",
+                                                                            "attrs": {
+                                                                                "id": "arabic-table-inner-b"
+                                                                            },
+                                                                            "content": [
+                                                                                {
+                                                                                    "type": "text",
+                                                                                    "text": "Nested cell"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "arabic-table-split-cell"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "parallelRow",
+                                                    "attrs": {
+                                                        "id": "arabic-table-split"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "parallelCell",
+                                                            "attrs": {
+                                                                "id": "arabic-table-split-ar",
+                                                                "lang": "ar"
+                                                            },
+                                                            "content": [
+                                                                {
+                                                                    "type": "paragraph",
+                                                                    "attrs": {
+                                                                        "id": "arabic-table-split-ar-text"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "text",
+                                                                            "text": "العربية داخل العمود"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "parallelCell",
+                                                            "attrs": {
+                                                                "id": "arabic-table-split-en",
+                                                                "lang": "en"
+                                                            },
+                                                            "content": [
+                                                                {
+                                                                    "type": "paragraph",
+                                                                    "attrs": {
+                                                                        "id": "arabic-table-split-en-text"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "text",
+                                                                            "text": "English inside column"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "arabic-table-last-cell"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "paragraph",
+                                                    "attrs": {
+                                                        "id": "arabic-table-last",
+                                                        "dir": "auto"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "نص عربي Arabic ",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "bold"
+                                                                },
+                                                                {
+                                                                    "type": "underline"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "rich content",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "italic"
+                                                                },
+                                                                {
+                                                                    "type": "textStyle",
+                                                                    "attrs": {
+                                                                        "color": "#123456",
+                                                                        "backgroundColor": "#fff4cc",
+                                                                        "fontSize": "22px"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "hardBreak"
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "A second line 123"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "parallelCell",
+                    "attrs": {
+                        "id": "outer-en",
+                        "lang": "en"
+                    },
+                    "content": [
+                        {
+                            "type": "table",
+                            "attrs": {
+                                "id": "english-table"
+                            },
+                            "content": [
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableHeader",
+                                            "attrs": {
+                                                "id": "english-table-heading-cell",
+                                                "colspan": 2
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "heading",
+                                                    "attrs": {
+                                                        "id": "english-table-heading",
+                                                        "level": 2
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "جدول مختلط Complex table"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "english-table-merged",
+                                                "rowspan": 2,
+                                                "verticalAlign": "middle",
+                                                "backgroundColor": "#eaf4ff"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "paragraph",
+                                                    "attrs": {
+                                                        "id": "english-table-rich",
+                                                        "dir": "auto"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "نص عربي Arabic ",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "bold"
+                                                                },
+                                                                {
+                                                                    "type": "underline"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "rich content",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "italic"
+                                                                },
+                                                                {
+                                                                    "type": "textStyle",
+                                                                    "attrs": {
+                                                                        "color": "#123456",
+                                                                        "backgroundColor": "#fff4cc",
+                                                                        "fontSize": "22px"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "hardBreak"
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "A second line 123"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "table",
+                                                    "attrs": {
+                                                        "id": "english-table-nested-table"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "tableRow",
+                                                            "content": [
+                                                                {
+                                                                    "type": "tableCell",
+                                                                    "attrs": {
+                                                                        "id": "english-table-inner-cell-a"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "paragraph",
+                                                                            "attrs": {
+                                                                                "id": "english-table-inner-a"
+                                                                            },
+                                                                            "content": [
+                                                                                {
+                                                                                    "type": "text",
+                                                                                    "text": "داخل الجدول"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "type": "tableCell",
+                                                                    "attrs": {
+                                                                        "id": "english-table-inner-cell-b"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "paragraph",
+                                                                            "attrs": {
+                                                                                "id": "english-table-inner-b"
+                                                                            },
+                                                                            "content": [
+                                                                                {
+                                                                                    "type": "text",
+                                                                                    "text": "Nested cell"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "english-table-split-cell"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "parallelRow",
+                                                    "attrs": {
+                                                        "id": "english-table-split"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "parallelCell",
+                                                            "attrs": {
+                                                                "id": "english-table-split-ar",
+                                                                "lang": "ar"
+                                                            },
+                                                            "content": [
+                                                                {
+                                                                    "type": "paragraph",
+                                                                    "attrs": {
+                                                                        "id": "english-table-split-ar-text"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "text",
+                                                                            "text": "العربية داخل العمود"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "parallelCell",
+                                                            "attrs": {
+                                                                "id": "english-table-split-en",
+                                                                "lang": "en"
+                                                            },
+                                                            "content": [
+                                                                {
+                                                                    "type": "paragraph",
+                                                                    "attrs": {
+                                                                        "id": "english-table-split-en-text"
+                                                                    },
+                                                                    "content": [
+                                                                        {
+                                                                            "type": "text",
+                                                                            "text": "English inside column"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "tableRow",
+                                    "content": [
+                                        {
+                                            "type": "tableCell",
+                                            "attrs": {
+                                                "id": "english-table-last-cell"
+                                            },
+                                            "content": [
+                                                {
+                                                    "type": "paragraph",
+                                                    "attrs": {
+                                                        "id": "english-table-last",
+                                                        "dir": "auto"
+                                                    },
+                                                    "content": [
+                                                        {
+                                                            "type": "text",
+                                                            "text": "نص عربي Arabic ",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "bold"
+                                                                },
+                                                                {
+                                                                    "type": "underline"
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "rich content",
+                                                            "marks": [
+                                                                {
+                                                                    "type": "italic"
+                                                                },
+                                                                {
+                                                                    "type": "textStyle",
+                                                                    "attrs": {
+                                                                        "color": "#123456",
+                                                                        "backgroundColor": "#fff4cc",
+                                                                        "fontSize": "22px"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "hardBreak"
+                                                        },
+                                                        {
+                                                            "type": "text",
+                                                            "text": "A second line 123"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "id": "nested-end"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "النهاية End of nested content"
+                }
+            ]
+        }
+    ]
+}

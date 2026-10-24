@@ -1,0 +1,26 @@
+{
+    "type": "doc",
+    "content": [
+        {
+            "type": "paragraph",
+            "attrs": {
+                "dir": "rtl"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "قِيمَةٌ عَرَبِيَّةٌ ABC 123 (١٢٣) لا خلال الاتفاق",
+                    "marks": [
+                        {
+                            "type": "textStyle",
+                            "attrs": {
+                                "fontFamily": "Arial",
+                                "fontSize": "18px"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
