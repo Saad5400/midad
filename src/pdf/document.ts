@@ -137,7 +137,8 @@ export async function writeScenePdf(
             }
             return `${key} gs\n`;
         };
-        for (const command of source.commands) {
+        for (let commandIndex = 0; commandIndex < source.commands.length; commandIndex++) {
+            const command = source.commands[commandIndex];
             if (command.kind === 'clipStart') {
                 content.push(
                     `q ${scalar(command.x)} ${scalar(source.height - command.y - command.height)} ${scalar(command.width)} ${scalar(command.height)} re W n`,
@@ -256,9 +257,25 @@ export async function writeScenePdf(
                 continue;
             }
             if (command.kind === 'line') {
-                content.push(
-                    `q ${state}${ink} RG ${scalar(command.width)} w ${scalar(command.x)} ${scalar(source.height - command.y)} m ${scalar(command.toX)} ${scalar(source.height - command.toY)} l S Q`,
-                );
+                const segments: string[] = [];
+                let line = command;
+                while (true) {
+                    segments.push(
+                        `${scalar(line.x)} ${scalar(source.height - line.y)} m ${scalar(line.toX)} ${scalar(source.height - line.toY)} l`,
+                    );
+                    const next = source.commands[commandIndex + 1];
+                    if (
+                        command.tableBorder === undefined ||
+                        next?.kind !== 'line' ||
+                        next.tableBorder !== command.tableBorder ||
+                        next.width !== command.width ||
+                        !next.color.every((value, index) => value === color[index])
+                    )
+                        break;
+                    line = next;
+                    commandIndex++;
+                }
+                content.push(`q ${state}${ink} RG ${scalar(command.width)} w ${segments.join(' ')} S Q`);
                 continue;
             }
             content.push(

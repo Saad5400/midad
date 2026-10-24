@@ -1,5 +1,5 @@
-import { inheritedDirection } from '../typography/direction.js';
 import { copyJson, type Attributes, type NativeDocument, type NativeNode } from '../document/model.js';
+import { inheritedDirection } from '../typography/direction.js';
 import type { StructureResult } from './lists.js';
 import {
     allocator,
@@ -383,12 +383,18 @@ export function splitTableCell(document: NativeDocument, cellId: string): Struct
     return { document: update(document, grid.table, [rebuild(grid, grid.rows, cells)]), caret: cellCaret(cell.node) };
 }
 
+export interface TableColumnLayout {
+    readonly columnEdges: readonly number[];
+    readonly minimumColumnWidths?: readonly number[];
+}
+
 export function resizeTableColumns(
     document: NativeDocument,
     tableId: string,
     boundary: number,
     delta: number,
     tableWidth: number,
+    layout?: TableColumnLayout,
 ): NativeDocument {
     const table = nodePath(document, tableId).at(-1);
     if (table?.kind !== 'table') throw new Error('The table no longer exists');
@@ -402,12 +408,38 @@ export function resizeTableColumns(
         tableWidth <= 0
     )
         throw new Error('Invalid table column resize');
-    const weights = columnWeights(grid),
+    if (
+        layout &&
+        (layout.columnEdges.length !== grid.columns + 1 ||
+            layout.columnEdges.some(
+                (edge, index) => !Number.isFinite(edge) || (index > 0 && edge <= layout.columnEdges[index - 1]),
+            ) ||
+            Math.abs(layout.columnEdges[0]) > 0.002 ||
+            Math.abs(layout.columnEdges.at(-1)! - tableWidth) > 0.002 ||
+            (layout.minimumColumnWidths &&
+                (layout.minimumColumnWidths.length !== grid.columns ||
+                    layout.minimumColumnWidths.some((width) => !Number.isFinite(width) || width < 0))))
+    )
+        throw new Error('Invalid table column layout');
+    const weights = layout
+            ? layout.columnEdges.slice(1).map((edge, index) => edge - layout.columnEdges[index])
+            : columnWeights(grid),
         sum = weights.reduce((total, value) => total + value, 0);
     const minimum = (Math.min(24, tableWidth / grid.columns / 2) * sum) / tableWidth;
     const left = boundary - 1,
         right = boundary;
-    const change = Math.max(minimum - weights[left], Math.min(weights[right] - minimum, (delta * sum) / tableWidth));
+    const leftMinimum = Math.min(
+        weights[left],
+        Math.max(minimum, ((layout?.minimumColumnWidths?.[left] ?? 0) * sum) / tableWidth),
+    );
+    const rightMinimum = Math.min(
+        weights[right],
+        Math.max(minimum, ((layout?.minimumColumnWidths?.[right] ?? 0) * sum) / tableWidth),
+    );
+    const change = Math.max(
+        leftMinimum - weights[left],
+        Math.min(weights[right] - rightMinimum, (delta * sum) / tableWidth),
+    );
     if (Math.abs(change) < 0.000001) return document;
     weights[left] += change;
     weights[right] -= change;

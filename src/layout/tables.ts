@@ -4,6 +4,7 @@ import { point } from '../typography/metrics.js';
 import { color, type Color } from '../typography/style.js';
 import { flowSpace, flowTracks, materializeBands, shiftBand, type Band } from './bands.js';
 import { scope, type LayoutContext, type MeasureBlocks } from './context.js';
+import { fitWidths, minimumTableColumns } from './intrinsic.js';
 
 interface TableCell {
     node: NativeNode;
@@ -19,9 +20,12 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
     const grid = tableGrid(node);
     if (!grid.columns) return fragmentedTableBands(node, width, ctx, blocks);
     const weights = columnWeights(grid);
-    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    const minimum = minimumTableColumns(node, ctx);
+    const fitted = fitWidths(width, weights, minimum);
+    const minimumColumnWidths =
+        minimum.reduce((sum, value) => sum + value, 0) <= width ? minimum : minimum.map(() => 0);
     const edges = [0];
-    for (const weight of weights) edges.push(edges.at(-1)! + (width * weight) / total);
+    for (const value of fitted) edges.push(edges.at(-1)! + value);
     const cells = grid.cells.map((cell) => ({
         ...cell,
         bands: blocks(
@@ -79,7 +83,10 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                                 cellId: cell.node.id,
                                 tableX: 0,
                                 columnEdges: edges,
+                                minimumColumnWidths,
                                 direction: rtl ? 'rtl' : 'ltr',
+                                borderColor: border,
+                                borderDepth: ctx.tableDepth ?? 0,
                             });
                             const background = cell.node.attributes?.backgroundColor
                                 ? color(cell.node.attributes.backgroundColor)
@@ -96,6 +103,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                             for (const x of [box.x, point(box.x + box.width)])
                                 band.commands.push({
                                     kind: 'line',
+                                    tableBorder: ctx.tableDepth ?? 0,
                                     x,
                                     y: 0,
                                     toX: x,
@@ -106,6 +114,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                             for (const y of [0, height])
                                 band.commands.push({
                                     kind: 'line',
+                                    tableBorder: ctx.tableDepth ?? 0,
                                     x: box.x,
                                     y,
                                     toX: point(box.x + box.width),
@@ -151,7 +160,10 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                 cellId: cell.node.id,
                 tableX: 0,
                 columnEdges: edges,
+                minimumColumnWidths,
                 direction: rtl ? 'rtl' : 'ltr',
+                borderColor: border,
+                borderDepth: ctx.tableDepth ?? 0,
             });
             const background = cell.node.attributes?.backgroundColor
                 ? color(cell.node.attributes.backgroundColor)
@@ -163,6 +175,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
             for (const x of [box.x, point(box.x + box.width)])
                 band.commands.push({
                     kind: 'line',
+                    tableBorder: ctx.tableDepth ?? 0,
                     x,
                     y: box.y,
                     toX: x,
@@ -173,6 +186,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
             for (const y of [box.y, point(box.y + box.height)])
                 band.commands.push({
                     kind: 'line',
+                    tableBorder: ctx.tableDepth ?? 0,
                     x: box.x,
                     y,
                     toX: point(box.x + box.width),
@@ -206,9 +220,12 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
     const rows = grid.rows;
     const cells: TableCell[] = grid.cells.map((cell) => ({ ...cell, bands: [], start: 0, end: 0 }));
     const weights = columnWeights(grid);
-    const total = weights.reduce((sum, item) => sum + item, 0);
+    const minimum = minimumTableColumns(node, ctx);
+    const fitted = fitWidths(width, weights, minimum);
+    const minimumColumnWidths =
+        minimum.reduce((sum, value) => sum + value, 0) <= width ? minimum : minimum.map(() => 0);
     const edges = [0];
-    for (const weight of weights) edges.push(edges[edges.length - 1] + (width * weight) / total);
+    for (const value of fitted) edges.push(edges[edges.length - 1] + value);
     const rowHeights = rows.map(() => 12);
     for (const cell of cells) {
         cell.bands = materializeBands(
@@ -304,7 +321,10 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
                 height: cellHeight,
                 tableX: 0,
                 columnEdges: edges,
+                minimumColumnWidths,
                 direction: rtl ? 'rtl' : 'ltr',
+                borderColor: border,
+                borderDepth: ctx.tableDepth ?? 0,
             });
             const background = cell.node.attributes?.backgroundColor
                 ? color(cell.node.attributes.backgroundColor)
@@ -321,11 +341,21 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
                     tableBackground: ctx.tableDepth ?? 0,
                 });
             for (const x of [bounds.x, point(bounds.x + bounds.width)])
-                result.commands.push({ kind: 'line', x, y: 0, toX: x, toY: cellHeight, width: 0.5, color: border });
+                result.commands.push({
+                    kind: 'line',
+                    tableBorder: ctx.tableDepth ?? 0,
+                    x,
+                    y: 0,
+                    toX: x,
+                    toY: cellHeight,
+                    width: 0.5,
+                    color: border,
+                });
             if (at === cell.start || positions[index + 1] === cell.end) {
                 const y = at === cell.start ? 0 : height;
                 result.commands.push({
                     kind: 'line',
+                    tableBorder: ctx.tableDepth ?? 0,
                     x: bounds.x,
                     y,
                     toX: bounds.x + bounds.width,

@@ -34,6 +34,7 @@ export interface RectCommand {
     readonly tableBackground?: number;
 }
 export interface LineCommand {
+    readonly tableBorder?: number;
     readonly kind: 'line';
     readonly x: number;
     readonly y: number;
@@ -128,7 +129,10 @@ export interface SceneCell {
     readonly height: number;
     readonly tableX: number;
     readonly columnEdges: readonly number[];
+    readonly minimumColumnWidths?: readonly number[];
     readonly direction: 'ltr' | 'rtl';
+    readonly borderColor?: Color;
+    readonly borderDepth?: number;
 }
 
 export function cellAt(scene: DocumentScene, pageIndex: number, x: number, y: number): SceneCell | undefined {

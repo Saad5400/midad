@@ -1,16 +1,14 @@
 // @vitest-environment node
-import { importDocument, type Json } from '@saad5400/midad/document';
-import { exportDocument } from '@saad5400/midad/document';
-import { emptyWritingPosition } from '@saad5400/midad/browser';
-import { NativeTextKernel } from '@saad5400/midad/rendering';
+import { emptyWritingPosition, NativeNavigation } from '@saad5400/midad/browser';
+import { exportDocument, importDocument, type Json } from '@saad5400/midad/document';
 import { layoutDocument } from '@saad5400/midad/layout';
-import { NativeNavigation } from '@saad5400/midad/browser';
-import { verifyScenePdf, writeRasterCanaries } from '../fixtures/pdfGeometry';
-import { makeNestedRichFixture } from '../fixtures/nativeDocument';
+import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { makeNestedRichFixture } from '../fixtures/nativeDocument';
+import { verifyScenePdf, writeRasterCanaries } from '../fixtures/pdfGeometry';
 
 const require = createRequire(import.meta.url);
 const paragraph = (id: string, text = id): Json => ({
@@ -185,8 +183,8 @@ describe('native nested rich content layout', () => {
                     page.commands.some(
                         (command) =>
                             command.kind === 'line' &&
-                            near(command.x, cell.x) &&
-                            near(command.toX, cell.x + cell.width) &&
+                            command.x <= cell.x + 0.002 &&
+                            command.toX >= cell.x + cell.width - 0.002 &&
                             near(command.y, bottom) &&
                             near(command.toY, bottom),
                     ),
@@ -194,6 +192,159 @@ describe('native nested rich content layout', () => {
                 ).toBe(true);
             }
     });
+    it.each(
+        ['ltr', 'rtl'].flatMap((dir) =>
+            ['plain', 'columns', 'nested'].flatMap((context) =>
+                [0, 20, 30].flatMap((before) => [1, 2].map((span) => ({ dir, context, before, span }))),
+            ),
+        ),
+    )(
+        'keeps interlocking merged rich cells complete at tight page boundaries ($dir, $context, $before, $span)',
+        async ({ dir, context, before, span }) => {
+            const lines = (prefix: string, count: number): Json[] =>
+                Array.from({ length: count }, (_, index) => ({
+                    type: 'paragraph',
+                    attrs: { id: `${prefix}-${index}`, dir },
+                    content: [
+                        {
+                            type: 'text',
+                            text: `${prefix} ${index} النص العربي Mixed text`,
+                            marks: [
+                                { type: 'textStyle', attrs: { fontSize: index % 3 ? '14px' : '22px' } },
+                                ...(index % 2 ? [{ type: 'bold' }] : []),
+                            ],
+                        },
+                    ],
+                }));
+            const cell = (id: string, content: Json[], rowspan = 1, colspan = 1): Json => ({
+                type: 'tableCell',
+                attrs: { id, rowspan, colspan, verticalAlign: 'middle', backgroundColor: '#e7eef9' },
+                content,
+            });
+            const merged: Json = {
+                type: 'table',
+                attrs: { id: 'interlocking', borderColor: span === 1 ? '#cccccc' : 'rgba(34,68,102,0.5)' },
+                content: [
+                    {
+                        type: 'tableRow',
+                        content: [
+                            cell('a', lines('a-text', 28), 3, span),
+                            cell('b', lines('b-text', 2)),
+                            cell('c', lines('c-text', 4), 2),
+                        ],
+                    },
+                    {
+                        type: 'tableRow',
+                        content: [cell('d', [columns('inside-d', lines('d-ar', 20), lines('d-en', 9))], 3)],
+                    },
+                    { type: 'tableRow', content: [cell('e', lines('e-text', 8), 2)] },
+                    { type: 'tableRow', content: [cell('f', lines('f-text', 6), 1, span)] },
+                ],
+            };
+            const wrapped =
+                context === 'plain'
+                    ? merged
+                    : columns(
+                          'outside',
+                          [context === 'nested' ? table('wrapper', [merged]) : merged],
+                          lines('outside-other', 5),
+                      );
+            const doc = importDocument(
+                { type: 'doc', attrs: { dir }, content: [...lines('before', before), wrapped, ...lines('after', 2)] },
+                'tight-interlocking',
+            );
+            await kernel.prepare(doc);
+            const result = layoutDocument(doc, kernel);
+            if (
+                process.env.NATIVE_FIDELITY_ARTIFACTS &&
+                dir === 'rtl' &&
+                context === 'columns' &&
+                before === 20 &&
+                span === 1
+            ) {
+                await mkdir(process.env.NATIVE_FIDELITY_ARTIFACTS, { recursive: true });
+                await writeFile(
+                    `${process.env.NATIVE_FIDELITY_ARTIFACTS}/interlocking.fixture.json`,
+                    JSON.stringify(exportDocument(doc)),
+                );
+                await verifyScenePdf(doc, result, kernel, 'interlocking-boundary');
+            }
+            if (
+                process.env.NATIVE_FIDELITY_ARTIFACTS &&
+                dir === 'ltr' &&
+                context === 'columns' &&
+                before === 0 &&
+                span === 2
+            )
+                await verifyScenePdf(doc, result, kernel, 'interlocking-translucent');
+            for (const page of result.pages) {
+                for (const cell of page.cells ?? [])
+                    for (const y of [cell.y, cell.y + cell.height]) {
+                        const strokes = page.commands
+                            .filter(
+                                (command) =>
+                                    command.kind === 'line' &&
+                                    Math.abs(command.y - y) < 0.002 &&
+                                    Math.abs(command.toY - y) < 0.002 &&
+                                    (!cell.borderColor ||
+                                        command.color.every((value, index) => value === cell.borderColor![index])),
+                            )
+                            .map((command) =>
+                                'toX' in command
+                                    ? [Math.min(command.x, command.toX), Math.max(command.x, command.toX)]
+                                    : [0, 0],
+                            )
+                            .sort((a, b) => a[0] - b[0]);
+                        let edge = cell.x;
+                        for (const [start, end] of strokes) if (start <= edge + 0.002 && end > edge) edge = end;
+                        expect(
+                            edge,
+                            `${cell.cellId} at page ${result.pages.indexOf(page) + 1}, y=${y}`,
+                        ).toBeGreaterThanOrEqual(cell.x + cell.width - 0.002);
+                    }
+                for (const line of page.lines) {
+                    expect(line.top, line.paragraphId).toBeGreaterThanOrEqual(72 - 0.002);
+                    expect(line.top + line.height, line.paragraphId).toBeLessThanOrEqual(page.height - 72 + 0.002);
+                    const shapedLine = line.shaped.lines.find(
+                        (entry) => Math.abs(entry.top - line.originalTop) < 0.002,
+                    )!;
+                    if (line.cellId) {
+                        const boxes = page.cells?.filter((cell) => cell.cellId === line.cellId) ?? [];
+                        const left = (line.left ?? 0) + shapedLine.left,
+                            right = left + shapedLine.width;
+                        expect(
+                            boxes.some((cell) => left >= cell.x - 0.002 && right <= cell.x + cell.width + 0.002),
+                            `Horizontal overflow: ${line.paragraphId}`,
+                        ).toBe(true);
+                    }
+                    if (line.cellId)
+                        expect(
+                            page.cells?.some(
+                                (cell) =>
+                                    cell.cellId === line.cellId &&
+                                    line.top >= cell.y - 0.002 &&
+                                    line.top + line.height <= cell.y + cell.height + 0.002,
+                            ),
+                            line.paragraphId,
+                        ).toBe(true);
+                }
+            }
+            const { textBlocks, blockText } = await import('@saad5400/midad/editing');
+            for (const block of textBlocks(doc.root)) {
+                const visible = result.pages
+                    .flatMap((page) => page.lines)
+                    .filter((line) => line.paragraphId === block.id)
+                    .map((line) => {
+                        const shaped = line.shaped.lines.find(
+                            (candidate) => Math.abs(candidate.top - line.originalTop) < 0.002,
+                        )!;
+                        return line.shaped.text.slice(shaped.start, shaped.endWithBreak);
+                    })
+                    .join('');
+                expect(visible, block.id).toBe(blockText(block));
+            }
+        },
+    );
     async function scene(children: Json[]) {
         const doc = importDocument({ type: 'doc', content: children }, 'nested-layout');
         await kernel.prepare(doc);

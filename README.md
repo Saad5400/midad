@@ -117,6 +117,10 @@ view.dispose();
 
 The engine includes rich text, lists, tables and merged cells, nested language columns, reusable document sections, embedded fields and images, undo/redo, navigation, collaboration primitives and PDF review geometry. Existing serialized format keys remain readable for compatibility; integrations should use the generic document API.
 
+Layout contract 2 closes continued table-cell borders and constrains feasible table/language columns by shaped glyph widths. Requested column proportions remain unchanged when the content fits. Resizing hosts should pass the current `SceneCell` as the optional sixth argument to `resizeTableColumns`, so edits use the displayed edges and minimum widths. Live editor sessions need a refresh when adopting a changed rendering contract; frozen PDF bytes remain authoritative.
+
+Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.
+
 ## Source organization
 
 Source modules and their corresponding tests share these boundaries:
