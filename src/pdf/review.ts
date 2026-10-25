@@ -2,6 +2,7 @@ import type { NativeDocument, NativeNode } from '../document/model.js';
 import { blockText, isTextBlock } from '../editing/text.js';
 import type { DocumentScene, TextReading } from '../layout/scene.js';
 import { compareReading } from '../layout/text-reading.js';
+import { INVALID_TEXT_OFFSET, textIndex } from '../rendering/text/encoding.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
 
 export interface PdfReviewMap {
@@ -51,24 +52,7 @@ export function sceneReviewMap(document: NativeDocument, scene: DocumentScene): 
     const known = new Map(blocks.map((block) => [block.id, block]));
     const rows: PdfReviewRow[] = [];
     const geometry = new Map<string, NonNullable<PdfReviewMap['blocks'][number]['empty']>>();
-    const encoder = new TextEncoder();
-    const offsets = new WeakMap<ShapedParagraph, Map<number, number>>();
     const shapedLines = new WeakMap<ShapedParagraph, Map<number, number>>();
-    const sourceOffset = (shaped: ShapedParagraph): Map<number, number> => {
-        const cached = offsets.get(shaped);
-        if (cached) return cached;
-        const result = new Map<number, number>();
-        let byte = 0,
-            offset = 0;
-        for (const character of shaped.text) {
-            result.set(byte, offset);
-            byte += encoder.encode(character).length;
-            offset += character.length;
-        }
-        result.set(byte, offset);
-        offsets.set(shaped, result);
-        return result;
-    };
     scene.pages.forEach((page, pageIndex) => {
         for (const line of page.lines) {
             const block = known.get(line.paragraphId);
@@ -141,17 +125,19 @@ export function sceneReviewMap(document: NativeDocument, scene: DocumentScene): 
             if (!block || !line) continue;
             const first = line.shaped.sources[0];
             const prefix = first?.nodeId === block.id && !first.editable ? first.to : 0;
-            const byteToUtf16 = sourceOffset(line.shaped);
+            const byteToUtf16 = textIndex(line.shaped).offsets;
             entries.sort((a, b) => compareReading(a.part.order, b.part.order));
             const ranges = entries.map(({ part, clip }) => {
-                const offset = byteToUtf16.get(part.order[0]);
-                if (offset === undefined) throw new Error('Invalid PDF review text offset');
+                const offset = byteToUtf16[part.order[0]];
+                if (offset === undefined || offset === INVALID_TEXT_OFFSET)
+                    throw new Error('Invalid PDF review text offset');
                 const from = Math.max(0, offset - prefix);
                 if (offset < prefix) return { from: 0, to: 0 };
                 const atomic = part.order.length > 1;
                 let to = Math.min(block.text.length, from + 1);
                 let offsets: number[] | undefined;
-                if (!atomic) {
+                if (!atomic && block.text.startsWith(part.text, from)) to = from + part.text.length;
+                else if (!atomic) {
                     const positions: number[] = [];
                     let cursor = from;
                     while (positions.length < part.text.length && cursor < block.text.length) {
