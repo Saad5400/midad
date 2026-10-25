@@ -6,6 +6,7 @@ import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { LAB_IMAGE } from '../fixtures/migrationCorpus';
 import { verifyScenePdf } from '../fixtures/pdfGeometry';
 
 let kernel: NativeTextKernel;
@@ -14,6 +15,7 @@ beforeAll(async () => {
     kernel = await NativeTextKernel.withAssets(
         await CanvasKitInit({ wasmBinary: await readFile(require.resolve('canvaskit-wasm/bin/canvaskit.wasm')) }),
         async (font) => new Uint8Array(await readFile(`assets/fonts/${font}.ttf`)),
+        async (source) => ({ bytes: new Uint8Array(Buffer.from(source.slice(source.indexOf(',') + 1), 'base64')) }),
     );
 });
 afterAll(() => kernel.destroy());
@@ -140,6 +142,67 @@ it('keeps a requested tall row across page boundaries without clipping text or l
     expect(rows.filter((row) => row.ends)).toEqual([rows.at(-1)]);
     expect(scene.pages.flatMap((page) => page.lines).filter((line) => line.paragraphId === 'a-text')).toHaveLength(1);
     await verifyScenePdf(document, scene, kernel, 'row-pages');
+});
+
+it('preserves custom row heights with images and inline fields in a merged cell', async () => {
+    const content = table(256, true);
+    const first = content.content[0];
+    const document = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    ...content,
+                    content: [
+                        {
+                            ...first,
+                            content: first.content.map((cell) =>
+                                cell.attrs.id === 'a'
+                                    ? {
+                                          ...cell,
+                                          content: [
+                                              {
+                                                  type: 'paragraph',
+                                                  attrs: { id: 'mixed-row', dir: 'ltr' },
+                                                  content: [
+                                                      { type: 'text', text: 'Mixed عربي ' },
+                                                      {
+                                                          type: 'image',
+                                                          attrs: { src: LAB_IMAGE, width: 24, height: 16 },
+                                                      },
+                                                      {
+                                                          type: 'variable',
+                                                          attrs: {
+                                                              id: 'row-field',
+                                                              type: 'text',
+                                                              name: 'Row value',
+                                                              value: 'X',
+                                                              width: 48,
+                                                              height: 24,
+                                                              settings: { fontFamily: 'Arial', fontSize: 12 },
+                                                          },
+                                                      },
+                                                  ],
+                                              },
+                                          ],
+                                      }
+                                    : cell,
+                            ),
+                        },
+                        ...content.content.slice(1),
+                    ],
+                },
+            ],
+        },
+        'row-rich-objects',
+    );
+    await kernel.prepare(document);
+    const scene = layoutDocument(document, kernel);
+    const cell = scene.pages[0].cells!.find((cell) => cell.cellId === 'a')!;
+    expect(cell.height).toBe(264);
+    expect(scene.pages[0].commands.filter((command) => command.kind === 'image')).toHaveLength(1);
+    expect(scene.pages[0].commands.filter((command) => command.kind === 'field')).toHaveLength(1);
+    await verifyScenePdf(document, scene, kernel, 'row-rich-objects');
 });
 
 it('treats row height as a minimum and preserves overflowing rich text', async () => {
