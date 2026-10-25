@@ -23,6 +23,7 @@ import {
     type TableGrid,
 } from './table-grid.js';
 export { tableGrid } from './table-grid.js';
+export { setTableRowHeight } from './table-rows.js';
 
 export type TableCommand =
     | 'rowBefore'

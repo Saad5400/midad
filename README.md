@@ -119,6 +119,8 @@ The engine includes rich text, lists, tables and merged cells, nested language c
 
 Layout contract 3 paginates oversized merged-cell groups using the remaining physical page space, including nested tables/columns and top/middle/bottom alignment. Continued borders stay closed, and feasible table/language columns respect shaped-glyph minimum widths. Requested column proportions remain unchanged when the content fits. Resizing hosts should pass the current `SceneCell` as the optional sixth argument to `resizeTableColumns`, so edits use the displayed edges and minimum widths. Live editor sessions need a refresh when adopting a changed rendering contract; frozen PDF bytes remain authoritative.
 
+Layout contract 4 adds table-row minimum heights through `setTableRowHeight(document, tableId, rowId, heightPx)`. Pass `null` for automatic height. Rows expand to fit their content and paginate when necessary. `ScenePage.tableRows` supplies immutable physical fragments, logical row IDs/indexes and final-fragment markers for mouse, touch and keyboard controls. HTML clipboard output retains row heights. Existing contract-3 scene goldens remain unchanged.
+
 The PDF writer reuses compatible opaque text setup and exact binary-grid text moves. Font switches retain absolute anchors for consistent raster placement. Reading dictionaries keep every source span, text value and bounding box; Unicode boundary indexes are shared between shaping and review mapping.
 
 Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.

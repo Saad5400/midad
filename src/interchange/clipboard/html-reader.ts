@@ -224,8 +224,17 @@ export function parseHtmlFragment(source: string): NativeFragment {
             else if (tag === 'HR') output.push(node('horizontalRule'));
             else if (tag === 'TABLE') {
                 const row = (element: HTMLElement): NativeNode => {
-                    const rowAttrs = attributes(element, nextAttrs),
+                    const rowAttrs = { ...attributes(element, nextAttrs) },
                         rowMarks = marks(element, nextMarks);
+                    const height = (element.style.height || element.getAttribute('height') || '')
+                        .trim()
+                        .match(/^(\d+(?:\.\d+)?)(px|pt|in|cm|mm)?$/i);
+                    if (height) {
+                        const unit = height[2]?.toLowerCase() ?? 'px';
+                        const value =
+                            Number(height[1]) * ({ px: 1, pt: 4 / 3, in: 96, cm: 96 / 2.54, mm: 96 / 25.4 }[unit] ?? 1);
+                        if (value <= 100000) rowAttrs.rowHeight = value;
+                    }
                     const cells = Array.from(element.children)
                         .filter((cell) => ['TD', 'TH'].includes(cell.tagName))
                         .map((cell) => {

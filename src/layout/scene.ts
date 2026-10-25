@@ -116,8 +116,20 @@ export interface ScenePage {
     readonly commands: readonly PaintCommand[];
     readonly lines: readonly SceneLine[];
     readonly cells?: readonly SceneCell[];
+    readonly tableRows?: readonly SceneTableRow[];
     readonly columns?: readonly SceneColumn[];
     readonly blocks?: readonly SceneColumn[];
+}
+
+export interface SceneTableRow {
+    readonly tableId: string;
+    readonly rowId: string;
+    readonly rowIndex: number;
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+    readonly ends: boolean;
 }
 
 export interface SceneCell {

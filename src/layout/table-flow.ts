@@ -1,9 +1,11 @@
 import type { NativeNode } from '../document/model.js';
-import type { GridCell } from '../editing/table-grid.js';
+import type { GridCell, GridRow } from '../editing/table-grid.js';
+import { tableRowMinimum } from '../editing/table-rows.js';
 import { point } from '../typography/metrics.js';
 import { color, type Color } from '../typography/style.js';
 import { blank, requiredHeight, shiftBand, takeBands, type Band } from './bands.js';
 import type { LayoutContext } from './context.js';
+import { tableRowFragments } from './table-rows.js';
 
 interface FlowCell extends GridCell {
     bands: readonly Band[];
@@ -98,10 +100,11 @@ export function flowingTableBand(
     width: number,
     ctx: LayoutContext,
     cells: readonly FlowCell[],
-    rows: number,
+    rows: readonly GridRow[],
     edges: readonly number[],
     minimumColumnWidths: readonly number[],
     height: number,
+    rowOffset: number,
 ): Band {
     const full = ctx.availableHeight;
     const rtl = ctx.direction === 'rtl';
@@ -117,11 +120,11 @@ export function flowingTableBand(
             const starts: number[] = [];
             const ends: number[] = [];
             const plans = new Map<FlowCell, CellFlow>();
-            const ending: FlowCell[][] = Array.from({ length: rows }, () => []);
+            const ending: FlowCell[][] = Array.from({ length: rows.length }, () => []);
             for (const cell of cells) ending[cell.row + cell.rowspan - 1].push(cell);
-            for (let row = 0; row < rows; row++) {
+            for (let row = 0; row < rows.length; row++) {
                 starts[row] = row ? ends[row - 1] : 0;
-                ends[row] = point(starts[row] + 12);
+                ends[row] = point(starts[row] + tableRowMinimum(rows[row].node));
                 for (const cell of ending[row]) {
                     const plan = placeFlow(cell.bands, starts[cell.row] + 6, available, full);
                     plans.set(cell, plan);
@@ -145,7 +148,14 @@ export function flowingTableBand(
             const cursors = new Map<FlowCell, number>();
             for (let from = 0; from < ends.at(-1)!; ) {
                 const to = Math.min(ends.at(-1)!, from + roomAt(from, available, full));
-                const band: Band = { height: point(to - from), commands: [], lines: [], cells: [], columns: [] };
+                const band: Band = {
+                    height: point(to - from),
+                    commands: [],
+                    lines: [],
+                    cells: [],
+                    columns: [],
+                    tableRows: tableRowFragments(node.id, rows, [0, ...ends], from, to, width, rowOffset),
+                };
                 for (const cell of cells) {
                     const start = Math.max(from, starts[cell.row]);
                     const end = Math.min(to, ends[cell.row + cell.rowspan - 1]);
@@ -213,6 +223,7 @@ export function flowingTableBand(
                             ...shifted.lines.map((line) => ({ ...line, cellId: line.cellId ?? cell.node.id })),
                         );
                         band.cells!.push(...(shifted.cells ?? []));
+                        band.tableRows!.push(...(shifted.tableRows ?? []));
                         band.columns!.push(...(shifted.columns ?? []));
                     }
                     cursors.set(cell, cursor);
