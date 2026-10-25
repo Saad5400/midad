@@ -19,6 +19,7 @@ export function setTableRowHeight(
 ): NativeDocument {
     const table = nodePath(document, tableId).at(-1);
     if (table?.kind !== 'table') throw new Error('The table no longer exists');
+    if (table.attributes?.locked === true) throw new Error('The table structure is locked');
     const row = tableGrid(table).rows.find((row) => row.node.id === rowId)?.node;
     if (!row) throw new Error('The table row no longer exists');
     const attributes = { ...row.attributes };
