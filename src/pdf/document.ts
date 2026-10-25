@@ -113,7 +113,7 @@ export async function writeScenePdf(
         return result;
     };
     const opacityStates = new Map<number, PDFRef>();
-    const reading = new PdfReadingTree(pdf);
+    const reading = new PdfReadingTree(pdf, scalar);
     for (const source of scene.pages) {
         const page = pdf.addPage([source.width, source.height]);
         const text = reading.page(page, source.height);

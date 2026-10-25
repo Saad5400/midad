@@ -1,6 +1,7 @@
 import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFString, type PDFPage, type PDFRef } from 'pdf-lib';
 import type { TextReading } from '../layout/scene.js';
 import { compareReading } from '../layout/text-reading.js';
+import { EncodedReadingSpan } from './reading-span.js';
 
 export class PdfReadingTree {
     private readonly root: PDFRef;
@@ -9,7 +10,10 @@ export class PdfReadingTree {
     private pages = 0;
     private readonly texts = new Map<string, PDFHexString>();
 
-    constructor(private readonly pdf: PDFDocument) {
+    constructor(
+        private readonly pdf: PDFDocument,
+        private readonly scalar: (value: number) => string = (value) => PDFNumber.of(value).toString(),
+    ) {
         this.root = pdf.context.nextRef();
     }
 
@@ -33,15 +37,9 @@ export class PdfReadingTree {
                 const id = owners.length;
                 const { x, y, width, height: lineHeight } = part.box;
                 const ref = this.pdf.context.register(
-                    this.pdf.context.obj({
-                        Type: 'StructElem',
-                        S: 'Span',
-                        P: group.ref,
-                        Pg: page.ref,
-                        K: id,
-                        ActualText: actualText,
-                        A: { O: 'Layout', BBox: [x, height - y - lineHeight, x + width, height - y] },
-                    }),
+                    new EncodedReadingSpan(
+                        `<< /Type /StructElem /S /Span /P ${group.ref} /Pg ${page.ref} /K ${id} /ActualText ${actualText} /A << /O /Layout /BBox [${[x, height - y - lineHeight, x + width, height - y].map(this.scalar).join(' ')}] >> >>`,
+                    ),
                 );
                 owners.push(ref);
                 group.spans.push({ ref, order: part.order });
