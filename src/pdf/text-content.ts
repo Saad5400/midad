@@ -46,6 +46,7 @@ export class PdfTextContent {
         if (this.activeFont !== command.fontId) {
             this.content.push(`${face.name} ${this.scalar(command.size)} Tf`);
             this.activeFont = command.fontId;
+            this.previousX = this.previousY = undefined;
         }
         if (this.activeItalic !== !!command.fauxItalic) this.previousX = this.previousY = undefined;
         this.activeItalic = !!command.fauxItalic;

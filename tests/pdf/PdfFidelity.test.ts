@@ -6,7 +6,7 @@ import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { PDFBool, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { CORPUS_CASES, createMigrationFixture } from '../fixtures/migrationCorpus';
 import { makeNestedRichFixture } from '../fixtures/nativeDocument';
@@ -42,6 +42,46 @@ beforeAll(async () => {
         paint.delete();
         surface.delete();
     }
+});
+
+it('anchors font switches absolutely to preserve PDF raster placement', async () => {
+    const document = importDocument(
+        {
+            type: 'doc',
+            content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'النص عربي English 123 المزيد بالعربية' }] },
+            ],
+        },
+        'font-switch-raster',
+    );
+    await kernel.prepare(document);
+    const scene = layoutDocument(document, kernel);
+    expect(
+        new Set(
+            scene.pages
+                .flatMap((page) => page.commands)
+                .flatMap((command) => ('glyphs' in command ? [command.fontId] : [])),
+        ).size,
+    ).toBeGreaterThan(1);
+    const pdf = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
+    let fonts = 0;
+    for (const page of pdf.getPages()) {
+        const streams = page.node.Contents() as PDFArray;
+        let absolute = true;
+        for (const ref of streams.asArray()) {
+            const stream = pdf.context.lookup(ref, PDFRawStream);
+            const instructions = new TextDecoder().decode(decodePDFRawStream(stream).decode());
+            for (const match of instructions.matchAll(/\/[^\s/]+ [\d.]+ Tf|\bBT\b|\bTm\b|<[0-9a-f]+> Tj/g)) {
+                if (match[0].endsWith('Tf')) {
+                    fonts++;
+                    absolute = true;
+                } else if (match[0] === 'BT') absolute = true;
+                else if (match[0] === 'Tm') absolute = false;
+                else expect(absolute, 'glyph after a font switch needs an absolute anchor').toBe(false);
+            }
+        }
+    }
+    expect(fonts).toBeGreaterThan(1);
 });
 
 it.each(
