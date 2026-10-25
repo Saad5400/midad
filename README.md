@@ -26,6 +26,28 @@ The raster checks cover marked Arabic, tight page boundaries, mixed bilingual ta
 
 The package is not published to npm yet. Versioned tarballs are attached to [GitHub releases](https://github.com/Saad5400/midad/releases); install a release artifact URL or build and install a local tarball. Applications do not need to commit the binary package to their source repository.
 
+## Per-page setup
+
+Flow documents can override page settings without changing the document defaults:
+
+```ts
+import { setPageLayout, clearPageLayout, pageLayoutForPage } from '@saad5400/midad/content/page-layout';
+
+const changed = setPageLayout(document, 2, { orientation: 'landscape' });
+const styled = setPageLayout(changed, 3, {
+    size: 'letter',
+    margins: { left: 48 },
+    background: { color: '#f4f7fb' },
+    footer: false,
+});
+const settings = pageLayoutForPage(styled, 3);
+const inherited = clearPageLayout(styled, 3);
+```
+
+Page numbers are one-based physical pages, including a cover. Overrides inherit document defaults and merge sparse margin changes. Paper sizes are `a3`, `a4`, `a5`, `letter`, `legal`, or custom `{ width, height }` in points; margins use CSS pixels. Backgrounds accept a color and an image `src` with `cover`, `contain`, or `stretch` fitting. The host supplies image access through its existing resolver.
+
+The shared layout reflows continuing text, lists, tables and parallel columns at page geometry changes while keeping document caret/search/review offsets. Canvas and PDF consume the same page boxes and background commands. Existing imported-PDF page geometry remains protected; changing its page size, orientation or source background is not implemented by these flow-page settings yet.
+
 ## Engine API
 
 Version 0.9 replaces the mutable `kernel.fontHash` property with `kernel.fontHashFor(document)`. Prepare each document before laying it out; its fingerprint remains valid when another document prepares or exports with the same kernel. `prepareFonts(document)` prepares only fonts, and `fontFingerprint(document)` asynchronously fingerprints an already loaded profile. A new combination of fonts requires preparation even if those font files were loaded for other documents. Host scene caches must compare against the document-specific fingerprint.

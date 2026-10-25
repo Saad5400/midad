@@ -80,12 +80,18 @@ export class NativeNavigation {
         this.blocks = collect(document.root, []);
         this.rows = this.blocks.flatMap((block) => {
             const rows = (placements.get(block.id) ?? [])
-                .sort((a, b) => a.placement.originalTop - b.placement.originalTop)
+                .sort(
+                    (a, b) =>
+                        (a.placement.fragmentFrom ?? 0) - (b.placement.fragmentFrom ?? 0) ||
+                        a.placement.originalTop - b.placement.originalTop,
+                )
                 .map(({ placement, pageIndex }) => {
                     const first = placement.shaped.sources[0];
                     return {
                         blockId: block.id,
-                        prefix: first?.nodeId === block.id && !first.editable ? first.to : 0,
+                        prefix:
+                            (first?.nodeId === block.id && !first.editable ? first.to : 0) -
+                            (placement.fragmentFrom ?? 0),
                         placement,
                         pageIndex,
                         line: placement.shaped.lines.find((line) => line.top === placement.originalTop)!,
@@ -99,11 +105,15 @@ export class NativeNavigation {
     row(target: TextCaret, affinity: CaretAffinity = 'downstream'): NavigationRow | undefined {
         const rows = this.byBlock.get(target.blockId);
         if (!rows?.length) return;
-        const position = target.offset + rows[0].prefix;
-        const start = rows.findIndex((row) => row.line.start === position);
-        if (affinity === 'upstream' && target.offset && start > 0 && rows[start - 1].line.end === position)
+        const start = rows.findIndex((row) => row.line.start - row.prefix === target.offset);
+        if (
+            affinity === 'upstream' &&
+            target.offset &&
+            start > 0 &&
+            rows[start - 1].line.end - rows[start - 1].prefix === target.offset
+        )
             return rows[start - 1];
-        return rows.find((row) => position < row.line.endWithBreak) ?? rows.at(-1);
+        return rows.find((row) => target.offset < row.line.endWithBreak - row.prefix) ?? rows.at(-1);
     }
 
     lineStops(row: NavigationRow): readonly CaretStop[] {
@@ -188,8 +198,9 @@ export class NativeNavigation {
         let offset: number;
         if (word) offset = wordBoundary(text, target.offset, forward ? 1 : -1);
         else {
-            const parts = graphemeRanges(current.row.placement.shaped),
-                position = target.offset + current.row.prefix;
+            const first = this.byBlock.get(target.blockId)![0];
+            const parts = graphemeRanges(first.placement.shaped),
+                position = target.offset + first.prefix;
             let low = 0,
                 high = parts.length;
             while (low < high) {
@@ -199,9 +210,7 @@ export class NativeNavigation {
             }
             const part = parts[forward ? low : low - 1];
             offset =
-                part && part.index >= current.row.prefix
-                    ? (forward ? part.end : part.index) - current.row.prefix
-                    : target.offset;
+                part && part.index >= first.prefix ? (forward ? part.end : part.index) - first.prefix : target.offset;
         }
         if (offset !== target.offset)
             return {

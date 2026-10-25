@@ -2,6 +2,7 @@ import { point } from '../typography/metrics.js';
 import type { PaintCommand, SceneCell, SceneColumn, SceneLine, SceneTableRow } from './scene.js';
 
 export interface Band {
+    completedNodes?: readonly string[];
     height: number;
     commands: PaintCommand[];
     lines: SceneLine[];

@@ -145,26 +145,32 @@ describe('independent physical page settings', () => {
     });
 });
 
-it('merges separate page settings and undo preserves a peer page configuration', () => {
-    const a = SharedNativeDocument.create(importDocument({ type: 'doc' }, 'shared-pages'));
-    const b = SharedNativeDocument.fromState(a.state(), a.document().id);
-    try {
-        a.publish(setPageLayout(a.document(), 2, { orientation: 'landscape', size: 'letter' }));
-        b.publish(setPageLayout(b.document(), 3, { background: { color: '#fafafa' }, footer: false }));
-        a.receive(b.state(a.vector()));
-        b.receive(a.state(b.vector()));
-        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
-        expect(pageLayoutForPage(a.document(), 2).orientation).toBe('landscape');
-        expect(pageLayoutForPage(a.document(), 3).footer).toBe(false);
-        a.undo();
-        b.receive(a.state(b.vector()));
-        expect(pageLayoutOverride(a.document(), 2)).toBeUndefined();
-        expect(pageLayoutForPage(a.document(), 3).footer).toBe(false);
-        expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
-        a.redo();
-        expect(pageLayoutForPage(a.document(), 2).orientation).toBe('landscape');
-    } finally {
-        a.destroy();
-        b.destroy();
-    }
-});
+it.each([false, true])(
+    'merges separate page settings and undo preserves a peer page configuration (reverse IDs: %s)',
+    (reverse) => {
+        const a = SharedNativeDocument.create(importDocument({ type: 'doc' }, 'shared-pages'));
+        const b = SharedNativeDocument.fromState(a.state(), a.document().id);
+        const client = a.ydoc.clientID;
+        a.ydoc.clientID = (client + (reverse ? 2 : 1)) >>> 0;
+        b.ydoc.clientID = (client + (reverse ? 1 : 2)) >>> 0;
+        try {
+            a.publish(setPageLayout(a.document(), 2, { orientation: 'landscape', size: 'letter' }));
+            b.publish(setPageLayout(b.document(), 3, { background: { color: '#fafafa' }, footer: false }));
+            a.receive(b.state(a.vector()));
+            b.receive(a.state(b.vector()));
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            expect(pageLayoutForPage(a.document(), 2).orientation).toBe('landscape');
+            expect(pageLayoutForPage(a.document(), 3).footer).toBe(false);
+            a.undo();
+            b.receive(a.state(b.vector()));
+            expect(pageLayoutOverride(a.document(), 2)).toBeUndefined();
+            expect(pageLayoutForPage(a.document(), 3).footer).toBe(false);
+            expect(exportDocument(a.document())).toEqual(exportDocument(b.document()));
+            a.redo();
+            expect(pageLayoutForPage(a.document(), 2).orientation).toBe('landscape');
+        } finally {
+            a.destroy();
+            b.destroy();
+        }
+    },
+);

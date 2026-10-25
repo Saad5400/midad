@@ -91,6 +91,9 @@ export interface ClipEndCommand {
 }
 
 export interface SceneLine {
+    readonly fragmentFrom?: number;
+    readonly fragmentByteFrom?: number;
+    readonly sourceNodeOffsets?: ReadonlyMap<string, number>;
     readonly paragraphId: string;
     readonly textNodeId: string;
     readonly left?: number;
@@ -232,9 +235,12 @@ export function hitTest(
     const prefix = first?.nodeId === line.paragraphId && !first.editable ? first.to : 0;
     return {
         nodeId: source?.nodeId ?? line.paragraphId,
-        offset: source ? Math.max(0, Math.min(bounded - source.from, source.to - source.from)) : 0,
+        offset: source
+            ? Math.max(0, Math.min(bounded - source.from, source.to - source.from)) +
+              (line.sourceNodeOffsets?.get(source.nodeId) ?? 0)
+            : 0,
         blockId: line.paragraphId,
-        blockOffset: Math.max(0, bounded - prefix),
+        blockOffset: Math.max(0, bounded - prefix + (line.fragmentFrom ?? 0)),
         affinity: position.affinity,
     };
 }

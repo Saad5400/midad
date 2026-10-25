@@ -75,6 +75,9 @@ export class SharedNativeDocument {
                     this.store.seeding = false;
                 }, SEED);
                 this.view = this.read(document.revision);
+                this.ydoc.transact(() => {
+                    if (this.writer.seedPlaceholders(this.view)) this.view = this.read(document.revision);
+                }, SEED);
             }
         } catch (error) {
             this.destroy();

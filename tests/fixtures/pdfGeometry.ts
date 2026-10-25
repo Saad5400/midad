@@ -3,6 +3,7 @@ import type { DocumentScene, GlyphCommand } from '@saad5400/midad/layout';
 import { writeScenePdf } from '@saad5400/midad/pdf';
 import type { NativeTextKernel } from '@saad5400/midad/rendering';
 import { paintPage } from '@saad5400/midad/rendering';
+import { deepStrictEqual } from 'node:assert';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -22,6 +23,30 @@ import { compareScenePdfRaster, glyphRegions } from './pdfRaster';
 type GlyphPlacement =
     | { kind: 'glyph'; glyph: number; x: number; y: number; skew: number; color: number[] }
     | { kind: 'path'; x: number; y: number; color: number[] };
+const fontMetrics = new WeakMap<PDFDict, { map?: Uint8Array; widths: ReadonlyMap<number, number> }>();
+function pdfFontMetrics(font: PDFDict): { map?: Uint8Array; widths: ReadonlyMap<number, number> } {
+    const cached = fontMetrics.get(font);
+    if (cached) return cached;
+    const descendant = font.lookup(PDFName.of('DescendantFonts'), PDFArray).lookup(0, PDFDict);
+    const encoding = descendant.lookup(PDFName.of('CIDToGIDMap'));
+    const map = encoding instanceof PDFRawStream ? decodePDFRawStream(encoding).decode() : undefined;
+    const widths = new Map<number, number>();
+    const table = descendant.lookup(PDFName.of('W'), PDFArray);
+    for (let index = 0; index < table.size(); ) {
+        const first = table.lookup(index++, PDFNumber).asNumber();
+        const next = table.lookup(index++);
+        if (next instanceof PDFArray)
+            for (let at = 0; at < next.size(); at++) widths.set(first + at, next.lookup(at, PDFNumber).asNumber());
+        else {
+            if (!(next instanceof PDFNumber)) throw new Error('Invalid PDF width table');
+            const width = table.lookup(index++, PDFNumber).asNumber();
+            for (let code = first; code <= next.asNumber(); code++) widths.set(code, width);
+        }
+    }
+    const result = { map, widths };
+    fontMetrics.set(font, result);
+    return result;
+}
 function renderedGlyphs(pdf: PDFDocument, page: PDFPage): GlyphPlacement[] {
     const streams = page.node.Contents() as PDFArray;
     let instructions = '';
@@ -38,7 +63,7 @@ function renderedGlyphs(pdf: PDFDocument, page: PDFPage): GlyphPlacement[] {
         lineX = 0,
         lineY = 0,
         skew = 0;
-    const widths = new Map<number, number>();
+    let widths: ReadonlyMap<number, number> = new Map();
     let color = [0, 0, 0];
     const result: GlyphPlacement[] = [];
     for (const match of instructions.matchAll(
@@ -50,23 +75,9 @@ function renderedGlyphs(pdf: PDFDocument, page: PDFPage): GlyphPlacement[] {
         } else if (part.font) {
             const font = fonts.lookup(PDFName.of(part.font), PDFDict);
             fontSize = Number(part.size);
-            const descendant = font.lookup(PDFName.of('DescendantFonts'), PDFArray).lookup(0, PDFDict);
-            const encoding = descendant.lookup(PDFName.of('CIDToGIDMap'));
-            map = encoding instanceof PDFRawStream ? decodePDFRawStream(encoding).decode() : undefined;
-            widths.clear();
-            const table = descendant.lookup(PDFName.of('W'), PDFArray);
-            for (let index = 0; index < table.size(); ) {
-                const first = table.lookup(index++, PDFNumber).asNumber();
-                const next = table.lookup(index++);
-                if (next instanceof PDFArray)
-                    for (let at = 0; at < next.size(); at++)
-                        widths.set(first + at, next.lookup(at, PDFNumber).asNumber());
-                else {
-                    if (!(next instanceof PDFNumber)) throw new Error('Invalid PDF width table');
-                    const width = table.lookup(index++, PDFNumber).asNumber();
-                    for (let code = first; code <= next.asNumber(); code++) widths.set(code, width);
-                }
-            }
+            const metrics = pdfFontMetrics(font);
+            map = metrics.map;
+            widths = metrics.widths;
         } else if (part.pathX !== undefined) {
             result.push({ kind: 'path', x: Number(part.pathX), y: Number(part.pathY), color: [...color] });
         } else if (part.begin) {
@@ -110,6 +121,7 @@ export async function verifyScenePdf(
         objectsPerTick: 100000,
     });
     const exportMs = performance.now() - started;
+    if (process.env.NATIVE_PERF_PROFILE === '1') console.log(JSON.stringify({ workload: name, exportMs }));
     expect(exportMs).toBeLessThan(5000);
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBe(scene.pages.length);
@@ -137,7 +149,11 @@ export async function verifyScenePdf(
                               },
                 ),
             );
-        expect(renderedGlyphs(pdf, pdf.getPage(index))).toEqual(expected);
+        deepStrictEqual(
+            renderedGlyphs(pdf, pdf.getPage(index)),
+            expected,
+            `${name}: page ${index + 1} glyph placements`,
+        );
     }
     if (process.env.NATIVE_PDF_RASTER === '1') {
         const comparison = await compareScenePdfRaster(scene, kernel, bytes, name);

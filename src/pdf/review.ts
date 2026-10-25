@@ -87,7 +87,8 @@ export function sceneReviewMap(document: NativeDocument, scene: DocumentScene): 
                 shapedLines.set(line.shaped, starts);
             }
             const start = starts.get(line.originalTop);
-            if (start !== undefined) lineIndex.set(JSON.stringify(['paragraph', line.paragraphId, start]), line);
+            if (start !== undefined)
+                lineIndex.set(JSON.stringify(['paragraph', line.paragraphId, start + (line.fragmentFrom ?? 0)]), line);
         }
         type Rectangle = { x: number; y: number; width: number; height: number };
         const intersect = (a: Rectangle, b: Rectangle): Rectangle => ({
@@ -126,12 +127,16 @@ export function sceneReviewMap(document: NativeDocument, scene: DocumentScene): 
             const first = line.shaped.sources[0];
             const prefix = first?.nodeId === block.id && !first.editable ? first.to : 0;
             const byteToUtf16 = textIndex(line.shaped).offsets;
+            const fragment = line.fragmentFrom ?? 0;
+            const byteFrom =
+                line.fragmentByteFrom ??
+                (fragment ? new TextEncoder().encode(block.text.slice(0, fragment)).length : 0);
             entries.sort((a, b) => compareReading(a.part.order, b.part.order));
             const ranges = entries.map(({ part, clip }) => {
-                const offset = byteToUtf16[part.order[0]];
+                const offset = byteToUtf16[part.order[0] - byteFrom];
                 if (offset === undefined || offset === INVALID_TEXT_OFFSET)
                     throw new Error('Invalid PDF review text offset');
-                const from = Math.max(0, offset - prefix);
+                const from = Math.max(0, offset - prefix + fragment);
                 if (offset < prefix) return { from: 0, to: 0 };
                 const atomic = part.order.length > 1;
                 let to = Math.min(block.text.length, from + 1);

@@ -150,3 +150,18 @@ it.each(['cover', 'contain', 'stretch'] as const)(
         expect(pdf.getPage(0).node.Resources()?.toString()).toContain('/XObject');
     },
 );
+
+it('keeps custom paper dimensions within the supported PDF page limit', async () => {
+    const document = setDocumentPageLayout(
+        importDocument(
+            { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Custom paper' }] }] },
+            'large-paper',
+        ),
+        { orientation: 'landscape', size: { width: 3000, height: 1000 }, margins: MARGIN_PRESETS.normal },
+    );
+    await kernel.prepare(document);
+    const scene = layoutDocument(document, kernel);
+    expect(scene.pages[0]).toMatchObject({ width: 3000, height: 1000 });
+    const pdf = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
+    expect(pdf.getPage(0).getSize()).toEqual({ width: 3000, height: 1000 });
+});

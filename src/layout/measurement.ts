@@ -1,5 +1,6 @@
 import { rejectedClause } from '../content/clauses/numbering.js';
 import type { NativeNode } from '../document/model.js';
+import { isTextBlock } from '../document/text.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
 import { DEFAULT_TEXT_STYLE, numericAttribute } from '../typography/style.js';
@@ -44,6 +45,7 @@ export function measureBlocks(
     }
     const cache = state.nodes;
     return nodes.flatMap((node) => {
+        if (parent.completed?.has(node.id)) return [];
         const scoped = scope(node, parent);
         const key = JSON.stringify([
             width,
@@ -51,8 +53,11 @@ export function measureBlocks(
             parent.fontHash,
             parent.availableHeight,
             parent.tableDepth ?? 0,
+            parent.fragments?.get(node.id)?.from ?? 0,
+            Boolean(parent.completed),
         ]);
-        const previous = cache.get(node);
+        const cacheable = !parent.completed || isTextBlock(node);
+        const previous = cacheable ? cache.get(node) : undefined;
         if (
             previous?.key === key &&
             [...previous.paragraphs].every((shaped) => !shaped.paragraph.isDeleted()) &&
@@ -68,17 +73,20 @@ export function measureBlocks(
             measured: new Set([node]),
         };
         const bands = measureBlock(node, width, ctx);
-        cache.set(node, {
-            key,
-            bands,
-            paragraphs: ctx.used,
-            numbers: new Map(
-                [...ctx.measured]
-                    .filter((node) => node.kind === 'clause')
-                    .map((node) => [node.id, parent.numbers.get(node.id)]),
-            ),
-            nodes: ctx.measured,
-        });
+        if (node.kind === 'horizontalRule' && bands.length)
+            bands[bands.length - 1] = { ...bands.at(-1)!, completedNodes: [node.id] };
+        if (cacheable)
+            cache.set(node, {
+                key,
+                bands,
+                paragraphs: ctx.used,
+                numbers: new Map(
+                    [...ctx.measured]
+                        .filter((node) => node.kind === 'clause')
+                        .map((node) => [node.id, parent.numbers.get(node.id)]),
+                ),
+                nodes: ctx.measured,
+            });
         for (const shaped of ctx.used) parent.used.add(shaped);
         for (const measured of ctx.measured) parent.measured.add(measured);
         return bands;
@@ -136,6 +144,10 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
         for (const item of node.children ?? []) {
             const children = [...(item.children ?? [])];
             const first = children.shift();
+            if (first && ctx.listStarts && ctx.listStarts.get(item.id) !== first.id) {
+                output.push(...measureBlocks([first, ...children], width - 18, ctx).map((band) => shiftBand(band, 9)));
+                continue;
+            }
             if (first && ['paragraph', 'heading', 'codeBlock'].includes(first.kind))
                 output.push(
                     ...glyphBands(
@@ -143,7 +155,7 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
                         width - 18,
                         ctx,
                         DEFAULT_TEXT_STYLE,
-                        node.kind === 'orderedList' ? `${index++}. ` : '• ',
+                        node.kind === 'orderedList' ? `${ctx.listNumbers?.get(item.id) ?? index++}. ` : '• ',
                     ).map((band) => shiftBand(band, 9)),
                 );
             else if (first) output.push(...measureBlocks([first], width - 18, ctx));
