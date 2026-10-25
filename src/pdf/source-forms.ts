@@ -1,4 +1,21 @@
-import { PDFBool, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
+import { PDFBool, PDFDict, PDFDocument, PDFName, PDFStream } from 'pdf-lib';
+
+export function sourceFormsNeedPreparation(source: PDFDocument): boolean {
+    const form = source.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
+    if (!form) return false;
+    if (form.lookupMaybe(PDFName.of('NeedAppearances'), PDFBool) === PDFBool.True) return true;
+    return source
+        .getForm()
+        .getFields()
+        .some((field) => {
+            const type = source.context.lookup(field.acroField.getInheritableAttribute(PDFName.of('FT')));
+            if (!['/Tx', '/Ch'].includes(type?.toString() ?? '')) return false;
+            return field.acroField.getWidgets().some((widget) => {
+                const appearance = widget.dict.lookupMaybe(PDFName.of('AP'), PDFDict);
+                return !(source.context.lookup(appearance?.get(PDFName.of('N'))) instanceof PDFStream);
+            });
+        });
+}
 
 export function assertSourceFormFields(source: PDFDocument, ids: readonly string[]): void {
     const native = new Set(ids);
@@ -11,7 +28,6 @@ export function assertSourceFormFields(source: PDFDocument, ids: readonly string
         if (native.has(name)) throw new Error('A native field conflicts with a source PDF field');
         names.add(name);
     }
-    const form = source.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
-    if (ids.length && fields.length && form?.lookupMaybe(PDFName.of('NeedAppearances'), PDFBool) === PDFBool.True)
+    if (ids.length && fields.length && sourceFormsNeedPreparation(source))
         throw new Error('Resolve source form appearances before native field export');
 }

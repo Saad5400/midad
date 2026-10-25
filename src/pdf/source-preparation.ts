@@ -10,6 +10,7 @@ import {
     type PDFField,
     type PDFObject,
 } from 'pdf-lib';
+import { sourceFormsNeedPreparation } from './source-forms.js';
 import { sourcePageViewports } from './source-pages.js';
 
 export interface SourceFormAnnotation {
@@ -50,8 +51,8 @@ function fieldValue(field: PDFField): unknown {
 
 export async function preparePdfSourceForms(original: Uint8Array, open: SourceFormOpener): Promise<Uint8Array> {
     const source = await PDFDocument.load(new Uint8Array(original), { updateMetadata: false });
-    const form = source.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
-    if (form?.lookupMaybe(PDFName.of('NeedAppearances'), PDFBool) !== PDFBool.True) return original;
+    if (!sourceFormsNeedPreparation(source)) return original;
+    const form = source.catalog.lookup(PDFName.of('AcroForm'), PDFDict);
     const fields = source.getForm().getFields();
     const before = new Map(
         fields.map((field) => [field.getName(), { value: fieldValue(field), flags: field.acroField.getFlags() }]),
@@ -74,11 +75,7 @@ export async function preparePdfSourceForms(original: Uint8Array, open: SourceFo
         }
         const bytes = await reader.saveDocument();
         const prepared = await PDFDocument.load(new Uint8Array(bytes), { updateMetadata: false });
-        if (
-            prepared.catalog
-                .lookupMaybe(PDFName.of('AcroForm'), PDFDict)
-                ?.lookupMaybe(PDFName.of('NeedAppearances'), PDFBool) === PDFBool.True
-        )
+        if (sourceFormsNeedPreparation(prepared))
             throw new Error('The source form contains values whose appearances could not be prepared');
         const fields = prepared.getForm().getFields();
         if (

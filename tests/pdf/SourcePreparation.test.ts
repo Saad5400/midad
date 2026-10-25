@@ -130,3 +130,36 @@ it('disposes the reader and refuses a preparation that changes canonical values'
     ).rejects.toThrow('values changed');
     expect(destroy).toHaveBeenCalledOnce();
 });
+
+it.each([
+    [undefined, 'AP'],
+    [false, 'AP'],
+    [undefined, 'N'],
+    [false, 'N'],
+])('prepares missing source widget %s/%s appearances', async (flag, missing) => {
+    const pdf = await PDFDocument.load(await source());
+    const form = pdf.catalog.lookup(PDFName.of('AcroForm'), PDFDict);
+    if (flag === undefined) form.delete(PDFName.of('NeedAppearances'));
+    else form.set(PDFName.of('NeedAppearances'), PDFBool.False);
+    for (const name of ['name', 'choice', 'multi'])
+        for (const widget of pdf.getForm().getField(name).acroField.getWidgets()) {
+            if (missing === 'AP') widget.dict.delete(PDFName.of('AP'));
+            else widget.dict.lookup(PDFName.of('AP'), PDFDict).delete(PDFName.of('N'));
+        }
+    const original = await pdf.save({ updateFieldAppearances: false });
+    await expect(pdfSourcePages(original, ['overlay-field'])).rejects.toThrow('Resolve source form appearances');
+    const open = vi.fn((data: Uint8Array) => getDocument({ data, ...options }).promise);
+    const prepared = await preparePdfSourceForms(original, open);
+    expect(open).toHaveBeenCalledOnce();
+    const result = await PDFDocument.load(prepared);
+    for (const name of ['name', 'choice', 'multi'])
+        for (const widget of result.getForm().getField(name).acroField.getWidgets())
+            expect(widget.getAppearances()?.normal).toBeDefined();
+    expect(result.getForm().getTextField('name').getText()).toBe('Current actual value');
+    expect(result.getForm().getDropdown('choice').getSelected()).toEqual(['Beta']);
+    expect(result.getForm().getOptionList('multi').getSelected()).toEqual(['One', 'Three']);
+    expect(await pdfSourcePages(prepared, ['overlay-field'])).toEqual(await pdfSourcePages(original));
+    const noReader = vi.fn();
+    expect(await preparePdfSourceForms(prepared, noReader)).toBe(prepared);
+    expect(noReader).not.toHaveBeenCalled();
+});
