@@ -18,22 +18,25 @@ import {
     tableGrid,
     tableRectangle,
     type GridCell,
-    type GridRow,
     type TableCellSelection,
     type TableGrid,
 } from './table-grid.js';
+import { applyTableCommand, blankCell, cellCaret, rebuild, type TableCommand } from './table-structure.js';
+export {
+    canMoveTableAxis,
+    deleteTableById,
+    setTableAttributes,
+    setTableCellAttributes,
+    tableAxisCommand,
+    tableAxisRange,
+    tableAxisSelection,
+    type TableAxis,
+    type TableAxisCommand,
+} from './table-axis.js';
 export { tableGrid } from './table-grid.js';
 export { setTableRowHeight } from './table-rows.js';
+export type { TableCommand } from './table-structure.js';
 
-export type TableCommand =
-    | 'rowBefore'
-    | 'rowAfter'
-    | 'deleteRow'
-    | 'columnBefore'
-    | 'columnAfter'
-    | 'deleteColumn'
-    | 'deleteTable'
-    | 'headerRow';
 const withChildren = (node: NativeNode, children: readonly NativeNode[]): NativeNode =>
     Object.freeze({ ...node, children: Object.freeze(children) });
 
@@ -47,92 +50,6 @@ export function tableContext(
     const grid = tableGrid(table),
         cell = grid.cells.find((cell) => path.includes(cell.node));
     return cell ? { grid, cell } : undefined;
-}
-
-function canonicalCell(cell: GridCell): NativeNode {
-    const attributes: Attributes = Object.freeze({
-        ...Object.fromEntries(
-            Object.entries(cell.node.attributes ?? {}).filter(
-                ([key]) => !['rmMergeOrigin', 'rmMergedTo', 'rmHideMode', 'rmColspan', 'rmRowspan'].includes(key),
-            ),
-        ),
-        colspan: cell.colspan,
-        rowspan: cell.rowspan,
-    });
-    return Object.freeze({ ...cell.node, attributes });
-}
-
-function rebuild(
-    grid: TableGrid,
-    rows: readonly GridRow[],
-    cells: readonly GridCell[],
-    columnSize?: string,
-): NativeNode {
-    const built = rows.map((row, index) => ({
-        ...row,
-        node: withChildren(
-            row.node,
-            cells
-                .filter((cell) => cell.row === index)
-                .sort((a, b) => a.column - b.column)
-                .map(canonicalCell),
-        ),
-    }));
-    const groups = new Map(
-        (grid.table.children ?? []).filter((node) => node.kind === 'tableRowGroup').map((node) => [node.id, node]),
-    );
-    const emitted = new Set<string>(),
-        children: NativeNode[] = [];
-    for (const row of built) {
-        const group = groups.get(row.parentId);
-        if (!group) children.push(row.node);
-        else if (!emitted.has(group.id)) {
-            emitted.add(group.id);
-            children.push(
-                withChildren(
-                    group,
-                    built.filter((candidate) => candidate.parentId === group.id).map((candidate) => candidate.node),
-                ),
-            );
-        }
-    }
-    return Object.freeze({
-        ...grid.table,
-        ...(columnSize === undefined ? {} : { attributes: Object.freeze({ ...grid.table.attributes, columnSize }) }),
-        children: Object.freeze(children),
-    });
-}
-
-function blankCell(nextId: () => string, template?: NativeNode, header = false): NativeNode {
-    const source = template ? textBlocks(template)[0] : undefined;
-    const paragraph = identity(
-        {
-            id: '',
-            kind: 'paragraph',
-            ...(source?.attributes ? { attributes: source.attributes } : {}),
-            children: Object.freeze([]),
-        },
-        nextId(),
-    );
-    const attributes = Object.freeze(
-        Object.fromEntries(
-            Object.entries(template?.attributes ?? {}).filter(
-                ([key]) => !['id', 'colspan', 'rowspan', 'colwidth'].includes(key) && !key.startsWith('rm'),
-            ),
-        ),
-    );
-    return Object.freeze({
-        id: nextId(),
-        kind: header ? 'tableHeader' : 'tableCell',
-        attributes,
-        children: Object.freeze([paragraph]),
-    });
-}
-
-function cellCaret(cell: NativeNode): TextCaret {
-    const block = textBlocks(cell)[0];
-    if (!block) throw new Error('The table cell has no editable paragraph');
-    return { blockId: block.id, offset: 0 };
 }
 
 export function insertTable(
@@ -194,135 +111,7 @@ export function insertTable(
 
 export function tableCommand(document: NativeDocument, blockId: string, command: TableCommand): StructureResult | null {
     const context = tableContext(document, blockId);
-    if (!context) return null;
-    const { grid, cell } = context,
-        nextId = allocator(document);
-    if (
-        command === 'deleteTable' ||
-        (command === 'deleteRow' && grid.rows.length === 1) ||
-        (command === 'deleteColumn' && grid.columns === 1)
-    ) {
-        const paragraph = identity(
-            {
-                id: '',
-                kind: 'paragraph',
-                attributes: Object.freeze({ dir: grid.table.attributes?.dir ?? 'rtl' }),
-                children: Object.freeze([]),
-            },
-            nextId(),
-        );
-        return { document: update(document, grid.table, [paragraph]), caret: { blockId: paragraph.id, offset: 0 } };
-    }
-    const rows = [...grid.rows],
-        cells = grid.cells.map((cell) => ({ ...cell }));
-    let targetRow = cell.row,
-        targetColumn = cell.column;
-    const weights = columnWeights(grid);
-    if (command === 'rowBefore' || command === 'rowAfter') {
-        const at = command === 'rowBefore' ? cell.row : cell.row + cell.rowspan;
-        targetRow = at;
-        rows.splice(at, 0, {
-            node: identity(withChildren(grid.rows[cell.row].node, []), nextId()),
-            parentId: grid.rows[cell.row].parentId,
-        });
-        for (const entry of cells) {
-            if (entry.row < at && entry.row + entry.rowspan > at) entry.rowspan++;
-            else if (entry.row >= at) entry.row++;
-        }
-        for (let column = 0; column < grid.columns; column++) {
-            if (
-                cells.some(
-                    (entry) =>
-                        entry.row <= at &&
-                        entry.row + entry.rowspan > at &&
-                        entry.column <= column &&
-                        entry.column + entry.colspan > column,
-                )
-            )
-                continue;
-            const template = grid.cells.find(
-                (entry) =>
-                    entry.row <= cell.row &&
-                    entry.row + entry.rowspan > cell.row &&
-                    entry.column <= column &&
-                    entry.column + entry.colspan > column,
-            )?.node;
-            cells.push({
-                node: blankCell(nextId, template, command === 'rowBefore' && template?.kind === 'tableHeader'),
-                row: at,
-                column,
-                rowspan: 1,
-                colspan: 1,
-            });
-        }
-    } else if (command === 'deleteRow') {
-        rows.splice(cell.row, 1);
-        for (let index = cells.length - 1; index >= 0; index--) {
-            const entry = cells[index];
-            if (entry.row === cell.row && entry.rowspan === 1) cells.splice(index, 1);
-            else if (entry.row <= cell.row && entry.row + entry.rowspan > cell.row) entry.rowspan--;
-            else if (entry.row > cell.row) entry.row--;
-        }
-        targetRow = Math.min(cell.row, rows.length - 1);
-    } else if (command === 'columnBefore' || command === 'columnAfter') {
-        const at = command === 'columnBefore' ? cell.column : cell.column + cell.colspan;
-        targetColumn = at;
-        weights.splice(at, 0, weights[Math.min(at, weights.length - 1)]);
-        for (const entry of cells) {
-            if (entry.column < at && entry.column + entry.colspan > at) entry.colspan++;
-            else if (entry.column >= at) entry.column++;
-        }
-        for (let row = 0; row < rows.length; row++) {
-            if (
-                cells.some(
-                    (entry) =>
-                        entry.column <= at &&
-                        entry.column + entry.colspan > at &&
-                        entry.row <= row &&
-                        entry.row + entry.rowspan > row,
-                )
-            )
-                continue;
-            const template = grid.cells.find(
-                (entry) =>
-                    entry.row <= row &&
-                    entry.row + entry.rowspan > row &&
-                    entry.column <= cell.column &&
-                    entry.column + entry.colspan > cell.column,
-            )?.node;
-            cells.push({
-                node: blankCell(nextId, template, template?.kind === 'tableHeader'),
-                row,
-                column: at,
-                rowspan: 1,
-                colspan: 1,
-            });
-        }
-    } else if (command === 'deleteColumn') {
-        weights.splice(cell.column, 1);
-        for (let index = cells.length - 1; index >= 0; index--) {
-            const entry = cells[index];
-            if (entry.column === cell.column && entry.colspan === 1) cells.splice(index, 1);
-            else if (entry.column <= cell.column && entry.column + entry.colspan > cell.column) entry.colspan--;
-            else if (entry.column > cell.column) entry.column--;
-        }
-        targetColumn = Math.min(cell.column, weights.length - 1);
-    } else if (command === 'headerRow') {
-        const entries = cells.filter((entry) => entry.row === cell.row);
-        const header = entries.some((entry) => entry.node.kind !== 'tableHeader');
-        for (const entry of entries)
-            entry.node = Object.freeze({ ...entry.node, kind: header ? 'tableHeader' : 'tableCell' });
-    }
-    const next = rebuild(grid, rows, cells, weights.join(','));
-    const target =
-        cells.find(
-            (entry) =>
-                entry.row <= targetRow &&
-                entry.row + entry.rowspan > targetRow &&
-                entry.column <= targetColumn &&
-                entry.column + entry.colspan > targetColumn,
-        ) ?? cells[0];
-    return { document: update(document, grid.table, [next]), caret: cellCaret(target.node) };
+    return context ? applyTableCommand(document, context.grid, context.cell, command) : null;
 }
 
 export function tabTable(document: NativeDocument, blockId: string, backward: boolean): StructureResult | null {
@@ -333,7 +122,8 @@ export function tabTable(document: NativeDocument, blockId: string, backward: bo
     const target = grid.cells[index + (backward ? -1 : 1)];
     if (target) return { document, caret: cellCaret(target.node) };
     if (!backward) {
-        const result = tableCommand(document, blockId, 'rowAfter')!;
+        const result = tableCommand(document, blockId, 'rowAfter');
+        if (!result) return { document, caret: cellCaret(cell.node) };
         const next = tableContext(result.document, result.caret.blockId)!;
         const first = next.grid.cells.find(
             (entry) => entry.row <= next.cell.row && entry.row + entry.rowspan > next.cell.row && entry.column === 0,
@@ -345,7 +135,7 @@ export function tabTable(document: NativeDocument, blockId: string, backward: bo
 
 export function mergeTableCells(document: NativeDocument, selection: TableCellSelection): StructureResult | null {
     const rectangle = tableRectangle(document, selection);
-    if (!rectangle || rectangle.cells.length < 2) return null;
+    if (!rectangle || rectangle.cells.length < 2 || rectangle.grid.table.attributes?.locked === true) return null;
     const { grid, cells, top, left, bottom, right } = rectangle;
     const origin = cells.find((cell) => cell.row === top && cell.column === left)!;
     const meaningful = cells.flatMap((cell) =>
@@ -365,7 +155,12 @@ export function mergeTableCells(document: NativeDocument, selection: TableCellSe
 
 export function splitTableCell(document: NativeDocument, cellId: string): StructureResult | null {
     const context = tableContext(document, cellId);
-    if (!context || (context.cell.rowspan === 1 && context.cell.colspan === 1)) return null;
+    if (
+        !context ||
+        context.grid.table.attributes?.locked === true ||
+        (context.cell.rowspan === 1 && context.cell.colspan === 1)
+    )
+        return null;
     const { grid, cell } = context,
         nextId = allocator(document);
     const cells = grid.cells.filter((entry) => entry !== cell);
@@ -399,6 +194,7 @@ export function resizeTableColumns(
 ): NativeDocument {
     const table = nodePath(document, tableId).at(-1);
     if (table?.kind !== 'table') throw new Error('The table no longer exists');
+    if (table.attributes?.locked === true) throw new Error('The table structure is locked');
     const grid = tableGrid(table);
     if (
         !Number.isInteger(boundary) ||

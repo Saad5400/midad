@@ -121,6 +121,8 @@ Layout contract 3 paginates oversized merged-cell groups using the remaining phy
 
 Layout contract 4 adds table-row minimum heights through `setTableRowHeight(document, tableId, rowId, heightPx)`. Pass `null` for automatic height. Rows expand to fit their content and paginate when necessary. `ScenePage.tableRows` supplies immutable physical fragments, logical row IDs/indexes and final-fragment markers for mouse, touch and keyboard controls. HTML clipboard output retains row heights. Existing contract-3 scene goldens remain unchanged.
 
+Table UI behavior is renderer-independent. `tableControlMenu` describes action groups/states, `applyTableControlAction` produces immutable edits and caret targets, and `tableControlFrame`/`tableHandleBoxes` project controls from the paginated scene. Hosts supply labels, icons and themed components. `SurfaceFocusIntent` cancels deferred focus restoration after a newer interaction. These APIs are available through the existing browser command, view and input entrypoints and require no Vue or application services.
+
 The PDF writer reuses compatible opaque text setup and exact binary-grid text moves. Font switches retain absolute anchors for consistent raster placement. Reading dictionaries keep every source span, text value and bounding box; Unicode boundary indexes are shared between shaping and review mapping.
 
 Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.
