@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { importDocument, exportDocument } from '../../document/codec.js';
+import { exportDocument, importDocument } from '../../document/codec.js';
 import {
     copyJson,
     isRecord,
@@ -9,6 +9,7 @@ import {
     type NativeMark,
     type NativeNode,
 } from '../../document/model.js';
+import { pdfPageNumbers } from '../../document/pdf-pages.js';
 import { isTextBlock, textBlocks } from '../../document/text.js';
 import { encodeSharedBytes, nativeSharedMarks, readSharedAttributes } from '../values.js';
 import { identity, key } from './schema.js';
@@ -127,6 +128,7 @@ export function readSharedDocument(store: SharedStore, view: NativeDocument, rev
     const root = store.meta.get('root');
     if (typeof root !== 'string') throw new Error('The shared document has no root');
     const parsed = importDocument(exportDocument({ ...view, root: readSharedNode(store, view, root) }), view.id);
-    if (!textBlocks(parsed.root).length) throw new Error('The shared document has no editable text');
+    if (!textBlocks(parsed.root).length && !pdfPageNumbers(parsed))
+        throw new Error('The shared document has no editable content');
     return Object.freeze({ ...parsed, revision });
 }

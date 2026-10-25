@@ -48,6 +48,20 @@ const savedContent = exportDocument(session.document);
 
 `NativeTextKernel`, `layoutDocument`, `paintPage` and `writeScenePdf` provide shaping, pagination, canvas and PDF rendering. Asset resolvers accept application-provided font and image bytes, allowing browser and server integrations without a specific backend. Bundled asset URLs are exposed through `@saad5400/midad/typography`.
 
+For imported PDFs, derive the fixed source surface before editing overlays:
+
+```ts
+import { layoutDocumentSurface } from '@saad5400/midad/layout';
+import { createPdfOverlaySnapshot, pdfSourcePages } from '@saad5400/midad/pdf';
+
+const pages = await pdfSourcePages(originalPdfBytes);
+await kernel.prepare(document);
+const scene = layoutDocumentSurface(document, kernel, { kind: 'pdf', pages });
+const snapshot = await createPdfOverlaySnapshot(originalPdfBytes, scene, kernel, () => document, pages);
+```
+
+The surface validates the document's protected `pdfPage` sequence against source pages, including mixed sizes, cropping, rotation and PDF scaling. Existing floating field/image commands and shared-document undo/redo work without text paragraphs. Snapshots retain original content streams, font/image resources, fields and annotations, and validate overlay transforms against the actual source. They rewrite the PDF file container and do not preserve digital signatures. Custom overlay registration and complete host authoring UI remain in progress.
+
 `PdfPrintController` in `/browser/view` prints validated, complete PDF bytes through a same-origin PDF frame. Hosts supply the PDF producer, a stable identity that changes with the PDF, readiness and optional callbacks for flushing edits, busy state and errors. It rejects stale responses, coalesces preparation requests, preserves editing focus and aborts stalled preparation after five seconds. The default 60 MiB byte limit is configurable. Each request refreshes its producer by default, since server-owned appearances can change without an editor revision. The optional `reuse` predicate is only for immutable bytes whose identity covers every change. Dispose the controller when its host unmounts to release pending work and owned frame/blob resources. Browsers may retain the loaded frame until a later print request or disposal when they do not emit `afterprint`.
 
 `PrintShortcut` in `/browser/input` connects Ctrl/Cmd+P to a host callback. It chooses the focused visible editor, remembers interaction when focus moves to host controls and excludes hidden/inert editors. Its input binding is independent of PDF transport. Both controllers are framework-independent and must be disposed. Explicit print actions and keyboard handling do not override the browser's native Print menu or arbitrary `window.print()` calls; those paths and full browser/device acceptance remain in progress. A host that displays field overlays must provide the complete PDF with those overlays rather than printing only its original background.
