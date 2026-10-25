@@ -1,4 +1,5 @@
 import { PDFDocument, PDFName, PDFNumber } from 'pdf-lib';
+import { assertSourceFormFields } from './source-forms.js';
 
 export interface PdfOverlayViewport {
     readonly width: number;
@@ -10,8 +11,12 @@ export interface PdfSourcePage extends PdfOverlayViewport {
     readonly number: number;
 }
 
-export async function pdfSourcePages(bytes: Uint8Array): Promise<readonly PdfSourcePage[]> {
+export async function pdfSourcePages(
+    bytes: Uint8Array,
+    fieldIds?: readonly string[],
+): Promise<readonly PdfSourcePage[]> {
     const source = await PDFDocument.load(new Uint8Array(bytes), { updateMetadata: false });
+    if (fieldIds) assertSourceFormFields(source, fieldIds);
     return sourcePageViewports(source);
 }
 

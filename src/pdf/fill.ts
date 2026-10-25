@@ -5,6 +5,7 @@ import {
     PDFHexString,
     PDFName,
     PDFNumber,
+    PDFStream,
     PDFString,
     type PDFField,
     type PDFObject,
@@ -19,6 +20,8 @@ import { NATIVE_RENDERER_VERSION } from '../rendering/version.js';
 import { writeScenePdf } from './document.js';
 import { fieldAppearancePage } from './field-appearance.js';
 import { appendPdfRevision, loadIncrementalPdf, snapshotPdfObjects } from './incremental.js';
+import { overlayMatrix, transformRectangle } from './source-geometry.js';
+import { sourcePageViewports } from './source-pages.js';
 
 function storedValue(value: PDFObject | undefined): string {
     if (value instanceof PDFString || value instanceof PDFHexString) return value.decodeText();
@@ -46,6 +49,7 @@ export async function fillNativePdf(
     )
         throw new Error('The native PDF does not match the current document renderer');
     const before = snapshotPdfObjects(pdf);
+    const viewports = sourcePageViewports(pdf);
     const existing = new Map<string, PDFField>();
     for (const field of pdf.getForm().getFields()) {
         if (existing.has(field.getName())) throw new Error('The native PDF contains duplicate field names');
@@ -109,13 +113,14 @@ export async function fillNativePdf(
                 JSON.stringify(fieldDefinition(node.attributes))
         )
             throw new Error('The native field definition changed after the PDF was prepared');
-        const rect = widgets[0].getRectangle();
+        const pageIndex = pdf.getPages().indexOf(pages[0]);
+        const rect = transformRectangle(widgets[0].getRectangle(), viewports[pageIndex].transform);
         if (!(rect.width > 0 && rect.height > 0 && rect.width <= 3000 && rect.height <= 3000))
             throw new Error('The native field has invalid geometry');
         const locked = field.isReadOnly();
         if (locked && storedValue(field.acroField.dict.lookup(PDFName.of('V'))) !== value)
             throw new Error('An already filled native field cannot be changed');
-        return { id, node, field, value, rect, locked };
+        return { id, node, field, value, rect, locked, matrix: overlayMatrix(viewports[pageIndex]) };
     });
     const pending = targets.filter((target) => !target.locked);
     if (!pending.length) return { bytes: original, fields: ids };
@@ -133,8 +138,11 @@ export async function fillNativePdf(
     const appearances = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
     const embedded = await pdf.embedPages(appearances.getPages());
     await pdf.flush();
-    pending.forEach(({ field, value }, index) => {
+    pending.forEach(({ field, value, matrix }, index) => {
         const widget = field.acroField.getWidgets()[0];
+        const appearance = pdf.context.lookup(embedded[index].ref);
+        if (!(appearance instanceof PDFStream)) throw new Error('The native appearance is unavailable');
+        appearance.dict.set(PDFName.of('Matrix'), pdf.context.obj([...matrix.slice(0, 4), 0, 0]));
         widget.setNormalAppearance(embedded[index].ref);
         field.acroField.dict.set(PDFName.of('V'), PDFHexString.fromText(value));
         field.acroField.dict.set(PDFName.of('Ff'), PDFNumber.of(field.acroField.getFlags() | 1));
