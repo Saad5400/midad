@@ -28,6 +28,7 @@ import { NATIVE_RENDERER_VERSION } from '../rendering/version.js';
 import { chooseFont } from '../typography/fonts.js';
 import { NativePdfFont } from './font.js';
 import { PdfReadingTree } from './reading.js';
+import { PdfTextContent } from './text-content.js';
 
 export function sceneManifest(scene: DocumentScene): unknown {
     return {
@@ -117,8 +118,11 @@ export async function writeScenePdf(
     for (const source of scene.pages) {
         const page = pdf.addPage([source.width, source.height]);
         const text = reading.page(page, source.height);
-        const fontKeys = new Map(
-            [...fonts].map(([id, font]) => [id, page.node.newFontDictionary(font.embedder.fontName, font.ref)]),
+        const pageFonts = new Map(
+            [...fonts].map(([id, font]) => [
+                id,
+                { name: page.node.newFontDictionary(font.embedder.fontName, font.ref).toString(), font: font.embedder },
+            ]),
         );
         const content: string[] = [];
         const imageKeys = new Map<string, PDFName>();
@@ -137,8 +141,14 @@ export async function writeScenePdf(
             }
             return `${key} gs\n`;
         };
+        const textContent = new PdfTextContent(content, source.height, pageFonts, scalar, alpha, text.span);
         for (let commandIndex = 0; commandIndex < source.commands.length; commandIndex++) {
             const command = source.commands[commandIndex];
+            if ('glyphs' in command) {
+                textContent.append(command);
+                continue;
+            }
+            textContent.finish();
             if (command.kind === 'clipStart') {
                 content.push(
                     `q ${scalar(command.x)} ${scalar(source.height - command.y - command.height)} ${scalar(command.width)} ${scalar(command.height)} re W n`,
@@ -278,33 +288,8 @@ export async function writeScenePdf(
                 content.push(`q ${state}${ink} RG ${scalar(command.width)} w ${segments.join(' ')} S Q`);
                 continue;
             }
-            content.push(
-                `q ${state}BT ${fontKeys.get(command.fontId)} ${scalar(command.size)} Tf ${ink} rg ${ink} RG ${scalar(command.size / 35)} w 4 M ${command.fauxBold ? 2 : 0} Tr`,
-            );
-            const font = fonts.get(command.fontId)!.embedder;
-            for (let index = 0; index < command.glyphs.length; index++) {
-                const start = command.reading?.find((part) => part.from === index && part.text);
-                if (start) content.push(text.span(start));
-                const x = scalar(command.positions[index * 2]);
-                const y = scalar(source.height - command.positions[index * 2 + 1]);
-                if (!command.text[index]) {
-                    const scale = scalar(command.size / font.font.unitsPerEm);
-                    content.push(
-                        `ET q ${scale} 0 0 ${scale} ${x} ${y} cm ${scalar(font.font.unitsPerEm / 35)} w`,
-                        ...font
-                            .outline(command.glyphs[index], !!command.fauxItalic)
-                            .map((operator) => operator.toString()),
-                        `${command.fauxBold ? 'B' : 'f'} Q BT`,
-                    );
-                    if (command.reading?.some((part) => part.to === index + 1 && part.text)) content.push('EMC');
-                    continue;
-                }
-                const code = font.hexCode(command.glyphs[index], command.text[index]);
-                content.push(`1 0 ${command.fauxItalic ? 0.25 : 0} 1 ${x} ${y} Tm <${code}> Tj`);
-                if (command.reading?.some((part) => part.to === index + 1 && part.text)) content.push('EMC');
-            }
-            content.push('ET Q');
         }
+        textContent.finish();
         const commands = content.join('\n');
         const stream = options.compress
             ? pdf.context.stream(options.compress(typedArrayFor(commands)), { Filter: PDFName.of('FlateDecode') })
@@ -324,11 +309,10 @@ export async function writeScenePdf(
                 }),
             ),
         );
-    let bytes: Uint8Array;
+    if (!pdf.getPageCount()) pdf.addPage();
+    await pdf.flush();
+    const writer = PDFStreamWriter.forContext(pdf.context, options.objectsPerTick ?? 50, true, 256);
     if (options.compress) {
-        if (!pdf.getPageCount()) pdf.addPage();
-        await pdf.flush();
-        const writer = PDFStreamWriter.forContext(pdf.context, options.objectsPerTick ?? 50);
         const sizing = writer as unknown as { computeIndirectObjectSize: (entry: [PDFRef, PDFObject]) => number };
         if (typeof sizing.computeIndirectObjectSize !== 'function')
             throw new Error('Unsupported PDF compression adapter');
@@ -344,8 +328,8 @@ export async function writeScenePdf(
             }
             return size(entry);
         };
-        bytes = await writer.serializeToBuffer();
-    } else bytes = await pdf.save({ objectsPerTick: options.objectsPerTick });
+    }
+    const bytes = await writer.serializeToBuffer();
     const latest = latestDocument();
     assertSceneRevision(scene, latest, () => kernel.fontHashFor(latest));
     return bytes;

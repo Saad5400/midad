@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import { layoutDocument } from '@saad5400/midad/layout';
-import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
+import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { afterAll, beforeAll, expect, it } from 'vitest';
 import { PDFBool, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import { CORPUS_CASES, createMigrationFixture } from '../fixtures/migrationCorpus';
 import { makeNestedRichFixture } from '../fixtures/nativeDocument';
 import { verifyScenePdf } from '../fixtures/pdfGeometry';
@@ -43,6 +43,53 @@ beforeAll(async () => {
         surface.delete();
     }
 });
+
+it.each(
+    [595, 1900].flatMap((width) =>
+        [0, 0.1].flatMap((offset) => [false, true].map((italic) => ({ width, offset, italic }))),
+    ),
+)(
+    'preserves exact mixed-script glyph coordinates at $width pt, offset $offset, italic $italic',
+    async ({ width, offset, italic }) => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        attrs: { id: 'precise-text', dir: 'rtl' },
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'نَصٌّ بالعربية á office किंक्र',
+                                marks: [
+                                    { type: 'textStyle', attrs: { fontFamily: 'Amiri' } },
+                                    { type: 'bold' },
+                                    ...(italic ? [{ type: 'italic' }] : []),
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            'precise-pdf',
+        );
+        await kernel.prepare(document);
+        const scene = layoutDocument(document, kernel, width);
+        const positioned = {
+            ...scene,
+            pages: scene.pages.map((page) => ({
+                ...page,
+                commands: page.commands.map((command) =>
+                    'glyphs' in command
+                        ? { ...command, positions: command.positions.map((value) => value + offset) }
+                        : command,
+                ),
+            })),
+        };
+        await verifyScenePdf(document, positioned, kernel, 'precise-pdf');
+    },
+);
 
 it.each(['inline', 'floating', 'stamp'].flatMap((kind) => [40, 128, 200.5].map((width) => ({ kind, width }))))(
     'keeps transparent $kind image sampling consistent at $width px',

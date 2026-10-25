@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { importDocument } from '@saad5400/midad/document';
-import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { layoutDocument } from '@saad5400/midad/layout';
 import { writeScenePdf } from '@saad5400/midad/pdf';
+import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -117,49 +117,52 @@ describe('native PDF compression adapters', () => {
         expect(JSON.stringify(document)).toBe(before);
         expect(scene.revision).toBe(document.revision);
     });
-    it('keeps separate reading owners and bounds when multiple spans share the same text', async () => {
-        const document = importDocument(
-            {
-                type: 'doc',
-                attrs: { dir: 'ltr' },
-                content: ['one', 'two'].map((id) => ({
-                    type: 'paragraph',
-                    attrs: { id },
-                    content: [{ type: 'text', text: 'Repeated text' }],
-                })),
-            },
-            'reading-owners',
-        );
-        await kernel.prepare(document);
-        const scene = layoutDocument(document, kernel);
-        const pdf = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
-        const page = scene.pages[0];
-        const expected = page.commands.flatMap((command) =>
-            'glyphs' in command ? (command.reading ?? []).filter((part) => part.text) : [],
-        );
-        const spans = pdf.context
-            .enumerateIndirectObjects()
-            .filter(([, value]) => value instanceof PDFDict && value.get(PDFName.of('S'))?.toString() === '/Span')
-            .map(([ref, value]) => ({ ref, value: value as PDFDict }))
-            .sort(
-                (a, b) =>
-                    a.value.lookup(PDFName.of('K'), PDFNumber).asNumber() -
-                    b.value.lookup(PDFName.of('K'), PDFNumber).asNumber(),
+    it.each(['Repeated text', 'نَصٌّ عربي café 😀 (\\) <tag>'])(
+        'keeps separate reading owners and bounds when multiple spans share the same text (%s)',
+        async (text) => {
+            const document = importDocument(
+                {
+                    type: 'doc',
+                    attrs: { dir: 'ltr' },
+                    content: ['one', 'two'].map((id) => ({
+                        type: 'paragraph',
+                        attrs: { id },
+                        content: [{ type: 'text', text }],
+                    })),
+                },
+                'reading-owners',
             );
-        expect(spans).toHaveLength(expected.length);
-        expect(new Set(spans.map((span) => span.ref.toString())).size).toBe(expected.length);
-        expect(expected.filter((part) => part.text === 'Repeated text')).toHaveLength(2);
-        spans.forEach(({ value }, index) => {
-            const part = expected[index],
-                box = part.box;
-            expect(value.lookup(PDFName.of('ActualText'), PDFHexString).decodeText()).toBe(part.text);
-            const bounds = value.lookup(PDFName.of('A'), PDFDict).lookup(PDFName.of('BBox'), PDFArray);
-            expect(bounds.asArray().map((value) => (value as PDFNumber).asNumber())).toEqual([
-                box.x,
-                page.height - box.y - box.height,
-                box.x + box.width,
-                page.height - box.y,
-            ]);
-        });
-    });
+            await kernel.prepare(document);
+            const scene = layoutDocument(document, kernel);
+            const pdf = await PDFDocument.load(await writeScenePdf(scene, kernel, () => document));
+            const page = scene.pages[0];
+            const expected = page.commands.flatMap((command) =>
+                'glyphs' in command ? (command.reading ?? []).filter((part) => part.text) : [],
+            );
+            const spans = pdf.context
+                .enumerateIndirectObjects()
+                .filter(([, value]) => value instanceof PDFDict && value.get(PDFName.of('S'))?.toString() === '/Span')
+                .map(([ref, value]) => ({ ref, value: value as PDFDict }))
+                .sort(
+                    (a, b) =>
+                        a.value.lookup(PDFName.of('K'), PDFNumber).asNumber() -
+                        b.value.lookup(PDFName.of('K'), PDFNumber).asNumber(),
+                );
+            expect(spans).toHaveLength(expected.length);
+            expect(new Set(spans.map((span) => span.ref.toString())).size).toBe(expected.length);
+            if (text === 'Repeated text') expect(expected.filter((part) => part.text === text)).toHaveLength(2);
+            spans.forEach(({ value }, index) => {
+                const part = expected[index],
+                    box = part.box;
+                expect(value.lookup(PDFName.of('ActualText'), PDFHexString).decodeText()).toBe(part.text);
+                const bounds = value.lookup(PDFName.of('A'), PDFDict).lookup(PDFName.of('BBox'), PDFArray);
+                expect(bounds.asArray().map((value) => (value as PDFNumber).asNumber())).toEqual([
+                    box.x,
+                    page.height - box.y - box.height,
+                    box.x + box.width,
+                    page.height - box.y,
+                ]);
+            });
+        },
+    );
 });

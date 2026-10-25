@@ -1,12 +1,21 @@
 import type { NativeDocument } from '@saad5400/midad/document';
-import type { NativeTextKernel } from '@saad5400/midad/rendering';
 import type { DocumentScene, GlyphCommand } from '@saad5400/midad/layout';
-import { paintPage } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
+import type { NativeTextKernel } from '@saad5400/midad/rendering';
+import { paintPage } from '@saad5400/midad/rendering';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream, type PDFPage } from 'pdf-lib';
+import {
+    PDFArray,
+    PDFDict,
+    PDFDocument,
+    PDFName,
+    PDFNumber,
+    PDFRawStream,
+    decodePDFRawStream,
+    type PDFPage,
+} from 'pdf-lib';
 import { expect } from 'vitest';
 import { compareScenePdfRaster, glyphRegions } from './pdfRaster';
 
@@ -23,30 +32,67 @@ function renderedGlyphs(pdf: PDFDocument, page: PDFPage): GlyphPlacement[] {
     }
     const fonts = page.node.Resources()!.lookup(PDFName.of('Font'), PDFDict);
     let map: Uint8Array | undefined;
+    let fontSize = 0,
+        x = 0,
+        y = 0,
+        lineX = 0,
+        lineY = 0,
+        skew = 0;
+    const widths = new Map<number, number>();
     let color = [0, 0, 0];
     const result: GlyphPlacement[] = [];
     for (const match of instructions.matchAll(
-        /\/([^\s/]+) [\d.]+ Tf|1 0 ([\d.\-]+) 1 ([\d.\-]+) ([\d.\-]+) Tm\s*<([0-9a-f]+)> Tj|ET q [\d.\-]+ 0 0 [\d.\-]+ ([\d.\-]+) ([\d.\-]+) cm|([\d.\-]+) ([\d.\-]+) ([\d.\-]+) rg/g,
+        /\/(?<font>[^\s/]+) (?<size>[\d.]+) Tf|1 0 (?<skew>[\d.\-]+) 1 (?<x>[\d.\-]+) (?<y>[\d.\-]+) Tm|(?<dx>[\d.\-]+) (?<dy>[\d.\-]+) Td|<(?<code>[0-9a-f]+)> Tj|ET q [\d.\-]+ 0 0 [\d.\-]+ (?<pathX>[\d.\-]+) (?<pathY>[\d.\-]+) cm|(?<r>[\d.\-]+) (?<g>[\d.\-]+) (?<b>[\d.\-]+) rg|\b(?<begin>BT)\b/g,
     )) {
-        if (match[8] !== undefined) {
-            color = match.slice(8, 11).map(Number);
-        } else if (match[1]) {
-            const font = fonts.lookup(PDFName.of(match[1]), PDFDict);
+        const part = match.groups!;
+        if (part.r !== undefined) {
+            color = [part.r, part.g, part.b].map(Number);
+        } else if (part.font) {
+            const font = fonts.lookup(PDFName.of(part.font), PDFDict);
+            fontSize = Number(part.size);
             const descendant = font.lookup(PDFName.of('DescendantFonts'), PDFArray).lookup(0, PDFDict);
             const encoding = descendant.lookup(PDFName.of('CIDToGIDMap'));
             map = encoding instanceof PDFRawStream ? decodePDFRawStream(encoding).decode() : undefined;
-        } else if (match[6] !== undefined) {
-            result.push({ kind: 'path', x: Number(match[6]), y: Number(match[7]), color: [...color] });
-        } else {
-            const code = parseInt(match[5], 16);
-            result.push({
-                kind: 'glyph',
-                color: [...color],
-                glyph: map ? (map[code * 2] << 8) | map[code * 2 + 1] : code,
-                skew: Number(match[2]),
-                x: Number(match[3]),
-                y: Number(match[4]),
-            });
+            widths.clear();
+            const table = descendant.lookup(PDFName.of('W'), PDFArray);
+            for (let index = 0; index < table.size(); ) {
+                const first = table.lookup(index++, PDFNumber).asNumber();
+                const next = table.lookup(index++);
+                if (next instanceof PDFArray)
+                    for (let at = 0; at < next.size(); at++)
+                        widths.set(first + at, next.lookup(at, PDFNumber).asNumber());
+                else {
+                    if (!(next instanceof PDFNumber)) throw new Error('Invalid PDF width table');
+                    const width = table.lookup(index++, PDFNumber).asNumber();
+                    for (let code = first; code <= next.asNumber(); code++) widths.set(code, width);
+                }
+            }
+        } else if (part.pathX !== undefined) {
+            result.push({ kind: 'path', x: Number(part.pathX), y: Number(part.pathY), color: [...color] });
+        } else if (part.begin) {
+            x = y = lineX = lineY = skew = 0;
+        } else if (part.x !== undefined) {
+            x = lineX = Number(part.x);
+            y = lineY = Number(part.y);
+            skew = Number(part.skew);
+        } else if (part.dx !== undefined) {
+            lineX += Number(part.dx) + skew * Number(part.dy);
+            lineY += Number(part.dy);
+            x = lineX;
+            y = lineY;
+        } else if (part.code) {
+            for (let at = 0; at < part.code.length; at += 4) {
+                const code = parseInt(part.code.slice(at, at + 4), 16);
+                result.push({
+                    kind: 'glyph',
+                    color: [...color],
+                    glyph: map ? (map[code * 2] << 8) | map[code * 2 + 1] : code,
+                    skew,
+                    x,
+                    y,
+                });
+                x += ((widths.get(code) ?? 1000) * fontSize) / 1000;
+            }
         }
     }
     return result;
