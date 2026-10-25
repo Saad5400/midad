@@ -1,11 +1,13 @@
 import type { NativeNode } from '../document/model.js';
 import { columnWeights, tableGrid } from '../editing/table-grid.js';
+import { tableRowMinimum } from '../editing/table-rows.js';
 import { point } from '../typography/metrics.js';
 import { color, type Color } from '../typography/style.js';
 import { flowSpace, flowTracks, materializeBands, shiftBand, type Band } from './bands.js';
 import { scope, type LayoutContext, type MeasureBlocks } from './context.js';
 import { fitWidths, minimumTableColumns } from './intrinsic.js';
 import { flowingTableBand } from './table-flow.js';
+import { tableRowFragments } from './table-rows.js';
 
 interface TableCell {
     node: NativeNode;
@@ -36,7 +38,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
             true,
         ),
     }));
-    const rowHeights = grid.rows.map(() => 12);
+    const rowHeights = grid.rows.map((row) => tableRowMinimum(row.node));
     const contentHeight = (cell: (typeof cells)[number]) => cell.bands.reduce((sum, band) => sum + band.height, 0);
     for (const cell of cells)
         if (cell.rowspan === 1) rowHeights[cell.row] = Math.max(rowHeights[cell.row], contentHeight(cell) + 12);
@@ -59,6 +61,8 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
         const height = point(offsets[end] - offsets[start]);
         if (height > ctx.availableHeight) {
             if (end === start + 1) {
+                const rowId = grid.rows[start].node.id;
+                const rowIndex = start;
                 const tracks = group.map((cell) => {
                     const spare = Math.max(0, height - 12 - contentHeight(cell));
                     const alignment = cell.node.attributes?.verticalAlign;
@@ -66,11 +70,18 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                     return [flowSpace(6 + shift), ...cell.bands, flowSpace(6 + spare - shift)];
                 });
                 result.push(
-                    flowTracks(tracks, ctx.availableHeight, (tracks) => {
+                    flowTracks(tracks, ctx.availableHeight, (tracks, { last }) => {
                         const height = point(
                             Math.max(0, ...tracks.map((bands) => bands.reduce((sum, band) => sum + band.height, 0))),
                         );
-                        const band: Band = { height, commands: [], lines: [], cells: [], columns: [] };
+                        const band: Band = {
+                            height,
+                            commands: [],
+                            lines: [],
+                            cells: [],
+                            columns: [],
+                            tableRows: [{ tableId: node.id, rowId, rowIndex, x: 0, y: 0, width, height, ends: last }],
+                        };
                         for (const [index, cell] of group.entries()) {
                             const box = {
                                 x: point(rtl ? width - edges[cell.column + cell.colspan] : edges[cell.column]),
@@ -131,6 +142,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                                     ...shifted.lines.map((line) => ({ ...line, cellId: line.cellId ?? cell.node.id })),
                                 );
                                 band.cells!.push(...(shifted.cells ?? []));
+                                band.tableRows!.push(...(shifted.tableRows ?? []));
                                 band.columns!.push(...(shifted.columns ?? []));
                                 y = point(y + content.height);
                             }
@@ -148,10 +160,11 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                         width,
                         ctx,
                         group.map((cell) => ({ ...cell, row: cell.row - start })),
-                        end - start,
+                        grid.rows.slice(start, end),
                         edges,
                         minimumColumnWidths,
                         height,
+                        start,
                     ),
                 );
                 start = end;
@@ -163,7 +176,14 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
             start = end;
             continue;
         }
-        const band: Band = { height, commands: [], lines: [], cells: [], columns: [] };
+        const band: Band = {
+            height,
+            commands: [],
+            lines: [],
+            cells: [],
+            columns: [],
+            tableRows: tableRowFragments(node.id, grid.rows, offsets, offsets[start], offsets[end], width),
+        };
         for (const cell of group) {
             const box = {
                 x: point(rtl ? width - edges[cell.column + cell.colspan] : edges[cell.column]),
@@ -222,6 +242,7 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
                 band.commands.push(...shifted.commands);
                 band.lines.push(...shifted.lines.map((line) => ({ ...line, cellId: line.cellId ?? cell.node.id })));
                 band.cells!.push(...(shifted.cells ?? []));
+                band.tableRows!.push(...(shifted.tableRows ?? []));
                 band.columns!.push(...(shifted.columns ?? []));
                 y = point(y + content.height);
             }
@@ -243,7 +264,7 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
         minimum.reduce((sum, value) => sum + value, 0) <= width ? minimum : minimum.map(() => 0);
     const edges = [0];
     for (const value of fitted) edges.push(edges[edges.length - 1] + value);
-    const rowHeights = rows.map(() => 12);
+    const rowHeights = rows.map((row) => tableRowMinimum(row.node));
     for (const cell of cells) {
         cell.bands = materializeBands(
             blocks(
@@ -314,6 +335,7 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
             commands: [],
             lines: [],
             cells: [],
+            tableRows: tableRowFragments(node.id, rows, offsets, at, positions[index + 1], width),
             columns: [],
             minimumHeight: Math.max(height, ...content.map(({ band }) => band.minimumHeight ?? band.height)),
             keepNext: !breaks.has(positions[index + 1]),
@@ -388,6 +410,7 @@ function fragmentedTableBands(node: NativeNode, width: number, ctx: LayoutContex
             result.lines.push(...shifted.lines.map((line) => ({ ...line, cellId: line.cellId ?? cell.node.id })));
             result.columns!.push(...(shifted.columns ?? []));
             result.cells!.push(...(shifted.cells ?? []));
+            result.tableRows!.push(...(shifted.tableRows ?? []));
         }
         return result;
     });

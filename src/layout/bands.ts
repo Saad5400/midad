@@ -1,11 +1,12 @@
 import { point } from '../typography/metrics.js';
-import type { PaintCommand, SceneCell, SceneColumn, SceneLine } from './scene.js';
+import type { PaintCommand, SceneCell, SceneColumn, SceneLine, SceneTableRow } from './scene.js';
 
 export interface Band {
     height: number;
     commands: PaintCommand[];
     lines: SceneLine[];
     cells?: SceneCell[];
+    tableRows?: SceneTableRow[];
     columns?: SceneColumn[];
     keepNext?: boolean;
     writable?: boolean;
@@ -94,6 +95,9 @@ export function shiftBand(band: Band, x: number, y = 0): Band {
             : {}),
         commands: band.commands.map((command) => shiftCommand(command, x, y)),
         lines: band.lines.map((line) => ({ ...line, left: point((line.left ?? 0) + x), top: point(line.top + y) })),
+        ...(band.tableRows
+            ? { tableRows: band.tableRows.map((row) => ({ ...row, x: point(row.x + x), y: point(row.y + y) })) }
+            : {}),
         ...(band.columns
             ? { columns: band.columns.map((column) => ({ ...column, x: point(column.x + x), y: point(column.y + y) })) }
             : {}),
@@ -169,7 +173,7 @@ export function takeBands(
 export function flowTracks(
     tracks: readonly (readonly Band[])[],
     fullHeight: number,
-    compose: (tracks: readonly (readonly Band[])[]) => Band,
+    compose: (tracks: readonly (readonly Band[])[], state: { last: boolean }) => Band,
 ): Band {
     const height = point(Math.max(0, ...tracks.map((bands) => bands.reduce((sum, band) => sum + band.height, 0))));
     const minimumHeight = Math.min(
@@ -185,7 +189,10 @@ export function flowTracks(
             if (!parts.some((part) => part.head.length)) return;
             const last = parts.every((part) => !part.rest.length);
             return {
-                head: compose(parts.map((part) => part.head)),
+                head: compose(
+                    parts.map((part) => part.head),
+                    { last },
+                ),
                 ...(last
                     ? {}
                     : {
@@ -223,6 +230,9 @@ export function stretchBand(band: Band, height: number): Band {
     return {
         ...band,
         height,
+        tableRows: band.tableRows?.map((row) =>
+            near(row.y + row.height, band.height) ? { ...row, height: point(row.height + delta) } : row,
+        ),
         cells: band.cells?.map((cell) =>
             cells.includes(cell) ? { ...cell, height: point(cell.height + delta) } : cell,
         ),

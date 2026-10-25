@@ -1,5 +1,5 @@
 import { point } from '../typography/metrics.js';
-import type { PaintCommand, RectCommand, SceneCell, SceneColumn, ScenePage } from './scene.js';
+import type { PaintCommand, RectCommand, SceneCell, SceneColumn, ScenePage, SceneTableRow } from './scene.js';
 import { tableBorders } from './table-borders.js';
 
 export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
@@ -28,10 +28,33 @@ export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
             ),
             lines: Object.freeze(entry.lines.map((line) => Object.freeze(line))),
             cells,
+            tableRows: coalesceRows(entry.tableRows ?? []),
             columns: coalesceColumns(entry.columns ?? []),
             blocks: coalesceColumns(entry.blocks ?? []),
         });
     });
+}
+
+function coalesceRows(rows: readonly SceneTableRow[]): readonly SceneTableRow[] {
+    const result: SceneTableRow[] = [];
+    const last = new Map<string, number>();
+    for (const row of rows) {
+        const index = last.get(row.rowId);
+        const previous = index === undefined ? undefined : result[index];
+        if (
+            previous &&
+            previous.tableId === row.tableId &&
+            previous.x === row.x &&
+            previous.width === row.width &&
+            Math.abs(previous.y + previous.height - row.y) < 0.002
+        )
+            result[index!] = { ...previous, height: point(row.y + row.height - previous.y), ends: row.ends };
+        else {
+            last.set(row.rowId, result.length);
+            result.push(row);
+        }
+    }
+    return Object.freeze(result.map((row) => Object.freeze(row)));
 }
 
 function coalesceColumns(columns: readonly SceneColumn[]): readonly SceneColumn[] {

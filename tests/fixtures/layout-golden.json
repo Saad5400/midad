@@ -1,5 +1,5 @@
 {
-    "version": 3,
+    "version": 4,
     "scenes": {
         "arabic-1": "0649d02e56ade9b5d4043329cba48f5b46fc349a65f7783c6c302a55d159edd3",
         "arabic-10": "a9f8efa12a536f00dcf1f8c2823434b463e0a373db24af5c26a6f800af5c46d5",
@@ -15,7 +15,8 @@
         "marked-Amiri": "433ba11c9d5918737e8eb85d56ec1cf41bb327fe9ea9ef448ee01d62359133e8",
         "interlocking": "e2163c3db1a129ee3e8a40891a62c823ad4970d01bab2bf9013277e84f82884e",
         "interlocking-narrow": "d2078ba3979eb2daf9a1f7e320760a0bbb4607c691fd9882324a89ddf5dd6844",
-        "mixed-row-flow": "0f4c15a0237ef2b5b6c6cd86d2886e5db5aa82d248af17f5e0f99f5710adf712"
+        "mixed-row-flow": "0f4c15a0237ef2b5b6c6cd86d2886e5db5aa82d248af17f5e0f99f5710adf712",
+        "row-heights": "0e5c104fdda7c813d2053297442b97467ad22620c18f5fcac28c3fc2c20f3950"
     },
     "documents": {
         "arabic-1": "layout-contract/arabic-1.json",
@@ -32,6 +33,7 @@
         "marked-Amiri": "layout-contract/marked-Amiri.json",
         "interlocking": "layout-contract/interlocking.json",
         "interlocking-narrow": "layout-contract/interlocking-narrow.json",
-        "mixed-row-flow": "layout-contract/mixed-row-flow.json"
+        "mixed-row-flow": "layout-contract/mixed-row-flow.json",
+        "row-heights": "layout-contract/row-heights.json"
     }
 }

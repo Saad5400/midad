@@ -11,7 +11,7 @@ import type { LayoutContext as Context } from './context.js';
 import { fieldPaintCommands } from './fields.js';
 import { finalizePages } from './finalize.js';
 import { measureBlocks, pruneMeasurements } from './measurement.js';
-import type { DocumentScene, PaintCommand, SceneCell, SceneColumn, SceneLine } from './scene.js';
+import type { DocumentScene, PaintCommand, SceneCell, SceneColumn, SceneLine, SceneTableRow } from './scene.js';
 import { readingRun } from './text-reading.js';
 
 export function createDocumentScene(
@@ -53,6 +53,7 @@ export function createDocumentScene(
         commands: PaintCommand[];
         lines: SceneLine[];
         cells: SceneCell[];
+        tableRows: SceneTableRow[];
         columns: SceneColumn[];
         blocks: SceneColumn[];
     }> = [];
@@ -63,6 +64,7 @@ export function createDocumentScene(
             commands: [] as PaintCommand[],
             lines: [] as SceneLine[],
             cells: [] as SceneCell[],
+            tableRows: [] as SceneTableRow[],
             columns: [] as SceneColumn[],
             blocks: [] as SceneColumn[],
         };
@@ -131,6 +133,7 @@ export function createDocumentScene(
             page.commands.push(...shifted.commands);
             page.lines.push(...shifted.lines);
             page.cells.push(...(shifted.cells ?? []));
+            page.tableRows.push(...(shifted.tableRows ?? []));
             page.columns.push(...(shifted.columns ?? []));
             if (band.height > 0)
                 page.blocks.push({ id: owners.get(original)!, x: left, y, width: area, height: band.height });
@@ -246,7 +249,7 @@ export function createDocumentScene(
                       )),
             );
         }
-        pages.unshift({ width, height, commands, lines: [], cells: [], columns: [], blocks: [] });
+        pages.unshift({ width, height, commands, lines: [], cells: [], tableRows: [], columns: [], blocks: [] });
     }
     kernel.clearUnused(ctx.used);
     const immutable = finalizePages(pages);

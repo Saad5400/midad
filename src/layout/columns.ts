@@ -48,6 +48,7 @@ export function parallelBands(node: NativeNode, width: number, ctx: LayoutContex
             commands: [],
             lines: [],
             cells: [],
+            tableRows: [],
             columns: [],
             keepNext: tracks.some((bands) => bands.at(-1)?.keepNext),
         };
@@ -64,6 +65,7 @@ export function parallelBands(node: NativeNode, width: number, ctx: LayoutContex
                     })),
                 );
                 result.cells!.push(...(shifted.cells ?? []));
+                result.tableRows!.push(...(shifted.tableRows ?? []));
                 result.columns!.push(...(shifted.columns ?? []));
                 y = point(y + band.height);
             }

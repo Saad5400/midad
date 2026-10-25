@@ -2,8 +2,8 @@ import type { NativeNode } from '../../document/model.js';
 import { inheritedDirection } from '../../typography/direction.js';
 import { chooseFont } from '../../typography/fonts.js';
 import { DEFAULT_TEXT_STYLE, blockTextStyle, nodeTextStyle, type Color } from '../../typography/style.js';
-import { customBlocks, type NativeFragment } from './model.js';
 import { safeLink } from './html-policy.js';
+import { customBlocks, type NativeFragment } from './model.js';
 
 const escape = (text: string): string =>
     text.replace(
@@ -68,6 +68,14 @@ export function fragmentHtml(fragment: NativeFragment, direction: 'rtl' | 'ltr' 
         if (metadata && node.attributes) attributes.push(`data-clm-attrs="${escape(JSON.stringify(node.attributes))}"`);
         attributes.push(`dir="${resolvedDirection}"`);
         const blockStyles = [];
+        if (
+            node.kind === 'tableRow' &&
+            typeof node.attributes?.rowHeight === 'number' &&
+            Number.isFinite(node.attributes.rowHeight) &&
+            node.attributes.rowHeight >= 0 &&
+            node.attributes.rowHeight <= 100000
+        )
+            blockStyles.push(`height:${node.attributes.rowHeight}px`);
         if (['left', 'right', 'center', 'justify'].includes(String(node.attributes?.textAlign)))
             blockStyles.push(`text-align:${node.attributes!.textAlign}`);
         else if (!metadata && ['paragraph', 'heading', 'codeBlock'].includes(node.kind))

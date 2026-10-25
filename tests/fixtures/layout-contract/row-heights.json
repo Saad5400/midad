@@ -1,0 +1,153 @@
+{
+    "type": "doc",
+    "attrs": {
+        "dir": "ltr"
+    },
+    "content": [
+        {
+            "type": "table",
+            "attrs": {
+                "id": "heights"
+            },
+            "content": [
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "r1",
+                        "rowHeight": 192
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "a",
+                                "rowspan": 2
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "a-p",
+                                        "dir": "ltr"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Arabic عربي a-p"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "b",
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "b-p",
+                                        "dir": "ltr"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Arabic عربي b-p"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "r2",
+                        "rowHeight": 96
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "c",
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "c-p",
+                                        "dir": "ltr"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Arabic عربي c-p"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "tableRow",
+                    "attrs": {
+                        "id": "r3",
+                        "rowHeight": 1800
+                    },
+                    "content": [
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "d",
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "d-p",
+                                        "dir": "ltr"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Arabic عربي d-p"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "tableCell",
+                            "attrs": {
+                                "id": "e",
+                                "rowspan": 1
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "e-p",
+                                        "dir": "ltr"
+                                    },
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Arabic عربي e-p"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
