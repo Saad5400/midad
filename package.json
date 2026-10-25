@@ -1,6 +1,6 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.18.0",
+    "version": "0.19.0",
     "type": "module",
     "sideEffects": false,
     "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",

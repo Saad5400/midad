@@ -10,6 +10,7 @@ import { insertFloatingNativeImage, nativeImages, placeNativeImage } from '@saad
 import { exportDocument, importDocument } from '@saad5400/midad/document';
 import { layoutDocumentSurface } from '@saad5400/midad/layout';
 import { layoutPdfOverlays } from '@saad5400/midad/layout/pdf-overlays';
+import { setDocumentPresentation } from '@saad5400/midad/presentation';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
@@ -59,6 +60,39 @@ const document = (fields: unknown[], images: unknown[] = []) =>
         'pdf-overlays',
     );
 describe('PDF document overlays', () => {
+    it('keeps imported pages fixed while composing the portrait cover, letterhead and cover objects', async () => {
+        const source = setDocumentPresentation(
+            document([
+                field('cover-field', { surface: 'cover', value: 'الغلاف Cover' }),
+                field('body-field', {
+                    settings: { page: 2, relativeXPct: 0.1, relativeYPct: 0.2, widthPct: 0.3, heightPct: 0.1 },
+                }),
+            ]),
+            { cover: { enabled: true, src: LAB_IMAGE }, header: { enabled: true, src: LAB_IMAGE } },
+        );
+        await kernel.prepare(source);
+        const scene = layoutDocumentSurface(source, kernel, {
+            kind: 'pdf',
+            pages: pages.map((page, index) => ({ ...page, number: index + 1 })),
+        });
+        expect(scene.coverPages).toBe(1);
+        expect(scene.pages.slice(1).map(({ width, height }) => ({ width, height }))).toEqual(pages);
+        expect(scene.pages[0].commands.find((command) => command.kind === 'field')).toMatchObject({
+            nodeId: 'cover-field',
+            x: 30,
+            y: 37.5,
+        });
+        expect(scene.pages[2].commands.find((command) => command.kind === 'field')).toMatchObject({
+            nodeId: 'body-field',
+            x: 80,
+            y: 80,
+            width: 240,
+            height: 40,
+        });
+        expect(scene.pages[1].commands[0]).toMatchObject({ kind: 'image', x: 0, y: 0, width: 600, height: 200 });
+        expect(scene.pages[2].commands[0]).toMatchObject({ kind: 'image', width: 800, height: 800 / 3 });
+        await verifyScenePdf(source, scene, kernel, 'pdf-imported-presentation');
+    });
     it('authors overlays without a text caret, retaining exact page placement through undo, redo, sync and JSON reload', async () => {
         const started = performance.now();
         const shared = SharedNativeDocument.create(document([]));

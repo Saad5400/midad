@@ -21,7 +21,12 @@ export async function createPdfOverlaySnapshot(
     };
     current();
     const source = await PDFDocument.load(new Uint8Array(original), { updateMetadata: false });
-    if (source.getPageCount() !== scene.pages.length || viewports.length !== scene.pages.length)
+    const offset = scene.coverPages ?? 0;
+    if (
+        ![0, 1].includes(offset) ||
+        source.getPageCount() + offset !== scene.pages.length ||
+        viewports.length !== source.getPageCount()
+    )
         throw new Error('The overlay does not match the source PDF pages');
     const expected = sourcePageViewports(source);
     const matrices = viewports.map((viewport, index) => {
@@ -30,8 +35,8 @@ export async function createPdfOverlaySnapshot(
             matrix.length !== 6 ||
             !matrix.every(Number.isFinite) ||
             ![width, height].every((value) => Number.isFinite(value) && value > 0) ||
-            Math.abs(width - scene.pages[index].width) > 0.001 ||
-            Math.abs(height - scene.pages[index].height) > 0.001 ||
+            Math.abs(width - scene.pages[index + offset].width) > 0.001 ||
+            Math.abs(height - scene.pages[index + offset].height) > 0.001 ||
             Math.abs(width - expected[index].width) > 0.001 ||
             Math.abs(height - expected[index].height) > 0.001 ||
             matrix.some((value, part) => Math.abs(value - expected[index].transform[part]) > 0.000001)
@@ -51,8 +56,9 @@ export async function createPdfOverlaySnapshot(
         ];
     });
     const overlay = await PDFDocument.load(await writeScenePdf(scene, kernel, latestDocument));
-    const embedded = await source.embedPages(overlay.getPages());
-    for (const [index, page] of source.getPages().entries()) {
+    const embedded = await source.embedPages(overlay.getPages().slice(offset));
+    if (offset) source.insertPage(0, (await source.copyPages(overlay, [0]))[0]);
+    for (const [index, page] of source.getPages().slice(offset).entries()) {
         const crop = page.getCropBox();
         const bounds = [crop.x, crop.y, crop.x + crop.width, crop.y + crop.height];
         const appearance = source.context.register(

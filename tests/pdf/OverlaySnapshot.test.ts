@@ -2,6 +2,7 @@
 import { importDocument } from '@saad5400/midad/document';
 import { layoutDocumentSurface, layoutPdfOverlays } from '@saad5400/midad/layout';
 import { createPdfOverlaySnapshot, pdfSourcePages } from '@saad5400/midad/pdf';
+import { setDocumentPresentation } from '@saad5400/midad/presentation';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { execFileSync } from 'node:child_process';
@@ -231,6 +232,34 @@ it('keeps pages with no overlay content and rejects changes during snapshot crea
             viewports,
         ),
     ).rejects.toThrow();
+});
+
+it('prepends the exact cover scene and composes branded source pages without changing source geometry', async () => {
+    const fixtureData = await fixture();
+    const { bytes, viewports } = fixtureData;
+    const document = setDocumentPresentation(fixtureData.document, {
+        cover: { enabled: true, src: LAB_IMAGE },
+        header: { enabled: true, src: LAB_IMAGE },
+    });
+    await kernel.prepare(document);
+    const scene = layoutPdfOverlays(document, kernel, viewports);
+    expect(scene.coverPages).toBe(1);
+    const result = await createPdfOverlaySnapshot(bytes, scene, kernel, () => document, viewports);
+    const exported = await PDFDocument.load(result);
+    const original = await PDFDocument.load(bytes);
+    expect(exported.getPageCount()).toBe(9);
+    expect(exported.getPage(0).getSize()).toEqual({ width: scene.pages[0].width, height: scene.pages[0].height });
+    for (let index = 0; index < 8; index++) {
+        expect(exported.getPage(index + 1).getCropBox()).toEqual(original.getPage(index).getCropBox());
+        expect(exported.getPage(index + 1).getRotation()).toEqual(original.getPage(index).getRotation());
+    }
+    const reader = await getDocument({ data: new Uint8Array(result) }).promise;
+    try {
+        for (let index = 0; index < 9; index++)
+            await (await reader.getPage(index + 1)).getOperatorList({ intent: 'print' });
+    } finally {
+        await reader.destroy();
+    }
 });
 
 it.runIf(process.env.NATIVE_PDF_RASTER === '1')(

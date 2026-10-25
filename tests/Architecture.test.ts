@@ -267,9 +267,11 @@ describe('source architecture', () => {
         'rendering/index.ts',
         'content/fields/queries.ts',
         'content/presentation/queries.ts',
+        'content/page-layout-queries.ts',
         'content/clauses/queries.ts',
         'content/fields/geometry.ts',
         'layout/pdf-overlays.ts',
+        'layout/cover.ts',
         'layout/object-regions.ts',
         'collaboration/shared/reader.ts',
     ])('keeps %s independent of editing mutations', (entry) => {
