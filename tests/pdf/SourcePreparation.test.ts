@@ -8,6 +8,23 @@ import { expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const options = { standardFontDataUrl: join(dirname(require.resolve('pdfjs-dist/package.json')), 'standard_fonts/') };
+const normalize = (value: unknown): unknown =>
+    typeof value === 'string'
+        ? value.replace(/g_d\d+_/g, 'g_d_')
+        : Array.isArray(value)
+          ? value.map(normalize)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item)]))
+            : value;
+const ops = async (data: Uint8Array) => {
+    const reader = await getDocument({ data: new Uint8Array(data), ...options }).promise;
+    try {
+        return normalize(await (await reader.getPage(1)).getOperatorList({ intent: 'print' }));
+    } finally {
+        await reader.destroy();
+    }
+};
+
 async function source() {
     const pdf = await PDFDocument.create(),
         page = pdf.addPage([400, 600]);
@@ -60,22 +77,6 @@ it('prepares current values through the supplied PDF reader while preserving val
     expect(pdf.catalog.lookup(PDFName.of('AcroForm'), PDFDict).lookup(PDFName.of('NeedAppearances'))).toBe(
         PDFBool.False,
     );
-    const normalize = (value: unknown): unknown =>
-        typeof value === 'string'
-            ? value.replace(/g_d\d+_/g, 'g_d_')
-            : Array.isArray(value)
-              ? value.map(normalize)
-              : value && typeof value === 'object'
-                ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item)]))
-                : value;
-    const ops = async (data: Uint8Array) => {
-        const reader = await getDocument({ data: new Uint8Array(data), ...options }).promise;
-        try {
-            return normalize(await (await reader.getPage(1)).getOperatorList({ intent: 'print' }));
-        } finally {
-            await reader.destroy();
-        }
-    };
     expect(await ops(prepared)).toEqual(await ops(original));
 });
 it('does not start a reader or rewrite a source with resolved appearances', async () => {
@@ -159,6 +160,18 @@ it.each([
     expect(result.getForm().getDropdown('choice').getSelected()).toEqual(['Beta']);
     expect(result.getForm().getOptionList('multi').getSelected()).toEqual(['One', 'Three']);
     expect(await pdfSourcePages(prepared, ['overlay-field'])).toEqual(await pdfSourcePages(original));
+    const glyphText = (value: unknown): string =>
+        Array.isArray(value)
+            ? value.map(glyphText).join('')
+            : value && typeof value === 'object'
+              ? 'unicode' in value
+                  ? String(value.unicode)
+                  : Object.values(value).map(glyphText).join('')
+              : '';
+    const drawn = glyphText(await ops(prepared));
+    expect(drawn).toContain('Current actual value');
+    expect(drawn).toContain('Beta');
+    expect(glyphText(await ops(original))).not.toContain('Current actual value');
     const noReader = vi.fn();
     expect(await preparePdfSourceForms(prepared, noReader)).toBe(prepared);
     expect(noReader).not.toHaveBeenCalled();
