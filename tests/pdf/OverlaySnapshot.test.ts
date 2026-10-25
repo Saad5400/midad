@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { importDocument } from '@saad5400/midad/document';
-import { layoutPdfOverlays } from '@saad5400/midad/layout';
-import { createPdfOverlaySnapshot } from '@saad5400/midad/pdf';
+import { layoutDocumentSurface, layoutPdfOverlays } from '@saad5400/midad/layout';
+import { createPdfOverlaySnapshot, pdfSourcePages } from '@saad5400/midad/pdf';
+import { setDocumentPresentation } from '@saad5400/midad/presentation';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { execFileSync } from 'node:child_process';
@@ -9,7 +10,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PDFDict, PDFDocument, PDFName, PDFNumber, degrees } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { LAB_IMAGE } from '../fixtures/migrationCorpus';
@@ -24,6 +25,49 @@ beforeAll(async () => {
     );
 });
 afterAll(() => kernel?.destroy());
+
+it('retains encoded source images, text, fonts and fine vector content without rasterizing the background', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([240, 320]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const image = await pdf.embedPng(Buffer.from(LAB_IMAGE.slice(LAB_IMAGE.indexOf(',') + 1), 'base64'));
+    page.drawText('Original vector text', { x: 12, y: 280, size: 18, font });
+    page.drawImage(image, { x: 30, y: 130, width: 180, height: 60 });
+    for (let index = 0; index < 12; index++)
+        page.drawLine({
+            start: { x: 12, y: 20 + index * 4 },
+            end: { x: 225, y: 32 + index * 4 },
+            thickness: 0.125,
+            color: rgb(0, 0, 0),
+        });
+    const bytes = await pdf.save();
+    const pages = await pdfSourcePages(bytes);
+    const document = importDocument(
+        { type: 'doc', content: [{ type: 'pdfPage', attrs: { number: 1 } }] },
+        'quality-source',
+    );
+    await kernel.prepare(document);
+    const scene = layoutDocumentSurface(document, kernel, { kind: 'pdf', pages });
+    const started = performance.now();
+    const snapshot = await createPdfOverlaySnapshot(bytes, scene, kernel, () => document, pages);
+    expect(performance.now() - started).toBeLessThan(5000);
+    const before = await PDFDocument.load(bytes);
+    const after = await PDFDocument.load(snapshot);
+    expect(after.getPage(0).node.Contents()!.toString()).toBe(before.getPage(0).node.Contents()!.toString());
+    expect(after.getPage(0).node.Resources()!.toString()).toBe(before.getPage(0).node.Resources()!.toString());
+    for (const [reference, object] of before.context.enumerateIndirectObjects()) {
+        if (!(object instanceof PDFRawStream) || object.dict.get(PDFName.of('Type')) === PDFName.of('ObjStm')) continue;
+        const retained = after.context.lookup(reference);
+        expect(retained).toBeInstanceOf(PDFRawStream);
+        expect((retained as PDFRawStream).getContents()).toEqual(object.getContents());
+    }
+    const diagnostics = process.env.NATIVE_FIDELITY_ARTIFACTS;
+    if (diagnostics) {
+        await mkdir(diagnostics, { recursive: true });
+        await writeFile(join(diagnostics, 'import-quality-source.pdf'), bytes);
+        await writeFile(join(diagnostics, 'import-quality-snapshot.pdf'), snapshot);
+    }
+});
 
 async function fixture() {
     const pdf = await PDFDocument.create();
@@ -105,6 +149,12 @@ it('retains original page geometry, fields and annotation order without changing
     const { bytes, document, scene, viewports } = await fixture();
     const untouched = new Uint8Array(bytes);
     const result = await createPdfOverlaySnapshot(bytes, scene, kernel, () => document, viewports);
+    const diagnostics = process.env.NATIVE_FIDELITY_ARTIFACTS;
+    if (diagnostics) {
+        await mkdir(diagnostics, { recursive: true });
+        await writeFile(join(diagnostics, 'import-mixed-overlays.pdf'), result);
+        await writeFile(join(diagnostics, 'import-mixed-viewports.json'), JSON.stringify(viewports));
+    }
     expect(bytes).toEqual(untouched);
     expect(scene.glyphCount).toBeGreaterThan(0);
     expect(scene.pages[0].commands.some((command) => command.kind === 'image')).toBe(true);
@@ -134,7 +184,7 @@ it('retains original page geometry, fields and annotation order without changing
     await reader.destroy();
 }, 10000);
 
-it.each(['count', 'dimensions', 'singular', 'nonfinite', 'revision'])(
+it.each(['count', 'dimensions', 'singular', 'nonfinite', 'revision', 'translation', 'rotation', 'source-size'])(
     'refuses a mismatched %s instead of producing an incomplete print',
     async (kind) => {
         const { bytes, document, scene, viewports } = await fixture();
@@ -143,10 +193,22 @@ it.each(['count', 'dimensions', 'singular', 'nonfinite', 'revision'])(
         if (kind === 'dimensions') changed[0].width++;
         if (kind === 'singular') changed[0].transform = [0, 0, 0, 0, 0, 0];
         if (kind === 'nonfinite') changed[0].transform = [1, 0, 0, -1, NaN, 0];
+        if (kind === 'translation') changed[0].transform = [1, 0, 0, -1, 0, 400];
+        if (kind === 'rotation') changed[0].transform = [0, 1, 1, 0, -20, -10];
+        if (kind === 'source-size') changed[0].width++;
         await expect(
             createPdfOverlaySnapshot(
                 bytes,
-                kind === 'revision' ? { ...scene, revision: scene.revision + 1 } : scene,
+                kind === 'revision'
+                    ? { ...scene, revision: scene.revision + 1 }
+                    : kind === 'source-size'
+                      ? {
+                            ...scene,
+                            pages: scene.pages.map((page, index) =>
+                                index ? page : { ...page, width: page.width + 1 },
+                            ),
+                        }
+                      : scene,
                 kernel,
                 () => document,
                 changed,
@@ -170,6 +232,34 @@ it('keeps pages with no overlay content and rejects changes during snapshot crea
             viewports,
         ),
     ).rejects.toThrow();
+});
+
+it('prepends the exact cover scene and composes branded source pages without changing source geometry', async () => {
+    const fixtureData = await fixture();
+    const { bytes, viewports } = fixtureData;
+    const document = setDocumentPresentation(fixtureData.document, {
+        cover: { enabled: true, src: LAB_IMAGE },
+        header: { enabled: true, src: LAB_IMAGE },
+    });
+    await kernel.prepare(document);
+    const scene = layoutPdfOverlays(document, kernel, viewports);
+    expect(scene.coverPages).toBe(1);
+    const result = await createPdfOverlaySnapshot(bytes, scene, kernel, () => document, viewports);
+    const exported = await PDFDocument.load(result);
+    const original = await PDFDocument.load(bytes);
+    expect(exported.getPageCount()).toBe(9);
+    expect(exported.getPage(0).getSize()).toEqual({ width: scene.pages[0].width, height: scene.pages[0].height });
+    for (let index = 0; index < 8; index++) {
+        expect(exported.getPage(index + 1).getCropBox()).toEqual(original.getPage(index).getCropBox());
+        expect(exported.getPage(index + 1).getRotation()).toEqual(original.getPage(index).getRotation());
+    }
+    const reader = await getDocument({ data: new Uint8Array(result) }).promise;
+    try {
+        for (let index = 0; index < 9; index++)
+            await (await reader.getPage(index + 1)).getOperatorList({ intent: 'print' });
+    } finally {
+        await reader.destroy();
+    }
 });
 
 it.runIf(process.env.NATIVE_PDF_RASTER === '1')(

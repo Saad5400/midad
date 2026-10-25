@@ -1,6 +1,16 @@
 // @vitest-environment node
-import { importDocument } from '@saad5400/midad/document';
+import { SharedNativeDocument } from '@saad5400/midad/collaboration';
+import {
+    insertFloatingNativeField,
+    nativeFields,
+    placeNativeField,
+    updateNativeField,
+} from '@saad5400/midad/content/fields';
+import { insertFloatingNativeImage, nativeImages, placeNativeImage } from '@saad5400/midad/content/images';
+import { exportDocument, importDocument } from '@saad5400/midad/document';
+import { layoutDocumentSurface } from '@saad5400/midad/layout';
 import { layoutPdfOverlays } from '@saad5400/midad/layout/pdf-overlays';
+import { setDocumentPresentation } from '@saad5400/midad/presentation';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
@@ -49,7 +59,136 @@ const document = (fields: unknown[], images: unknown[] = []) =>
         },
         'pdf-overlays',
     );
-describe('read-only PDF document overlays', () => {
+describe('PDF document overlays', () => {
+    it('keeps imported pages fixed while composing the portrait cover, letterhead and cover objects', async () => {
+        const source = setDocumentPresentation(
+            document([
+                field('cover-field', { surface: 'cover', value: 'الغلاف Cover' }),
+                field('body-field', {
+                    settings: { page: 2, relativeXPct: 0.1, relativeYPct: 0.2, widthPct: 0.3, heightPct: 0.1 },
+                }),
+            ]),
+            { cover: { enabled: true, src: LAB_IMAGE }, header: { enabled: true, src: LAB_IMAGE } },
+        );
+        await kernel.prepare(source);
+        const scene = layoutDocumentSurface(source, kernel, {
+            kind: 'pdf',
+            pages: pages.map((page, index) => ({ ...page, number: index + 1 })),
+        });
+        expect(scene.coverPages).toBe(1);
+        expect(scene.pages.slice(1).map(({ width, height }) => ({ width, height }))).toEqual(pages);
+        expect(scene.pages[0].commands.find((command) => command.kind === 'field')).toMatchObject({
+            nodeId: 'cover-field',
+            x: 30,
+            y: 37.5,
+        });
+        expect(scene.pages[2].commands.find((command) => command.kind === 'field')).toMatchObject({
+            nodeId: 'body-field',
+            x: 80,
+            y: 80,
+            width: 240,
+            height: 40,
+        });
+        expect(scene.pages[1].commands[0]).toMatchObject({ kind: 'image', x: 0, y: 0, width: 600, height: 200 });
+        expect(scene.pages[2].commands[0]).toMatchObject({ kind: 'image', width: 800, height: 800 / 3 });
+        await verifyScenePdf(source, scene, kernel, 'pdf-imported-presentation');
+    });
+    it('authors overlays without a text caret, retaining exact page placement through undo, redo, sync and JSON reload', async () => {
+        const started = performance.now();
+        const shared = SharedNativeDocument.create(document([]));
+        const peer = SharedNativeDocument.fromState(shared.state(), shared.document().id);
+        const surface = { kind: 'pdf' as const, pages: pages.map((page, index) => ({ ...page, number: index + 1 })) };
+        const scene = async () => {
+            await kernel.prepare(shared.document());
+            return layoutDocumentSurface(shared.document(), kernel, surface);
+        };
+        try {
+            const originalPages = exportDocument(shared.document());
+            const field = insertFloatingNativeField(
+                shared.document(),
+                { type: 'text', name: 'Bilingual value' },
+                await scene(),
+                {
+                    page: 1,
+                    x: 80,
+                    y: 40,
+                    width: 240,
+                    height: 40,
+                },
+            );
+            peer.receive(shared.publish(field.document));
+            shared.stopCapturing();
+            const image = insertFloatingNativeImage(
+                shared.document(),
+                { src: LAB_IMAGE, alt: 'Overlay', width: 80, height: 40 },
+                await scene(),
+                {
+                    page: 0,
+                    x: 30,
+                    y: 60,
+                    width: 80,
+                    height: 40,
+                },
+            );
+            peer.receive(shared.publish(image.document));
+            shared.stopCapturing();
+            const value = updateNativeField(shared.document(), field.fieldId, { value: 'قيمة عربية Hello' });
+            peer.receive(shared.publish(value));
+            shared.stopCapturing();
+            const moved = placeNativeField(shared.document(), field.fieldId, await scene(), {
+                page: 0,
+                x: 120,
+                y: 700,
+                width: 240,
+                height: 40,
+            });
+            peer.receive(shared.publish(moved.document));
+            shared.stopCapturing();
+            const beforeMove = await scene();
+            const resized = placeNativeImage(shared.document(), image.imageId, beforeMove, {
+                page: 1,
+                x: 600,
+                y: 300,
+                width: 160,
+                height: 80,
+            });
+            peer.receive(shared.publish(resized.document));
+            const placed = await scene();
+            expect(placed.pages[0].commands.find((command) => command.kind === 'field')).toMatchObject({
+                nodeId: field.fieldId,
+                x: 120,
+                y: 700,
+                width: 240,
+                height: 40,
+            });
+            expect(placed.pages[1].commands.find((command) => command.kind === 'image')).toMatchObject({
+                nodeId: image.imageId,
+                x: 600,
+                y: 300,
+                width: 160,
+                height: 80,
+            });
+            shared.undo();
+            expect((await scene()).pages).toEqual(beforeMove.pages);
+            shared.redo();
+            expect((await scene()).pages).toEqual(placed.pages);
+            expect(nativeFields(peer.document())[0].attributes.value).toBe('قيمة عربية Hello');
+            expect(nativeImages(peer.document())[0].attributes.settings).toEqual(
+                nativeImages(shared.document())[0].attributes.settings,
+            );
+            const saved = exportDocument(shared.document());
+            expect((saved as { content: unknown }).content).toEqual((originalPages as { content: unknown }).content);
+            const reloaded = importDocument(saved, shared.document().id);
+            await kernel.prepare(reloaded);
+            const reopened = layoutDocumentSurface(reloaded, kernel, surface);
+            expect(reopened.pages).toEqual(placed.pages);
+            await verifyScenePdf(reloaded, reopened, kernel, 'pdf-authored-overlays');
+            expect(performance.now() - started).toBeLessThan(5000);
+        } finally {
+            shared.destroy();
+            peer.destroy();
+        }
+    });
     it('keeps source page boxes unchanged and maps normalized fields against their own page', async () => {
         const source = document([
             field('normalized', {

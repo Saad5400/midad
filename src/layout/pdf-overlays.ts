@@ -1,8 +1,11 @@
 import { floatingFieldPlacement } from '../content/fields/geometry.js';
 import { fieldSettings } from '../content/fields/queries.js';
+import { pageSize } from '../content/page-layout-queries.js';
+import { documentPresentation } from '../content/presentation/queries.js';
 import { isRecord, type Attributes, type NativeDocument } from '../document/model.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
+import { coverCommands } from './cover.js';
 import { fieldPaintCommands } from './fields.js';
 import { finalizePages } from './finalize.js';
 import type { DocumentScene, PaintCommand } from './scene.js';
@@ -25,6 +28,19 @@ export function layoutPdfOverlays(
     )
         throw new Error('Invalid PDF page geometry');
     const pages = boxes.map((box) => ({ ...box, lines: [], commands: [] as PaintCommand[] }));
+    const presentation = documentPresentation(document);
+    if (presentation.header.enabled && presentation.header.src) {
+        const asset = kernel.images.source(presentation.header.src);
+        for (const page of pages)
+            page.commands.push({
+                kind: 'image',
+                assetId: asset.id,
+                x: 0,
+                y: 0,
+                width: page.width,
+                height: (asset.height * page.width) / asset.width,
+            });
+    }
     const tops: number[] = [];
     let top = 0;
     for (const box of boxes) {
@@ -94,6 +110,10 @@ export function layoutPdfOverlays(
             page.commands.push({ kind: 'clipEnd' });
         }
     }
+    if (presentation.cover.enabled) {
+        const { width, height } = pageSize('portrait');
+        pages.unshift({ width, height, lines: [], commands: coverCommands(document, kernel, width, height, used) });
+    }
     kernel.clearUnused(used);
     const frozen = finalizePages(pages);
     return Object.freeze({
@@ -101,6 +121,7 @@ export function layoutPdfOverlays(
         revision: document.revision,
         fontHash: kernel.fontHashFor(document),
         margin: 0,
+        ...(presentation.cover.enabled ? { coverPages: 1 } : {}),
         glyphCount: frozen.reduce(
             (total, page) =>
                 total +
