@@ -1,7 +1,7 @@
 import { clauseNumbers } from '../content/clauses/numbering.js';
 import { floatingFieldPlacement } from '../content/fields/geometry.js';
 import { floatingAnchorIndex, resolveFloatingAnchor } from '../content/floating-anchors.js';
-import { documentPageLayout, pageSize } from '../content/page-layout.js';
+import { documentPageLayout, pageLayoutForPage, pageSize } from '../content/page-layout.js';
 import { documentPresentation, headerTile } from '../content/presentation/queries.js';
 import { isRecord, type NativeDocument } from '../document/model.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
@@ -12,6 +12,7 @@ import { coverCommands } from './cover.js';
 import { fieldPaintCommands } from './fields.js';
 import { finalizePages } from './finalize.js';
 import { measureBlocks, pruneMeasurements } from './measurement.js';
+import { pageBackgroundCommands } from './page-background.js';
 import type { DocumentScene, PaintCommand, SceneCell, SceneColumn, SceneLine, SceneTableRow } from './scene.js';
 import { readingRun } from './text-reading.js';
 
@@ -24,7 +25,7 @@ export function createDocumentScene(
     const coverPages = presentation.cover.enabled ? 1 : 0;
     const layout = documentPageLayout(document);
     const landscape = layout.orientation === 'landscape';
-    const size = pageSize(layout.orientation);
+    const size = pageSize(layout.orientation, layout.size);
     const width = point(surfaceWidth ?? size.width),
         height = point(size.height);
     if (!Number.isFinite(width) || width < 100 || width > 2000) throw new Error('Invalid layout surface width');
@@ -49,6 +50,7 @@ export function createDocumentScene(
         availableHeight: point(height - top - bottom),
     };
     const pages: Array<{
+        background?: readonly PaintCommand[];
         width: number;
         height: number;
         commands: PaintCommand[];
@@ -59,7 +61,10 @@ export function createDocumentScene(
         blocks: SceneColumn[];
     }> = [];
     const newPage = () => {
+        const settings = pageLayoutForPage(document, pages.length + coverPages + 1);
+        const background = pageBackgroundCommands(settings.background, width, height, kernel);
         const page = {
+            ...(background ? { background } : {}),
             width,
             height,
             commands: [] as PaintCommand[],
@@ -70,7 +75,7 @@ export function createDocumentScene(
             blocks: [] as SceneColumn[],
         };
         pages.push(page);
-        if (presentation.header.enabled && presentation.header.src) {
+        if ((settings.header ?? presentation.header.enabled) && presentation.header.src) {
             const asset = kernel.images.source(presentation.header.src);
             const size = headerTile(asset.width, asset.height, width, height);
             page.commands.push({
@@ -183,6 +188,7 @@ export function createDocumentScene(
         );
     }
     pages.forEach((entry, index) => {
+        if (pageLayoutForPage(document, index + coverPages + 1).footer === false) return;
         const footer = kernel.shape(String(index + 1), area, 8, 'ltr');
         ctx.used.add(footer);
         for (const line of footer.lines)
@@ -210,7 +216,18 @@ export function createDocumentScene(
     });
     if (coverPages) {
         const commands = coverCommands(document, kernel, width, height, ctx.used);
-        pages.unshift({ width, height, commands, lines: [], cells: [], tableRows: [], columns: [], blocks: [] });
+        const background = pageBackgroundCommands(pageLayoutForPage(document, 1).background, width, height, kernel);
+        pages.unshift({
+            ...(background ? { background } : {}),
+            width,
+            height,
+            commands,
+            lines: [],
+            cells: [],
+            tableRows: [],
+            columns: [],
+            blocks: [],
+        });
     }
     kernel.clearUnused(ctx.used);
     const immutable = finalizePages(pages);

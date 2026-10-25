@@ -1,7 +1,9 @@
 import type { CanvasKit, Image } from 'canvaskit-wasm';
 import { IMAGE_FIELD_TYPES, nativeFields } from '../content/fields/queries.js';
+import { documentPageLayout } from '../content/page-layout-queries.js';
 import { documentPresentation } from '../content/presentation/queries.js';
 import type { NativeDocument, NativeNode } from '../document/model.js';
+import { isRecord } from '../document/model.js';
 import { decodeImage, rasterImage } from './raster-image.js';
 
 export interface ImageAsset {
@@ -33,6 +35,20 @@ export class DocumentImages {
         visit(document.root);
         for (const media of Object.values(documentPresentation(document)))
             if (media.enabled && media.src) sources.add(media.src);
+        const layout = document.root.attributes?.pageLayout;
+        const overrides =
+            isRecord(layout) && isRecord(layout.overrides) ? Object.values(layout.overrides).filter(isRecord) : [];
+        const background = documentPageLayout(document).background;
+        if (background?.src) sources.add(background.src);
+        for (const settings of overrides)
+            if (isRecord(settings.background) && typeof settings.background.src === 'string')
+                sources.add(settings.background.src);
+        const header = documentPresentation(document).header;
+        if (
+            header.src &&
+            (documentPageLayout(document).header === true || overrides.some((value) => value.header === true))
+        )
+            sources.add(header.src);
         for (const field of nativeFields(document))
             if (
                 IMAGE_FIELD_TYPES.has(String(field.attributes.type)) &&

@@ -111,6 +111,7 @@ export interface SceneColumn {
 }
 
 export interface ScenePage {
+    readonly background?: readonly PaintCommand[];
     readonly width: number;
     readonly height: number;
     readonly commands: readonly PaintCommand[];
@@ -119,6 +120,10 @@ export interface ScenePage {
     readonly tableRows?: readonly SceneTableRow[];
     readonly columns?: readonly SceneColumn[];
     readonly blocks?: readonly SceneColumn[];
+}
+
+export function pagePaintCommands(page: ScenePage, background = true): readonly PaintCommand[] {
+    return background && page.background?.length ? [...page.background, ...page.commands] : page.commands;
 }
 
 export interface SceneTableRow {
