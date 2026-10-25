@@ -1,8 +1,9 @@
 import type { CanvasKit } from 'canvaskit-wasm';
-import { chooseFont, scriptFontFiles } from '../../typography/fonts.js';
 import { symbolFontFiles } from '../../typography/font-fallbacks.js';
+import { chooseFont, scriptFontFiles } from '../../typography/fonts.js';
 import { point } from '../../typography/metrics.js';
 import { DEFAULT_TEXT_STYLE, type TextSpan, type TextStyle } from '../../typography/style.js';
+import { INVALID_TEXT_OFFSET, rememberTextIndex, utf8Index } from './encoding.js';
 import { NATIVE_FONT_ID, type TextFonts } from './fonts.js';
 import type { ShapedLine, ShapedParagraph, ShapedRun } from './model.js';
 
@@ -98,19 +99,33 @@ export function shapeParagraph(
             metricIndex++;
         byLine.set(metricIndex, line);
     }
-    const encodedText = new TextEncoder().encode(text);
+    const encoding = utf8Index(text);
+    const byteLength = encoding.offsets.length - 1;
+    let encodedText: Uint8Array | undefined;
+    let decoder: TextDecoder | undefined;
     const clusterOffsets = [...new Set(rawLines.flatMap((line) => line.runs.flatMap((run) => Array.from(run.offsets))))]
-        .filter((offset) => offset >= 0 && offset <= encodedText.length)
+        .filter((offset) => offset >= 0 && offset <= byteLength)
         .sort((a, b) => a - b);
     const clusterText = new Map<number, string>();
-    const decoder = new TextDecoder();
-    for (let index = 0; index < clusterOffsets.length; index++)
+    for (let index = 0; index < clusterOffsets.length; index++) {
+        const first = clusterOffsets[index];
+        const end = clusterOffsets[index + 1] ?? byteLength;
+        const from = encoding.offsets[first],
+            to = encoding.offsets[end];
         clusterText.set(
-            clusterOffsets[index],
-            decoder
-                .decode(encodedText.subarray(clusterOffsets[index], clusterOffsets[index + 1] ?? encodedText.length))
-                .replace(/[\r\n\uFFFC]/g, ''),
+            first,
+            (encoding.wellFormed &&
+            from !== undefined &&
+            to !== undefined &&
+            from !== INVALID_TEXT_OFFSET &&
+            to !== INVALID_TEXT_OFFSET
+                ? text.slice(from, to)
+                : (decoder ??= new TextDecoder()).decode(
+                      (encodedText ??= new TextEncoder().encode(text)).subarray(first, end),
+                  )
+            ).replace(/[\r\n\uFFFC]/g, ''),
         );
+    }
     const assignedClusters = new Set<number>();
     const explicitHeight = spans.some((span) => span.style.lineHeight !== null);
     let lines: ShapedLine[];
@@ -274,5 +289,6 @@ export function shapeParagraph(
         ),
         placeholders: Object.freeze(placeholders),
     });
+    rememberTextIndex(shaped, encoding);
     return shaped;
 }
