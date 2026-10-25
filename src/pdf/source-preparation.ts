@@ -10,6 +10,7 @@ import {
     type PDFField,
     type PDFObject,
 } from 'pdf-lib';
+import { prepareSourceFormResources } from './source-form-resources.js';
 import { sourceFormsNeedPreparation } from './source-forms.js';
 import { sourcePageViewports } from './source-pages.js';
 
@@ -59,6 +60,7 @@ export async function preparePdfSourceForms(original: Uint8Array, open: SourceFo
     );
     if (before.size !== fields.length) throw new Error('The source form contains duplicate field names');
     const pages = JSON.stringify(sourcePageViewports(source));
+    await prepareSourceFormResources(source);
     form.set(PDFName.of('NeedAppearances'), PDFBool.False);
     const reader = await open(await source.save({ updateFieldAppearances: false }));
     try {

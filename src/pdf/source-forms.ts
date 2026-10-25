@@ -1,5 +1,7 @@
 import { PDFBool, PDFDict, PDFDocument, PDFName, PDFStream } from 'pdf-lib';
 
+import { missingAppearanceFonts } from './source-form-resources.js';
+
 export function sourceFormsNeedPreparation(source: PDFDocument): boolean {
     const form = source.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
     if (!form) return false;
@@ -12,7 +14,8 @@ export function sourceFormsNeedPreparation(source: PDFDocument): boolean {
             if (!['/Tx', '/Ch'].includes(type?.toString() ?? '')) return false;
             return field.acroField.getWidgets().some((widget) => {
                 const appearance = widget.dict.lookupMaybe(PDFName.of('AP'), PDFDict);
-                return !(source.context.lookup(appearance?.get(PDFName.of('N'))) instanceof PDFStream);
+                const normal = source.context.lookup(appearance?.get(PDFName.of('N')));
+                return !(normal instanceof PDFStream) || missingAppearanceFonts(normal);
             });
         });
 }

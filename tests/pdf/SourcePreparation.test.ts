@@ -2,7 +2,7 @@
 import { pdfSourcePages, preparePdfSourceForms } from '@saad5400/midad/pdf';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, degrees } from 'pdf-lib';
+import { PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFStream, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { expect, it, vi } from 'vitest';
 
@@ -154,8 +154,16 @@ it.each([
     expect(open).toHaveBeenCalledOnce();
     const result = await PDFDocument.load(prepared);
     for (const name of ['name', 'choice', 'multi'])
-        for (const widget of result.getForm().getField(name).acroField.getWidgets())
-            expect(widget.getAppearances()?.normal).toBeDefined();
+        for (const widget of result.getForm().getField(name).acroField.getWidgets()) {
+            const normal = widget.getAppearances()?.normal;
+            expect(normal).toBeInstanceOf(PDFStream);
+            expect(
+                (normal as PDFStream).dict
+                    .lookup(PDFName.of('Resources'), PDFDict)
+                    .lookup(PDFName.of('Font'), PDFDict)
+                    .keys().length,
+            ).toBeGreaterThan(0);
+        }
     expect(result.getForm().getTextField('name').getText()).toBe('Current actual value');
     expect(result.getForm().getDropdown('choice').getSelected()).toEqual(['Beta']);
     expect(result.getForm().getOptionList('multi').getSelected()).toEqual(['One', 'Three']);
@@ -176,3 +184,47 @@ it.each([
     expect(await preparePdfSourceForms(prepared, noReader)).toBe(prepared);
     expect(noReader).not.toHaveBeenCalled();
 });
+
+it('repairs an existing appearance stream that references a missing font resource', async () => {
+    const prepared = await preparePdfSourceForms(await source(), (data) => getDocument({ data, ...options }).promise);
+    const pdf = await PDFDocument.load(prepared);
+    const normal = pdf.getForm().getTextField('name').acroField.getWidgets()[0].getAppearances()!.normal as PDFStream;
+    normal.dict.set(PDFName.of('Resources'), pdf.context.obj({}));
+    const broken = await pdf.save({ updateFieldAppearances: false });
+    await expect(pdfSourcePages(broken, ['overlay'])).rejects.toThrow('Resolve source form appearances');
+    const open = vi.fn((data: Uint8Array) => getDocument({ data, ...options }).promise);
+    const repaired = await preparePdfSourceForms(broken, open);
+    expect(open).toHaveBeenCalledOnce();
+    await expect(pdfSourcePages(repaired, ['overlay'])).resolves.toEqual(await pdfSourcePages(broken));
+});
+
+it.each(['nested (text) /Missing 12 Tf', 'literal /OtherFont 14 Tf'])(
+    'ignores font-like content inside painted source text: %s',
+    async (text) => {
+        const pdf = await PDFDocument.create();
+        const page = pdf.addPage();
+        const field = pdf.getForm().createTextField('literal');
+        field.setText(text);
+        field.addToPage(page);
+        const original = await pdf.save();
+        const open = vi.fn();
+        expect(await preparePdfSourceForms(original, open)).toBe(original);
+        expect(open).not.toHaveBeenCalled();
+    },
+);
+it.each(['Helv', 'UnknownSourceFont'])(
+    'handles missing appearance resources for %s without reader-only font fallback',
+    async (font) => {
+        const pdf = await PDFDocument.load(await source());
+        const field = pdf.getForm().getTextField('name');
+        field.acroField.setDefaultAppearance(`/${font} 22 Tf 0 g`);
+        for (const widget of field.acroField.getWidgets()) widget.dict.delete(PDFName.of('AP'));
+        const original = await pdf.save({ updateFieldAppearances: false });
+        const pending = preparePdfSourceForms(original, (data) => getDocument({ data, ...options }).promise);
+        if (font === 'UnknownSourceFont') await expect(pending).rejects.toThrow('could not be prepared');
+        else {
+            const prepared = await pending;
+            await expect(pdfSourcePages(prepared, ['overlay'])).resolves.toEqual(await pdfSourcePages(original));
+        }
+    },
+);
