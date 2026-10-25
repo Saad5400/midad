@@ -20,8 +20,10 @@ export function paintPage(
         paint = new ck.Paint();
         paint.setColor(ck.BLACK);
         paint.setAntiAlias(true);
-        for (let commandIndex = 0; commandIndex < page.commands.length; commandIndex++) {
-            const command = page.commands[commandIndex];
+        const commands =
+            !transparent && page.background?.length ? [...page.background, ...page.commands] : page.commands;
+        for (let commandIndex = 0; commandIndex < commands.length; commandIndex++) {
+            const command = commands[commandIndex];
             if (command.kind === 'clipStart') {
                 canvas.save();
                 canvas.clipRect(
@@ -68,7 +70,7 @@ export function paintPage(
                         let line = command;
                         while (true) {
                             builder.moveTo(line.x, line.y).lineTo(line.toX, line.toY);
-                            const next = page.commands[commandIndex + 1];
+                            const next = commands[commandIndex + 1];
                             if (
                                 next?.kind !== 'line' ||
                                 next.tableBorder !== command.tableBorder ||

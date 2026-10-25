@@ -32,7 +32,7 @@ export function initialTextCaret(
             const block = findNode(document, line.paragraphId);
             if (!block || !isTextBlock(block)) continue;
             const first = line.shaped?.sources[0];
-            const prefix = first?.nodeId === block.id && !first.editable ? first.to : 0;
+            const prefix = (first?.nodeId === block.id && !first.editable ? first.to : 0) - (line.fragmentFrom ?? 0);
             const shapedLine = line.shaped?.lines.find((row) => row.top === line.originalTop);
             return { blockId: block.id, offset: Math.max(0, (shapedLine?.start ?? 0) - prefix) };
         }

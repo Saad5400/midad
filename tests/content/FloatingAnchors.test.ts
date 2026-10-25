@@ -1,12 +1,12 @@
-import { importDocument, type Attributes, type NativeDocument } from '@saad5400/midad/document';
+import { SharedNativeDocument } from '@saad5400/midad/collaboration';
 import { floatingFieldPlacement, placementAttributes } from '@saad5400/midad/content/fields';
 import {
     bindFloatingAnchors,
     floatingAnchorIndex,
     resolveFloatingAnchor,
 } from '@saad5400/midad/content/floating-anchors';
+import { importDocument, type Attributes, type NativeDocument } from '@saad5400/midad/document';
 import type { DocumentScene, ScenePage } from '@saad5400/midad/layout';
-import { SharedNativeDocument } from '@saad5400/midad/collaboration';
 import { describe, expect, it } from 'vitest';
 
 const paragraph = (id: string) => ({ type: 'paragraph', attrs: { id }, content: [{ type: 'text', text: id }] });
@@ -263,4 +263,23 @@ describe('native floating anchors', () => {
             b.destroy();
         }
     });
+});
+
+it('moves an anchored field past the actual bottom of a shorter page', () => {
+    const doc = document();
+    const layout = {
+        pages: [
+            page([['a', 100]]),
+            page([['b', 600]], { width: 792, height: 612 }),
+            page([['c', 100]], { width: 420, height: 595 }),
+        ],
+    };
+    const attrs = { ...rawField, nativeAnchor: { block: 'b', edge: 'start', x: 0, y: 0, fallbacks: [] } };
+    expect(
+        resolveFloatingAnchor(
+            attrs,
+            { page: 1, x: 60, y: 600, width: 200, height: 100 },
+            floatingAnchorIndex(doc, layout),
+        ),
+    ).toMatchObject({ page: 2, y: 0, width: 200, height: 100 });
 });

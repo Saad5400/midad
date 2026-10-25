@@ -120,52 +120,76 @@ describe('our shared native document', () => {
             b.destroy();
         }
     });
-    it.each(['doc', 'tableCell', 'tableHeader', 'parallelCell', 'clauseBody', 'listItem', 'blockquote'])(
-        'materializes an empty %s safely when only its metadata changes',
-        (kind) => {
-            const empty = { type: kind, attrs: { id: 'empty-container' }, content: [] };
-            let root: unknown = { type: 'doc', content: [empty] };
-            if (kind === 'doc') root = empty;
-            if (kind === 'tableCell' || kind === 'tableHeader')
-                root = { type: 'doc', content: [{ type: 'table', content: [{ type: 'tableRow', content: [empty] }] }] };
-            if (kind === 'parallelCell') root = { type: 'doc', content: [{ type: 'parallelRow', content: [empty] }] };
-            if (kind === 'clauseBody')
-                root = {
-                    type: 'doc',
-                    content: [
-                        {
-                            type: 'clause',
-                            content: [{ type: 'clauseTitle', content: [{ type: 'text', text: 'Title' }] }, empty],
-                        },
-                    ],
-                };
-            if (kind === 'listItem') root = { type: 'doc', content: [{ type: 'bulletList', content: [empty] }] };
-            const seed = SharedNativeDocument.create(importDocument(root, 'empty-shared'));
-            const a = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
-            const b = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
+    it.each(
+        ['doc', 'tableCell', 'tableHeader', 'parallelCell', 'clauseBody', 'listItem', 'blockquote'].flatMap(
+            (kind) =>
+                [
+                    [kind, false],
+                    [kind, true],
+                ] as const,
+        ),
+    )('materializes an empty %s safely through metadata undo (reverse IDs: %s)', (kind, reverse) => {
+        const empty = { type: kind, attrs: { id: 'empty-container' }, content: [] };
+        let root: unknown = { type: 'doc', content: [empty] };
+        if (kind === 'doc') root = empty;
+        if (kind === 'tableCell' || kind === 'tableHeader')
+            root = { type: 'doc', content: [{ type: 'table', content: [{ type: 'tableRow', content: [empty] }] }] };
+        if (kind === 'parallelCell') root = { type: 'doc', content: [{ type: 'parallelRow', content: [empty] }] };
+        if (kind === 'clauseBody')
+            root = {
+                type: 'doc',
+                content: [
+                    {
+                        type: 'clause',
+                        content: [{ type: 'clauseTitle', content: [{ type: 'text', text: 'Title' }] }, empty],
+                    },
+                ],
+            };
+        if (kind === 'listItem') root = { type: 'doc', content: [{ type: 'bulletList', content: [empty] }] };
+        const seed = SharedNativeDocument.create(importDocument(root, 'empty-shared'));
+        const a = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
+        const b = SharedNativeDocument.fromState(seed.state(), 'empty-shared');
+        const client = seed.ydoc.clientID;
+        a.ydoc.clientID = (client + (reverse ? 2 : 1)) >>> 0;
+        b.ydoc.clientID = (client + (reverse ? 1 : 2)) >>> 0;
+        try {
+            const next = persistClauseVariants(
+                replaceBlockNode(a.document(), 'empty-container', (node) => ({
+                    ...node,
+                    attributes: { ...node.attributes, label: 'Changed' },
+                })),
+            );
+            const update = a.publish(next);
+            const peer = b.document();
+            b.publish({
+                ...peer,
+                revision: peer.revision + 1,
+                root: { ...peer.root, attributes: { ...peer.root.attributes, peerPageMarker: true } },
+            });
+            a.receive(b.state(a.vector()));
+            expect(() => b.receive(update)).not.toThrow();
+            expect(exportDocument(b.document())).toEqual(exportDocument(a.document()));
+            a.undo();
+            b.receive(a.state(b.vector()));
+            expect(exportDocument(b.document())).toEqual(exportDocument(a.document()));
+            expect(a.document().root.attributes?.peerPageMarker).toBe(true);
+            expect(textBlocks(a.document().root).map((node) => node.id)).toEqual(
+                textBlocks(seed.document().root).map((node) => node.id),
+            );
+            a.redo();
+            b.receive(a.state(b.vector()));
+            const reopened = SharedNativeDocument.fromState(a.state(), 'empty-shared');
             try {
-                const next = persistClauseVariants(
-                    replaceBlockNode(a.document(), 'empty-container', (node) => ({
-                        ...node,
-                        attributes: { ...node.attributes, label: 'Changed' },
-                    })),
-                );
-                const update = a.publish(next);
-                expect(() => b.receive(update)).not.toThrow();
-                expect(exportDocument(b.document())).toEqual(exportDocument(a.document()));
-                const reopened = SharedNativeDocument.fromState(a.state(), 'empty-shared');
-                try {
-                    expect(exportDocument(reopened.document())).toEqual(exportDocument(a.document()));
-                } finally {
-                    reopened.destroy();
-                }
+                expect(exportDocument(reopened.document())).toEqual(exportDocument(a.document()));
             } finally {
-                seed.destroy();
-                a.destroy();
-                b.destroy();
+                reopened.destroy();
             }
-        },
-    );
+        } finally {
+            seed.destroy();
+            a.destroy();
+            b.destroy();
+        }
+    });
 
     it.each([
         'rowBefore',

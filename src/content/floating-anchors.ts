@@ -1,6 +1,9 @@
 import type { Attributes, Json, NativeDocument, NativeNode } from '../document/model.js';
+import { isRecord } from '../document/model.js';
 import type { DocumentScene, ScenePage } from '../layout/scene.js';
 import type { FieldPlacement } from './fields/placement.js';
+import { pageLayoutForPage, pageSize } from './page-layout-queries.js';
+import { documentPresentation } from './presentation/queries.js';
 
 const GAP = 22.5;
 interface AnchorTarget {
@@ -27,6 +30,7 @@ export interface FloatingAnchorIndex {
     pages: readonly ScenePage[];
     coverPages: number;
     offsets: readonly number[];
+    pageSize?: (page: number) => { width: number; height: number };
 }
 const record = (value: unknown): value is Record<string, Json> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
@@ -109,7 +113,31 @@ export function floatingAnchorIndex(
     });
     const offsets = [0];
     for (const page of scene.pages.slice(coverPages)) offsets.push(offsets.at(-1)! + page.height + GAP);
-    return { bounds, roots: document.root.children ?? [], pages: scene.pages, coverPages, offsets };
+    const layout = document.root.attributes?.pageLayout;
+    const variable =
+        isRecord(layout) &&
+        isRecord(layout.overrides) &&
+        Object.values(layout.overrides).some(
+            (entry) => isRecord(entry) && ['orientation', 'size', 'margins'].some((key) => entry[key] !== undefined),
+        );
+    return {
+        bounds,
+        roots: document.root.children ?? [],
+        pages: scene.pages,
+        coverPages,
+        offsets,
+        ...(variable
+            ? {
+                  pageSize: (page: number) => {
+                      const layout = pageLayoutForPage(
+                          document,
+                          page + (documentPresentation(document).cover.enabled ? 1 : 0) + 1,
+                      );
+                      return pageSize(layout.orientation, layout.size);
+                  },
+              }
+            : {}),
+    };
 }
 function origin(index: FloatingAnchorIndex, destination: AnchorTarget): Origin | undefined {
     return index.bounds.get(destination.block)?.[destination.edge];
@@ -181,17 +209,30 @@ export function resolveFloatingAnchor(
     if (!saved) throw new Error('The floating object anchor is invalid');
     const base = origin(index, saved) ?? saved.fallbacks.map((fallback) => origin(index, fallback)).find(Boolean);
     if (!base) return placement;
-    const dimensions = index.pages[index.coverPages];
-    if (!dimensions) return placement;
-    const stride = dimensions.height + GAP,
-        y = Math.max(0, globalY(index, base) + saved.y);
-    let page = Math.floor(y / stride),
-        localY = y - page * stride;
-    const width = Math.min(placement.width, dimensions.width),
+    const body = index.pages.slice(index.coverPages);
+    if (!body.length) return placement;
+    const size = (page: number) => body[page] ?? index.pageSize?.(page) ?? body.at(-1)!;
+    const y = Math.max(0, globalY(index, base) + saved.y);
+    let page = 0,
+        offset = 0,
+        dimensions = size(page);
+    while (y >= offset + dimensions.height + GAP) {
+        offset += dimensions.height + GAP;
+        if (++page > 10000) throw new Error('The floating object page is out of range');
+        dimensions = size(page);
+    }
+    let localY = y - offset;
+    let width = Math.min(placement.width, dimensions.width),
         height = Math.min(placement.height, dimensions.height);
-    if (localY + height > dimensions.height && stride - localY < localY - (dimensions.height - height)) {
+    if (
+        localY + height > dimensions.height &&
+        dimensions.height + GAP - localY < localY - (dimensions.height - height)
+    ) {
         page++;
         localY = 0;
+        dimensions = size(page);
+        width = Math.min(placement.width, dimensions.width);
+        height = Math.min(placement.height, dimensions.height);
     }
     return {
         page,

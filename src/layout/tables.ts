@@ -20,10 +20,12 @@ interface TableCell {
     end: number;
 }
 export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, blocks: MeasureBlocks): Band[] {
-    const grid = tableGrid(node);
+    const decoded = tableGrid(node);
+    const grid = { ...decoded, columns: Math.max(decoded.columns, ctx.tableColumns?.get(node.id) ?? 0) };
     if (!grid.columns) return fragmentedTableBands(node, width, ctx, blocks);
     const weights = columnWeights(grid);
     const minimum = minimumTableColumns(node, ctx);
+    while (minimum.length < grid.columns) minimum.push(0);
     const fitted = fitWidths(width, weights, minimum);
     const minimumColumnWidths =
         minimum.reduce((sum, value) => sum + value, 0) <= width ? minimum : minimum.map(() => 0);
@@ -31,12 +33,14 @@ export function tableBands(node: NativeNode, width: number, ctx: LayoutContext, 
     for (const value of fitted) edges.push(edges.at(-1)! + value);
     const cells = grid.cells.map((cell) => ({
         ...cell,
-        bands: blocks(
-            cell.node.children ?? [],
-            Math.max(12, edges[cell.column + cell.colspan] - edges[cell.column] - 12),
-            scope(cell.node, { ...ctx, tableDepth: (ctx.tableDepth ?? 0) + 1 }),
-            true,
-        ),
+        bands: ctx.completed?.has(cell.node.id)
+            ? []
+            : blocks(
+                  cell.node.children ?? [],
+                  Math.max(12, edges[cell.column + cell.colspan] - edges[cell.column] - 12),
+                  scope(cell.node, { ...ctx, tableDepth: (ctx.tableDepth ?? 0) + 1 }),
+                  true,
+              ),
     }));
     const rowHeights = grid.rows.map((row) => tableRowMinimum(row.node));
     const contentHeight = (cell: (typeof cells)[number]) => cell.bands.reduce((sum, band) => sum + band.height, 0);

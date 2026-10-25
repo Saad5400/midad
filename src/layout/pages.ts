@@ -1,7 +1,7 @@
 import { clauseNumbers } from '../content/clauses/numbering.js';
 import { floatingFieldPlacement } from '../content/fields/geometry.js';
 import { floatingAnchorIndex, resolveFloatingAnchor } from '../content/floating-anchors.js';
-import { documentPageLayout, pageSize } from '../content/page-layout.js';
+import { documentPageLayout, pageLayoutForPage, pageSize } from '../content/page-layout.js';
 import { documentPresentation, headerTile } from '../content/presentation/queries.js';
 import { isRecord, type NativeDocument } from '../document/model.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
@@ -12,6 +12,9 @@ import { coverCommands } from './cover.js';
 import { fieldPaintCommands } from './fields.js';
 import { finalizePages } from './finalize.js';
 import { measureBlocks, pruneMeasurements } from './measurement.js';
+import { pageBackgroundCommands } from './page-background.js';
+import { flowPages } from './page-flow.js';
+import { pageGeometry } from './page-geometry.js';
 import type { DocumentScene, PaintCommand, SceneCell, SceneColumn, SceneLine, SceneTableRow } from './scene.js';
 import { readingRun } from './text-reading.js';
 
@@ -24,10 +27,10 @@ export function createDocumentScene(
     const coverPages = presentation.cover.enabled ? 1 : 0;
     const layout = documentPageLayout(document);
     const landscape = layout.orientation === 'landscape';
-    const size = pageSize(layout.orientation);
+    const size = pageSize(layout.orientation, layout.size);
     const width = point(surfaceWidth ?? size.width),
         height = point(size.height);
-    if (!Number.isFinite(width) || width < 100 || width > 2000) throw new Error('Invalid layout surface width');
+    if (!Number.isFinite(width) || width < 72 || width > 14400) throw new Error('Invalid layout surface width');
     const margin = (key: keyof typeof layout.margins) => {
         const value = layout.margins[key];
         if (!Number.isFinite(value) || value < 0) throw new Error('Invalid page margins');
@@ -49,6 +52,7 @@ export function createDocumentScene(
         availableHeight: point(height - top - bottom),
     };
     const pages: Array<{
+        background?: readonly PaintCommand[];
         width: number;
         height: number;
         commands: PaintCommand[];
@@ -59,7 +63,12 @@ export function createDocumentScene(
         blocks: SceneColumn[];
     }> = [];
     const newPage = () => {
+        const settings = pageLayoutForPage(document, pages.length + coverPages + 1);
+        const geometry = pageGeometry(document, pages.length + coverPages + 1, surfaceWidth);
+        const { width, height } = geometry;
+        const background = pageBackgroundCommands(settings.background, width, height, kernel);
         const page = {
+            ...(background ? { background } : {}),
             width,
             height,
             commands: [] as PaintCommand[],
@@ -70,7 +79,7 @@ export function createDocumentScene(
             blocks: [] as SceneColumn[],
         };
         pages.push(page);
-        if (presentation.header.enabled && presentation.header.src) {
+        if ((settings.header ?? presentation.header.enabled) && presentation.header.src) {
             const asset = kernel.images.source(presentation.header.src);
             const size = headerTile(asset.width, asset.height, width, height);
             page.commands.push({
@@ -84,64 +93,84 @@ export function createDocumentScene(
         }
         return page;
     };
-    let page = newPage();
-    let y = top;
-    const owners = new Map<Band, string>();
-    const content = (document.root.children ?? []).flatMap((node) => {
-        const bands = measureBlocks([node], area, ctx);
-        for (const band of bands) owners.set(band, node.id);
-        return bands;
-    });
-    pruneMeasurements(kernel, ctx.measured);
-    const requiredSpace = new Array<number>(content.length);
-    for (let start = 0; start < content.length; ) {
-        let end = start,
-            total = content[start].minimumHeight ?? content[start].height;
-        while (content[end].keepNext && end + 1 < content.length) {
-            const next = content[++end];
-            total += next.minimumHeight ?? next.height;
+    const raw = document.root.attributes?.pageLayout;
+    const overrides = isRecord(raw) && isRecord(raw.overrides) ? Object.values(raw.overrides) : [];
+    const varying = overrides.some(
+        (entry) => isRecord(entry) && ['orientation', 'size', 'margins'].some((key) => entry[key] !== undefined),
+    );
+    if (varying) {
+        const first = newPage();
+        flowPages(
+            document,
+            ctx,
+            { page: first, geometry: pageGeometry(document, coverPages + 1, surfaceWidth) },
+            () => {
+                const page = newPage();
+                return { page, geometry: pageGeometry(document, pages.length + coverPages, surfaceWidth) };
+            },
+        );
+        pruneMeasurements(kernel, ctx.measured);
+    } else {
+        let page = newPage();
+        let y = top;
+        const owners = new Map<Band, string>();
+        const content = (document.root.children ?? []).flatMap((node) => {
+            const bands = measureBlocks([node], area, ctx);
+            for (const band of bands) owners.set(band, node.id);
+            return bands;
+        });
+        pruneMeasurements(kernel, ctx.measured);
+        const requiredSpace = new Array<number>(content.length);
+        for (let start = 0; start < content.length; ) {
+            let end = start,
+                total = content[start].minimumHeight ?? content[start].height;
+            while (content[end].keepNext && end + 1 < content.length) {
+                const next = content[++end];
+                total += next.minimumHeight ?? next.height;
+            }
+            let remaining = total;
+            for (let index = start; index <= end; index++) {
+                const minimum = content[index].minimumHeight ?? content[index].height;
+                requiredSpace[index] = total > height - top - bottom ? minimum : remaining;
+                remaining -= minimum;
+            }
+            start = end + 1;
         }
-        let remaining = total;
-        for (let index = start; index <= end; index++) {
-            const minimum = content[index].minimumHeight ?? content[index].height;
-            requiredSpace[index] = total > height - top - bottom ? minimum : remaining;
-            remaining -= minimum;
-        }
-        start = end + 1;
+        content.forEach((original, index) => {
+            if (isSpacing(original)) {
+                y = point(Math.min(height - bottom, y + original.height));
+                return;
+            }
+            let pending: Band | undefined = original;
+            while (pending) {
+                const required =
+                    pending === original ? requiredSpace[index] : (pending.minimumHeight ?? pending.height);
+                if (y + required > height - bottom && y > top) {
+                    page = newPage();
+                    y = top;
+                }
+                const room = point(height - bottom - y);
+                const parts: BandParts | undefined = pending.split?.(room);
+                if ((pending.split && !parts) || (!pending.split && pending.height > room)) {
+                    if (y === top) throw new Error('A document block exceeds the writable page height');
+                    page = newPage();
+                    y = top;
+                    continue;
+                }
+                const band = parts?.head ?? pending;
+                const shifted = shiftBand(band, left, y);
+                page.commands.push(...shifted.commands);
+                page.lines.push(...shifted.lines);
+                page.cells.push(...(shifted.cells ?? []));
+                page.tableRows.push(...(shifted.tableRows ?? []));
+                page.columns.push(...(shifted.columns ?? []));
+                if (band.height > 0)
+                    page.blocks.push({ id: owners.get(original)!, x: left, y, width: area, height: band.height });
+                y = point(y + band.height);
+                pending = parts?.rest;
+            }
+        });
     }
-    content.forEach((original, index) => {
-        if (isSpacing(original)) {
-            y = point(Math.min(height - bottom, y + original.height));
-            return;
-        }
-        let pending: Band | undefined = original;
-        while (pending) {
-            const required = pending === original ? requiredSpace[index] : (pending.minimumHeight ?? pending.height);
-            if (y + required > height - bottom && y > top) {
-                page = newPage();
-                y = top;
-            }
-            const room = point(height - bottom - y);
-            const parts: BandParts | undefined = pending.split?.(room);
-            if ((pending.split && !parts) || (!pending.split && pending.height > room)) {
-                if (y === top) throw new Error('A document block exceeds the writable page height');
-                page = newPage();
-                y = top;
-                continue;
-            }
-            const band = parts?.head ?? pending;
-            const shifted = shiftBand(band, left, y);
-            page.commands.push(...shifted.commands);
-            page.lines.push(...shifted.lines);
-            page.cells.push(...(shifted.cells ?? []));
-            page.tableRows.push(...(shifted.tableRows ?? []));
-            page.columns.push(...(shifted.columns ?? []));
-            if (band.height > 0)
-                page.blocks.push({ id: owners.get(original)!, x: left, y, width: area, height: band.height });
-            y = point(y + band.height);
-            pending = parts?.rest;
-        }
-    });
     const floating = document.root.attributes?.floatingImages;
     const variables = document.root.attributes?.blockVariables;
     let anchors: ReturnType<typeof floatingAnchorIndex> | undefined;
@@ -151,9 +180,11 @@ export function createDocumentScene(
     ]) {
         if (!isRecord(entry) || entry.surface === 'cover') continue;
         const stride = (landscape ? 794 : 1123) + 30;
+        const initial = floatingFieldPlacement(entry, { width, height }, stride);
+        const dimensions = pageGeometry(document, initial.page + coverPages + 1, surfaceWidth);
         const { page: index, ...position } = resolveFloatingAnchor(
             entry,
-            floatingFieldPlacement(entry, { width, height }, stride),
+            floatingFieldPlacement(entry, dimensions, stride),
             (anchors ??= floatingAnchorIndex(document, { pages })),
         );
         if (index > 10000) throw new Error('The floating object page is out of range');
@@ -183,6 +214,9 @@ export function createDocumentScene(
         );
     }
     pages.forEach((entry, index) => {
+        if (pageLayoutForPage(document, index + coverPages + 1).footer === false) return;
+        const geometry = pageGeometry(document, index + coverPages + 1, surfaceWidth);
+        const { area, left, bottom, height } = geometry;
         const footer = kernel.shape(String(index + 1), area, 8, 'ltr');
         ctx.used.add(footer);
         for (const line of footer.lines)
@@ -209,8 +243,20 @@ export function createDocumentScene(
                 });
     });
     if (coverPages) {
+        const { width, height } = pageGeometry(document, 1, surfaceWidth);
         const commands = coverCommands(document, kernel, width, height, ctx.used);
-        pages.unshift({ width, height, commands, lines: [], cells: [], tableRows: [], columns: [], blocks: [] });
+        const background = pageBackgroundCommands(pageLayoutForPage(document, 1).background, width, height, kernel);
+        pages.unshift({
+            ...(background ? { background } : {}),
+            width,
+            height,
+            commands,
+            lines: [],
+            cells: [],
+            tableRows: [],
+            columns: [],
+            blocks: [],
+        });
     }
     kernel.clearUnused(ctx.used);
     const immutable = finalizePages(pages);

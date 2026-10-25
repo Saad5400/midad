@@ -4,7 +4,18 @@ import type { ShapedParagraph } from '../rendering/text/model.js';
 import { inheritedDirection } from '../typography/direction.js';
 import type { Band } from './bands.js';
 
+export interface TextContinuation {
+    readonly from: number;
+    readonly byteFrom: number;
+    readonly nodeOffsets: ReadonlyMap<string, number>;
+}
+
 export interface LayoutContext {
+    tableColumns?: ReadonlyMap<string, number>;
+    fragments?: ReadonlyMap<string, TextContinuation>;
+    completed?: ReadonlySet<string>;
+    listStarts?: ReadonlyMap<string, string>;
+    listNumbers?: ReadonlyMap<string, number>;
     used: Set<ShapedParagraph>;
     kernel: NativeTextKernel;
     fontHash: string;

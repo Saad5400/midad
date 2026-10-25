@@ -91,6 +91,9 @@ export interface ClipEndCommand {
 }
 
 export interface SceneLine {
+    readonly fragmentFrom?: number;
+    readonly fragmentByteFrom?: number;
+    readonly sourceNodeOffsets?: ReadonlyMap<string, number>;
     readonly paragraphId: string;
     readonly textNodeId: string;
     readonly left?: number;
@@ -111,6 +114,7 @@ export interface SceneColumn {
 }
 
 export interface ScenePage {
+    readonly background?: readonly PaintCommand[];
     readonly width: number;
     readonly height: number;
     readonly commands: readonly PaintCommand[];
@@ -119,6 +123,10 @@ export interface ScenePage {
     readonly tableRows?: readonly SceneTableRow[];
     readonly columns?: readonly SceneColumn[];
     readonly blocks?: readonly SceneColumn[];
+}
+
+export function pagePaintCommands(page: ScenePage, background = true): readonly PaintCommand[] {
+    return background && page.background?.length ? [...page.background, ...page.commands] : page.commands;
 }
 
 export interface SceneTableRow {
@@ -227,9 +235,12 @@ export function hitTest(
     const prefix = first?.nodeId === line.paragraphId && !first.editable ? first.to : 0;
     return {
         nodeId: source?.nodeId ?? line.paragraphId,
-        offset: source ? Math.max(0, Math.min(bounded - source.from, source.to - source.from)) : 0,
+        offset: source
+            ? Math.max(0, Math.min(bounded - source.from, source.to - source.from)) +
+              (line.sourceNodeOffsets?.get(source.nodeId) ?? 0)
+            : 0,
         blockId: line.paragraphId,
-        blockOffset: Math.max(0, bounded - prefix),
+        blockOffset: Math.max(0, bounded - prefix + (line.fragmentFrom ?? 0)),
         affinity: position.affinity,
     };
 }

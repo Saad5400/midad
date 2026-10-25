@@ -22,7 +22,7 @@ import {
     IMAGE_FIELD_TYPES,
 } from '../content/fields/queries.js';
 import type { NativeDocument } from '../document/model.js';
-import { assertSceneRevision, type DocumentScene } from '../layout/scene.js';
+import { assertSceneRevision, pagePaintCommands, type DocumentScene } from '../layout/scene.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import { NATIVE_RENDERER_VERSION } from '../rendering/version.js';
 import { chooseFont } from '../typography/fonts.js';
@@ -35,7 +35,12 @@ export function sceneManifest(scene: DocumentScene): unknown {
         documentId: scene.documentId,
         revision: scene.revision,
         fontHash: scene.fontHash,
-        pages: scene.pages.map((page) => ({ width: page.width, height: page.height, commands: page.commands })),
+        pages: scene.pages.map((page) => ({
+            width: page.width,
+            height: page.height,
+            commands: page.commands,
+            ...(page.background ? { background: page.background } : {}),
+        })),
     };
 }
 
@@ -69,7 +74,7 @@ export async function writeScenePdf(
     const fonts = new Map<string, { embedder: NativePdfFont; ref: PDFRef }>();
     const fontGlyphs = new Map<string, Map<number, Set<string>>>();
     for (const source of scene.pages)
-        for (const command of source.commands) {
+        for (const command of pagePaintCommands(source)) {
             if (command.kind && command.kind !== 'glyphs') continue;
             let entries = fontGlyphs.get(command.fontId);
             if (!entries) fontGlyphs.set(command.fontId, (entries = new Map()));
@@ -88,7 +93,7 @@ export async function writeScenePdf(
     }
     const images = new Map<string, PDFImage>();
     for (const source of scene.pages)
-        for (const command of source.commands) {
+        for (const command of pagePaintCommands(source)) {
             if (command.kind === 'image' && !images.has(command.assetId)) {
                 const image = await pdf.embedPng(kernel.images.get(command.assetId).bytes);
                 await image.embed();
@@ -142,8 +147,9 @@ export async function writeScenePdf(
             return `${key} gs\n`;
         };
         const textContent = new PdfTextContent(content, source.height, pageFonts, scalar, alpha, text.span);
-        for (let commandIndex = 0; commandIndex < source.commands.length; commandIndex++) {
-            const command = source.commands[commandIndex];
+        const sourceCommands = pagePaintCommands(source);
+        for (let commandIndex = 0; commandIndex < sourceCommands.length; commandIndex++) {
+            const command = sourceCommands[commandIndex];
             if ('glyphs' in command) {
                 textContent.append(command);
                 continue;
@@ -273,7 +279,7 @@ export async function writeScenePdf(
                     segments.push(
                         `${scalar(line.x)} ${scalar(source.height - line.y)} m ${scalar(line.toX)} ${scalar(source.height - line.toY)} l`,
                     );
-                    const next = source.commands[commandIndex + 1];
+                    const next = sourceCommands[commandIndex + 1];
                     if (
                         command.tableBorder === undefined ||
                         next?.kind !== 'line' ||

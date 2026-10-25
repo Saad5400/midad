@@ -41,7 +41,8 @@ export function searchRectangles(
             const row = shaped.lines.find((row) => row.top === line.originalTop);
             if (!row) continue;
             const first = shaped.sources[0];
-            const prefix = first?.nodeId === line.paragraphId && !first.editable ? first.to : 0;
+            const prefix =
+                (first?.nodeId === line.paragraphId && !first.editable ? first.to : 0) - (line.fragmentFrom ?? 0);
             let low = 0,
                 high = found.length;
             while (low < high) {

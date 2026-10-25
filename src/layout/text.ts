@@ -14,6 +14,8 @@ export function glyphBands(
     base = DEFAULT_TEXT_STYLE,
     prefix = '',
 ): Band[] {
+    const fragment = ctx.fragments?.get(node.id);
+    if (fragment?.from) prefix = '';
     const style = blockTextStyle(node, base);
     let spans = [...inlineSpans(node, style)];
     if (prefix) spans.unshift({ nodeId: node.id, text: prefix, style, editable: false });
@@ -76,7 +78,14 @@ export function glyphBands(
                 color: run.style.color,
                 fauxBold: run.fauxBold,
                 fauxItalic: run.fauxItalic,
-                reading: readingRun(JSON.stringify(['paragraph', node.id, line.start]), run, 0, height),
+                reading: readingRun(
+                    JSON.stringify(['paragraph', node.id, line.start + (fragment?.from ?? 0)]),
+                    run,
+                    0,
+                    height,
+                ).map((part) =>
+                    fragment ? { ...part, order: [part.order[0] + fragment.byteFrom, ...part.order.slice(1)] } : part,
+                ),
             };
             commands.push(glyph);
             for (const offset of [
@@ -128,8 +137,8 @@ export function glyphBands(
                                   ...command,
                                   reading: command.reading.map((part) => ({
                                       ...part,
-                                      group: JSON.stringify(['paragraph', node.id, line.start]),
-                                      order: [offset, ...part.order],
+                                      group: JSON.stringify(['paragraph', node.id, line.start + (fragment?.from ?? 0)]),
+                                      order: [offset + (fragment?.byteFrom ?? 0), ...part.order],
                                   })),
                               }
                             : command,
@@ -142,6 +151,13 @@ export function glyphBands(
             commands,
             lines: [
                 {
+                    ...(fragment
+                        ? {
+                              fragmentFrom: fragment.from,
+                              fragmentByteFrom: fragment.byteFrom,
+                              sourceNodeOffsets: fragment.nodeOffsets,
+                          }
+                        : {}),
                     paragraphId: node.id,
                     textNodeId: shaped.sources.find((source) => source.editable)?.nodeId ?? node.id,
                     left: 0,

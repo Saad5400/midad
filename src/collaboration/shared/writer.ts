@@ -11,10 +11,10 @@ import {
 import { blockText, isTextBlock } from '../../document/text.js';
 import { canonicalSharedJson, readSharedAttributes, writeSharedAttributes } from '../values.js';
 import { syncSharedInline } from './inline.js';
+import { readSharedDocument, readSharedNode } from './reader.js';
 import { key } from './schema.js';
 import type { SharedStore } from './store.js';
 import { variantScope as clauseVariantScope, variantBody } from './variants.js';
-import { readSharedDocument, readSharedNode } from './reader.js';
 
 export class SharedWriter {
     private readonly previousNodes = new Map<string, NativeNode>();
@@ -59,6 +59,24 @@ export class SharedWriter {
         for (const address of this.previousNodes.keys())
             if (!nextNodes.has(address) && !this.joined.has(address)) this.store.deleted.set(address, true);
     }
+    seedPlaceholders(document: NativeDocument): boolean {
+        const nodes = new Map<string, NativeNode>();
+        this.indexNodes(document.root, '', document, nodes);
+        if (![...nodes.keys()].some((address) => !this.store.registry.has(address))) return false;
+        const copy = (node: NativeNode): NativeNode =>
+            node.kind === 'text'
+                ? node
+                : {
+                      ...node,
+                      ...(node.kind === 'clause' && node.attributes?.variants
+                          ? { attributes: { ...node.attributes, variants: copyJson(node.attributes.variants) } }
+                          : {}),
+                      ...(node.children ? { children: node.children.map(copy) } : {}),
+                  };
+        this.write({ ...document, root: copy(document.root) }, document);
+        return true;
+    }
+
     private indexNodes(node: NativeNode, scope: string, document: NativeDocument, target = this.previousNodes): void {
         if (node.kind === 'text') return;
         target.set(key(scope, node.id), node);
