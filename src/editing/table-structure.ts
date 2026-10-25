@@ -3,7 +3,9 @@ import type { StructureResult } from './lists.js';
 import { columnWeights, type GridCell, type GridRow, type TableGrid } from './table-grid.js';
 import { allocator, identity, textBlocks, update, type TextCaret } from './text.js';
 const withChildren = (node: NativeNode, children: readonly NativeNode[]): NativeNode =>
-    Object.freeze({ ...node, children: Object.freeze(children) });
+    node.children?.length === children.length && node.children.every((child, index) => child === children[index])
+        ? node
+        : Object.freeze({ ...node, children: Object.freeze(children) });
 export type TableCommand =
     | 'rowBefore'
     | 'rowAfter'
@@ -14,6 +16,14 @@ export type TableCommand =
     | 'deleteTable'
     | 'headerRow';
 function canonicalCell(cell: GridCell): NativeNode {
+    if (
+        cell.node.attributes?.colspan === cell.colspan &&
+        cell.node.attributes?.rowspan === cell.rowspan &&
+        !['rmMergeOrigin', 'rmMergedTo', 'rmHideMode', 'rmColspan', 'rmRowspan'].some(
+            (key) => key in cell.node.attributes!,
+        )
+    )
+        return cell.node;
     const attributes: Attributes = Object.freeze({
         ...Object.fromEntries(
             Object.entries(cell.node.attributes ?? {}).filter(

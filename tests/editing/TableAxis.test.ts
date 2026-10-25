@@ -166,6 +166,8 @@ it('toggles a header column and applies cell styles without changing neighboring
         backgroundColor: '#ffeeaa',
         verticalAlign: 'middle',
     });
+    expect(findNode(styled, 'b')).toBe(findNode(header, 'b'));
+    expect(findNode(styled, 'r3')).toBe(findNode(header, 'r3'));
     expect(findNode(styled, 'a')!.attributes).toMatchObject({
         backgroundColor: '#ffeeaa',
         verticalAlign: 'middle',
