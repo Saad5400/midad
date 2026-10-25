@@ -65,8 +65,8 @@ function signature(value: unknown): string {
     return JSON.stringify(canonical(decode(value).document));
 }
 export class FragmentContentController {
-    private original: unknown;
-    private current: string;
+    protected original: unknown;
+    protected current: string;
     constructor(
         value: unknown,
         private readonly direction: 'rtl' | 'ltr' = 'rtl',
@@ -86,6 +86,23 @@ export class FragmentContentController {
     }
     publish(value: unknown): unknown {
         const result = fragmentContent(value, this.original);
+        this.current = signature(result);
+        return result;
+    }
+}
+
+export class DocumentContentController extends FragmentContentController {
+    source(): Record<string, unknown> {
+        const source = decode(this.original).document;
+        return {
+            ...source,
+            ...(!Array.isArray(source.content) || !source.content.length ? { content: [{ type: 'paragraph' }] } : {}),
+        };
+    }
+    publish(value: unknown): unknown {
+        const source = decode(this.original),
+            document = decode(value).document;
+        const result = source.encoded ? JSON.stringify(document) : document;
         this.current = signature(result);
         return result;
     }
