@@ -13,6 +13,10 @@
         "build.d.mts"
     ],
     "exports": {
+        "./content/typography": {
+            "types": "./dist/content/typography.d.ts",
+            "import": "./dist/content/typography.js"
+        },
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"

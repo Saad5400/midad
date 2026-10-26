@@ -1,6 +1,7 @@
 import { exportDocument, importDocument } from '../document/codec.js';
 import { type NativeNode } from '../document/model.js';
 import { automaticDirection, inheritedDirection } from '../typography/direction.js';
+import { documentTextStyle } from '../typography/style.js';
 import { fragmentHtml } from './clipboard.js';
 import { plainText } from './plain-text.js';
 
@@ -36,11 +37,17 @@ export function messageHtml(value: unknown, direction: 'rtl' | 'ltr' = 'rtl'): s
     try {
         const document = importDocument(messageSource(value, direction), 'message-preview');
         if (!messageNodes(document.root)) throw new Error('Unsupported message document objects');
-        return fragmentHtml(
+        const html = fragmentHtml(
             { blocks: document.root.children ?? [] },
             document.root.attributes?.dir === 'ltr' ? 'ltr' : 'rtl',
             false,
         );
+        if (!document.root.attributes?.typography) return html;
+        const family = JSON.stringify(documentTextStyle(document).family).replace(
+            /[&"<>]/g,
+            (character) => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!,
+        );
+        return `<div style="font-family:${family}">${html}</div>`;
     } catch {
         return plainText(value)
             .replace(/&/g, '&amp;')

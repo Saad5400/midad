@@ -11,7 +11,7 @@ export function glyphBands(
     node: NativeNode,
     width: number,
     ctx: Context,
-    base = DEFAULT_TEXT_STYLE,
+    base = ctx.defaultStyle ?? DEFAULT_TEXT_STYLE,
     prefix = '',
 ): Band[] {
     const fragment = ctx.fragments?.get(node.id);

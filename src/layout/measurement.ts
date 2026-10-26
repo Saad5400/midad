@@ -55,6 +55,7 @@ export function measureBlocks(
             parent.tableDepth ?? 0,
             parent.fragments?.get(node.id)?.from ?? 0,
             Boolean(parent.completed),
+            parent.defaultStyle?.family ?? DEFAULT_TEXT_STYLE.family,
         ]);
         const cacheable = !parent.completed || isTextBlock(node);
         const previous = cacheable ? cache.get(node) : undefined;
@@ -95,22 +96,17 @@ export function measureBlocks(
 
 function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
     const output: Band[] = [];
+    const base = ctx.defaultStyle ?? DEFAULT_TEXT_STYLE;
     if (['paragraph', 'heading', 'clauseTitle', 'codeBlock'].includes(node.kind))
         output.push(
-            ...glyphBands(
-                node,
-                width,
-                ctx,
-                node.kind === 'codeBlock' ? { ...DEFAULT_TEXT_STYLE, family: 'Courier New' } : DEFAULT_TEXT_STYLE,
-            ),
+            ...glyphBands(node, width, ctx, node.kind === 'codeBlock' ? { ...base, family: 'Courier New' } : base),
         );
     else if (node.kind === 'clause') {
         if (rejectedClause(node)) return output;
         const number = node.attributes?.ordered !== false ? `${ctx.numbers.get(node.id)}. ` : '';
         for (const child of node.children ?? []) {
             if (child.kind === 'clauseTitle') {
-                if (!node.attributes?.isTitleHidden)
-                    output.push(...glyphBands(child, width, ctx, DEFAULT_TEXT_STYLE, number));
+                if (!node.attributes?.isTitleHidden) output.push(...glyphBands(child, width, ctx, base, number));
             } else output.push(...measureBlocks([child], width, ctx));
         }
     } else if (node.kind === 'parallelRow') output.push(...parallelBands(node, width, ctx, measureBlocks));
@@ -154,7 +150,7 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
                         first,
                         width - 18,
                         ctx,
-                        DEFAULT_TEXT_STYLE,
+                        base,
                         node.kind === 'orderedList' ? `${ctx.listNumbers?.get(item.id) ?? index++}. ` : '• ',
                     ).map((band) => shiftBand(band, 9)),
                 );

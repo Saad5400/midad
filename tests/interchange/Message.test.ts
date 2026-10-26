@@ -10,6 +10,28 @@ import {
 import { describe, expect, it } from 'vitest';
 
 describe('native saved messages', () => {
+    it('retains an explicitly configured document font in HTML while preserving local font overrides', () => {
+        const html = messageHtml({
+            type: 'doc',
+            attrs: { typography: { fontFamily: 'Tajawal' } },
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [
+                        { type: 'text', text: 'Default' },
+                        {
+                            type: 'text',
+                            text: 'Explicit',
+                            marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial' } }],
+                        },
+                    ],
+                },
+            ],
+        });
+        expect(html).toContain('font-family:&quot;Tajawal&quot;');
+        expect(html).toContain('font-family:Arial');
+        expect(html).toContain('Default');
+    });
     it('renders safe formatting, direction, indentation and lists for welcome messages', () => {
         const html = messageHtml({
             type: 'doc',
