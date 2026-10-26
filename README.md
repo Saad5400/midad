@@ -198,6 +198,42 @@ The PDF writer reuses compatible opaque text setup and exact binary-grid text mo
 
 Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.
 
+## Node task runtime
+
+`@saad5400/midad/node` provides a Node.js 22 worker pool and private Unix-socket transport. Hosts supply their task handler, asset authorization and runtime identity. Browser entrypoints do not load these Node APIs.
+
+A worker module registers a handler after any startup preparation:
+
+```ts
+import { serveTaskWorker } from '@saad5400/midad/node';
+
+serveTaskWorker(async (payload) => handleTask(payload));
+```
+
+Start the pool and socket in a private directory owned by the service user:
+
+```ts
+import { TaskPool, TaskService, callTaskService } from '@saad5400/midad/node';
+
+const pool = new TaskPool({ worker: new URL('./worker.mjs', import.meta.url), workers: 2 });
+const service = await TaskService.open({ path: socketPath, identity: runtimeIdentity, pool });
+const result = await callTaskService({
+    path: socketPath,
+    identity: runtimeIdentity,
+    affinity: documentId,
+    payload: task,
+    budgetMs: 5000,
+});
+await service.close();
+await pool.close();
+```
+
+The host defines `handleTask`, `socketPath`, `runtimeIdentity`, `documentId` and `task`. Requests use JSON values with a four-byte big-endian length prefix and protocol version 1. The socket has mode 0600; its parent directory must be private and owned by the service user. Existing socket-path files are preserved and cause startup to fail. Close the service before its pool; graceful shutdown releases the socket for an explicit restart.
+
+Deadlines include queue time. Cancelling or timing out active work terminates and replaces its worker, preventing late task execution; cancelling queued work preserves the active worker. Handled application failures keep the worker, while crashes and invalid responses replace it. Queues, queued bytes, clients and input/output frame sizes are bounded. `affinity` prefers an idle worker that last handled the same key while other available workers can continue serving work. Workers recycle after a configurable number of jobs. `resourceLimits` controls V8 heap limits; applications must size and verify their renderer's additional native/WASM memory.
+
+`TaskError.code` distinguishes application failures, unavailable workers, overload, cancellation, deadlines and runtime-identity mismatches. A host should retain unsaved input when the runtime is unavailable. These primitives do not provide application authentication, persistence or a collaboration broadcast broker.
+
 ## Source organization
 
 Source modules and their corresponding tests share these boundaries:
