@@ -7,3 +7,5 @@ export * from './search.js';
 export * from './table-handles.js';
 export * from './viewport-readiness.js';
 export * from './viewport.js';
+export * from './pdf-document.js';
+export * from './pdf-labels.js';

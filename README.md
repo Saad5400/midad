@@ -88,6 +88,29 @@ Use `writePdfOverlayDocument` with the same arguments to retain editable native 
 
 `preparePdfSourceForms(bytes, openReader)` prepares pending original form appearances through a host-supplied PDF reader, such as PDF.js. It verifies that canonical values, field flags and page geometry are unchanged, and always disposes the reader. Appearance fonts must resolve in the PDF itself; missing standard-font resources are supplied, and unresolved fonts are rejected instead of relying on viewer fallback. Resolved sources return the same byte object without opening a reader. Cache a changed result as a separate immutable source before displaying it or recording its identity. The host retains control of reader assets and transport; Midad adds no PDF.js runtime dependency. Values that the source font cannot encode still raise an error instead of being replaced or dropped.
 
+`PdfDocumentController` in `/browser/view` owns a framework-independent PDF reader session: loading/first-paint readiness, cancellation, source disposal, page geometry, current-page tracking, zoom anchors, navigation, full-text copy and download URLs. `PDF_READER_LABELS` provides Arabic/English reader labels. Hosts supply a PDF parser/source adapter and the rendered page elements; the controller has no Vue, CLM, route or PDF.js dependency. It owns each opened source until replacement/disposal. Call `painted(page, generation)` with the generation captured by that page renderer, and `pageError` for rendering failures. `open()` resolves only when the current page is painted or the five-second attempt fails; a source provider that ignores cancellation cannot leave the caller waiting indefinitely.
+
+```ts
+import { PdfDocumentController } from '@saad5400/midad/browser/view';
+
+const reader = new PdfDocumentController({
+    load: (signal) => fetchPdfBytes(signal),
+    open: (bytes, signal) => openPdfSourceAdapter(bytes, signal),
+    viewport: () => viewportElement,
+    pagesElement: () => pageContainer,
+    afterLayout: () => waitForViewUpdate(),
+    changed: (state) => renderReader(state, (page) => reader.painted(page, state.generation)),
+});
+
+// renderReader calls its callback only after the page has actually painted.
+await reader.open();
+await reader.setMode('width');
+reader.navigate(2);
+reader.dispose();
+```
+
+The functions/elements in this binding example are supplied by the host. The source adapter implements `PdfDocumentSource` (`pages`, `bytes`, `plainText`, `destroy`); existing PDF engines can be used without coupling the controller to their worker or authentication setup. This API is the reusable controller layer, not a complete HTML editor or a built-in PDF decoder. The full embeddable editor UI is still being extracted.
+
 `PdfPrintController` in `/browser/view` prints validated, complete PDF bytes through a same-origin PDF frame. Hosts supply the PDF producer, a stable identity that changes with the PDF, readiness and optional callbacks for flushing edits, busy state and errors. It rejects stale responses, coalesces preparation requests, preserves editing focus and aborts stalled preparation after five seconds. The default 60 MiB byte limit is configurable. Each request refreshes its producer by default, since server-owned appearances can change without an editor revision. The optional `reuse` predicate is only for immutable bytes whose identity covers every change. Dispose the controller when its host unmounts to release pending work and owned frame/blob resources. Browsers may retain the loaded frame until a later print request or disposal when they do not emit `afterprint`.
 
 `PrintShortcut` in `/browser/input` connects Ctrl/Cmd+P to a host callback. It chooses the focused visible editor, remembers interaction when focus moves to host controls and excludes hidden/inert editors. Its input binding is independent of PDF transport. Both controllers are framework-independent and must be disposed. Explicit print actions and keyboard handling do not override the browser's native Print menu or arbitrary `window.print()` calls; those paths and full browser/device acceptance remain in progress. A host that displays field overlays must provide the complete PDF with those overlays rather than printing only its original background.
