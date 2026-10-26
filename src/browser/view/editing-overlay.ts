@@ -306,6 +306,7 @@ export class EditingOverlayView {
             this.element.append(element);
         }
         const active = new Set<string>();
+        let next = layer.element.firstElementChild;
         for (const item of items) {
             active.add(item.key);
             let node = layer.nodes.get(item.key);
@@ -315,6 +316,8 @@ export class EditingOverlayView {
                 layer.nodes.set(item.key, node);
                 layer.element.append(node);
             }
+            if (node !== next) layer.element.insertBefore(node, next);
+            next = node.nextElementSibling;
             paint(node, item);
         }
         for (const [key, node] of layer.nodes)

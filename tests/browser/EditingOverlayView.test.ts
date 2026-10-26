@@ -196,3 +196,18 @@ it('disposes only its own DOM and ignores late updates and retained-element even
     expect(host.children).toHaveLength(1);
     expect(host.firstElementChild).toBe(other);
 });
+
+it('preserves keyed cursor identity while following the current peer stacking order', () => {
+    const { frame, view } = open();
+    const peer = (id: string) => ({ id, name: id, color: '#112233', caret: rect, rectangles: [] });
+    const a = peer('a'),
+        b = peer('b');
+    view.update({ ...frame, peers: [a, b] });
+    const first = view.element.querySelector('[data-peer=a]');
+    view.update({ ...frame, peers: [b, a] });
+    expect([...view.element.querySelectorAll('[data-peer]')].map((node) => node.getAttribute('data-peer'))).toEqual([
+        'b',
+        'a',
+    ]);
+    expect(view.element.querySelector('[data-peer=a]')).toBe(first);
+});
