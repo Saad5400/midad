@@ -119,6 +119,8 @@ The functions/elements in this binding example are supplied by the host. The sou
 
 `PageView` in `@saad5400/midad/browser/view` owns a browser page's canvas, sizing, viewport observation, virtualization and repaint lifecycle. It can be mounted directly into an ordinary HTML element; no Vue or CLM component is needed. `ViewportReadiness` waits for current painted content in the actual visible viewport, including a restored scroll position on a later page.
 
+`TableResizeView` from the same entrypoint mounts the actual column/row resize controls with their default styles into a positioned page container. Pass the page's `cells`, `rows`, stored row heights, active `tableId`, labels and the page's scale (CSS pixels per scene point). Its `resize` and `resizeRow` callbacks receive scene-point values for the document commands. It supports mouse/pen/touch capture, physical RTL keyboard arrows, minimum column widths, row-height limits, Home for automatic row height and Escape/capture-loss cancellation. `update(frame)` preserves control focus while refreshing immutable scene snapshots; changed geometry cancels an unfinished drag. Call `dispose()` on unmount. Customize the highlight with `--midad-resize-fill` / `--midad-resize-color`. This is a reusable UI control, not the full embeddable editor UI.
+
 ```ts
 import { PageView } from '@saad5400/midad/browser/view';
 

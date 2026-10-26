@@ -5,6 +5,7 @@ export * from './page-view.js';
 export * from './pdf-print.js';
 export * from './search.js';
 export * from './table-handles.js';
+export * from './table-resize-view.js';
 export * from './viewport-readiness.js';
 export * from './viewport.js';
 export * from './pdf-document.js';
