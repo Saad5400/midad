@@ -46,16 +46,19 @@ export function glyphBands(
     );
     ctx.used.add(shaped);
     const explicitHeight = spans.some((span) => span.style.lineHeight !== null);
+    const textNodeId = shaped.sources.find((source) => source.editable)?.nodeId ?? node.id;
     const bands = shaped.lines.map((line): Band => {
         const height = point(Math.max(explicitHeight ? 0 : style.size * 1.6, line.bottom - line.top));
         const commands: PaintCommand[] = [];
+        const readingGroup = JSON.stringify(['paragraph', node.id, line.start + (fragment?.from ?? 0)]);
         for (const run of line.runs) {
             let x1 = Infinity,
                 x2 = -Infinity;
-            for (let index = 0; index < run.positions.length; index += 2) {
-                x1 = Math.min(x1, run.positions[index]);
-                x2 = Math.max(x2, run.positions[index]);
-            }
+            if (run.style.background || run.style.underline || run.style.strike || run.style.href)
+                for (let index = 0; index < run.positions.length; index += 2) {
+                    x1 = Math.min(x1, run.positions[index]);
+                    x2 = Math.max(x2, run.positions[index]);
+                }
             if (run.style.background)
                 commands.push({
                     kind: 'rect',
@@ -78,12 +81,7 @@ export function glyphBands(
                 color: run.style.color,
                 fauxBold: run.fauxBold,
                 fauxItalic: run.fauxItalic,
-                reading: readingRun(
-                    JSON.stringify(['paragraph', node.id, line.start + (fragment?.from ?? 0)]),
-                    run,
-                    0,
-                    height,
-                ).map((part) =>
+                reading: readingRun(readingGroup, run, 0, height).map((part) =>
                     fragment ? { ...part, order: [part.order[0] + fragment.byteFrom, ...part.order.slice(1)] } : part,
                 ),
             };
@@ -137,7 +135,7 @@ export function glyphBands(
                                   ...command,
                                   reading: command.reading.map((part) => ({
                                       ...part,
-                                      group: JSON.stringify(['paragraph', node.id, line.start + (fragment?.from ?? 0)]),
+                                      group: readingGroup,
                                       order: [offset + (fragment?.byteFrom ?? 0), ...part.order],
                                   })),
                               }
@@ -159,7 +157,7 @@ export function glyphBands(
                           }
                         : {}),
                     paragraphId: node.id,
-                    textNodeId: shaped.sources.find((source) => source.editable)?.nodeId ?? node.id,
+                    textNodeId,
                     left: 0,
                     top: 0,
                     height,

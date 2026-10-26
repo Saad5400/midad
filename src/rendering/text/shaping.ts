@@ -7,6 +7,14 @@ import { INVALID_TEXT_OFFSET, rememberTextIndex, utf8Index } from './encoding.js
 import { NATIVE_FONT_ID, type TextFonts } from './fonts.js';
 import type { ShapedLine, ShapedParagraph, ShapedRun } from './model.js';
 
+function freezeRun(run: ShapedRun): ShapedRun {
+    Object.freeze(run.glyphs);
+    Object.freeze(run.text);
+    Object.freeze(run.positions);
+    Object.freeze(run.offsets);
+    return Object.freeze(run);
+}
+
 export function shapeParagraph(
     ck: CanvasKit,
     fonts: TextFonts,
@@ -103,18 +111,22 @@ export function shapeParagraph(
     const byteLength = encoding.offsets.length - 1;
     let encodedText: Uint8Array | undefined;
     let decoder: TextDecoder | undefined;
-    const clusterOffsets = [...new Set(rawLines.flatMap((line) => line.runs.flatMap((run) => Array.from(run.offsets))))]
-        .filter((offset) => offset >= 0 && offset <= byteLength)
-        .sort((a, b) => a - b);
-    const clusterText = new Map<number, string>();
+    const boundaries = new Uint8Array(byteLength + 1);
+    for (const line of rawLines)
+        for (const run of line.runs)
+            for (const offset of run.offsets) if (offset >= 0 && offset <= byteLength) boundaries[offset] = 1;
+    const clusterOffsets: number[] = [];
+    for (let offset = 0; offset <= byteLength; offset++) if (boundaries[offset]) clusterOffsets.push(offset);
+    const clusterText: Array<string | undefined> = new Array(byteLength + 1);
+    const ignored = /[\r\n\uFFFC]/g;
+    const needsCleanup = /[\r\n\uFFFC]/.test(text);
     for (let index = 0; index < clusterOffsets.length; index++) {
         const first = clusterOffsets[index];
         const end = clusterOffsets[index + 1] ?? byteLength;
         const from = encoding.offsets[first],
             to = encoding.offsets[end];
-        clusterText.set(
-            first,
-            (encoding.wellFormed &&
+        const cluster =
+            encoding.wellFormed &&
             from !== undefined &&
             to !== undefined &&
             from !== INVALID_TEXT_OFFSET &&
@@ -122,11 +134,10 @@ export function shapeParagraph(
                 ? text.slice(from, to)
                 : (decoder ??= new TextDecoder()).decode(
                       (encodedText ??= new TextEncoder().encode(text)).subarray(first, end),
-                  )
-            ).replace(/[\r\n\uFFFC]/g, ''),
-        );
+                  );
+        clusterText[first] = needsCleanup ? cluster.replace(ignored, '') : cluster;
     }
-    const assignedClusters = new Set<number>();
+    const assignedClusters = new Uint8Array(byteLength + 1);
     const explicitHeight = spans.some((span) => span.style.lineHeight !== null);
     let lines: ShapedLine[];
     try {
@@ -154,7 +165,7 @@ export function shapeParagraph(
                 for (let index = 0; index < raw.glyphs.length; index++) {
                     if (raw.glyphs[index] === 0) {
                         const missing = Array.from(
-                            clusterText.get(raw.offsets[index]) ?? '',
+                            clusterText[raw.offsets[index]] ?? '',
                             (character) => `U+${character.codePointAt(0)!.toString(16).toUpperCase()}`,
                         ).join(', ');
                         throw new Error(
@@ -175,16 +186,7 @@ export function shapeParagraph(
                     const style = range?.span.style ?? DEFAULT_TEXT_STYLE;
                     const asset = rawAsset ?? fonts.get(range?.choice.id ?? NATIVE_FONT_ID);
                     if (!group || group.fontId !== asset.id || group.sourceStart !== (range?.byteStart ?? 0)) {
-                        if (group)
-                            runs.push(
-                                Object.freeze({
-                                    ...group,
-                                    glyphs: Object.freeze(group.glyphs),
-                                    text: Object.freeze(group.text),
-                                    positions: Object.freeze(group.positions),
-                                    offsets: Object.freeze(group.offsets),
-                                }),
-                            );
+                        if (group) runs.push(freezeRun(group));
                         group = {
                             sourceStart: range?.byteStart ?? 0,
                             fontId: asset.id,
@@ -199,8 +201,8 @@ export function shapeParagraph(
                         };
                     }
                     group.glyphs.push(raw.glyphs[index]);
-                    group.text.push(assignedClusters.has(offset) ? '' : (clusterText.get(offset) ?? ''));
-                    assignedClusters.add(offset);
+                    group.text.push(assignedClusters[offset] ? '' : (clusterText[offset] ?? ''));
+                    assignedClusters[offset] = 1;
                     group.positions.push(point(raw.positions[index * 2]), point(raw.positions[index * 2 + 1]));
                     group.offsets.push(raw.offsets[index]);
                     if (
@@ -213,15 +215,7 @@ export function shapeParagraph(
                             point(raw.positions[(index + 1) * 2 + 1]),
                         );
                         group.offsets.push(raw.offsets[index + 1]);
-                        runs.push(
-                            Object.freeze({
-                                ...group,
-                                glyphs: Object.freeze(group.glyphs),
-                                text: Object.freeze(group.text),
-                                positions: Object.freeze(group.positions),
-                                offsets: Object.freeze(group.offsets),
-                            }),
-                        );
+                        runs.push(freezeRun(group));
                         group = undefined;
                     }
                 }
@@ -245,9 +239,11 @@ export function shapeParagraph(
         paragraph.delete();
         throw error;
     } finally {
-        for (const face of new Set(rawLines.flatMap((line) => line.runs.map((run) => run.typeface)))) face?.delete();
+        const faces = new Set<(typeof rawLines)[number]['runs'][number]['typeface']>();
+        for (const line of rawLines) for (const run of line.runs) faces.add(run.typeface);
+        for (const face of faces) face?.delete();
     }
-    const rectangles = paragraph.getRectsForPlaceholders();
+    const rectangles = ranges.some(({ span }) => span.placeholder) ? paragraph.getRectsForPlaceholders() : [];
     const placeholders = ranges
         .filter(({ span }) => span.placeholder)
         .map(({ span, from }, index) => {
@@ -262,22 +258,24 @@ export function shapeParagraph(
                 height: point(rect[3] - rect[1]),
             });
         });
-    const bounds = lines.map((line) => ({ top: line.top, bottom: line.bottom }));
-    for (const placeholder of placeholders) {
-        let low = 0,
-            high = lines.length;
-        while (low < high) {
-            const middle = (low + high) >>> 1;
-            if (lines[middle].start <= placeholder.from) low = middle + 1;
-            else high = middle;
+    if (placeholders.length) {
+        const bounds = lines.map((line) => ({ top: line.top, bottom: line.bottom }));
+        for (const placeholder of placeholders) {
+            let low = 0,
+                high = lines.length;
+            while (low < high) {
+                const middle = (low + high) >>> 1;
+                if (lines[middle].start <= placeholder.from) low = middle + 1;
+                else high = middle;
+            }
+            const box = bounds[Math.max(0, low - 1)];
+            box.top = Math.min(box.top, placeholder.top);
+            box.bottom = Math.max(box.bottom, placeholder.top + placeholder.height);
         }
-        const box = bounds[Math.max(0, low - 1)];
-        box.top = Math.min(box.top, placeholder.top);
-        box.bottom = Math.max(box.bottom, placeholder.top + placeholder.height);
+        lines = lines.map((line, index) =>
+            Object.freeze({ ...line, top: point(bounds[index].top), bottom: point(bounds[index].bottom) }),
+        );
     }
-    lines = lines.map((line, index) =>
-        Object.freeze({ ...line, top: point(bounds[index].top), bottom: point(bounds[index].bottom) }),
-    );
     const shaped = Object.freeze({
         width,
         direction,

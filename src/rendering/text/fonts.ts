@@ -125,7 +125,7 @@ export class TextFonts {
     }
 
     match(typeface: Typeface): NativeFontAsset | undefined {
-        return [...this.assets.values()].find((asset) => typeface.isAliasOf(asset.typeface));
+        for (const asset of this.assets.values()) if (typeface.isAliasOf(asset.typeface)) return asset;
     }
 
     destroy(): void {
