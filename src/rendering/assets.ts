@@ -26,7 +26,7 @@ export class DocumentImages {
         private readonly read?: ImageReader,
     ) {}
 
-    async prepare(document: NativeDocument): Promise<void> {
+    private sources(document: NativeDocument): ReadonlySet<string> {
         const sources = new Set<string>();
         const visit = (node: NativeNode): void => {
             if (node.kind === 'image' && typeof node.attributes?.src === 'string') sources.add(node.attributes.src);
@@ -61,6 +61,15 @@ export class DocumentImages {
             for (const image of floating)
                 if (image && typeof image === 'object' && !Array.isArray(image) && typeof image.src === 'string')
                     sources.add(image.src);
+        return sources;
+    }
+
+    prepared(document: NativeDocument): boolean {
+        return [...this.sources(document)].every((source) => this.bySource.has(source));
+    }
+
+    async prepare(document: NativeDocument): Promise<void> {
+        const sources = this.sources(document);
         const results = await Promise.allSettled(
             [...sources].map(async (source) => {
                 if (this.bySource.has(source)) return;

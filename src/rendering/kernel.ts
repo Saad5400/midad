@@ -83,11 +83,19 @@ export class NativeTextKernel {
 
     private async prepareAssets(document: NativeDocument, images: boolean): Promise<void> {
         if (this.disposed) throw new Error('The document renderer has been disposed');
+        const files = neededFontFiles(document);
+        try {
+            const fingerprint = this.fonts.preparedFingerprint(files);
+            if (!images || this.images.prepared(document)) {
+                this.documentFonts.set(document.root, fingerprint);
+                return;
+            }
+        } catch {}
         this.preparing = this.preparing
             .catch(() => undefined)
             .then(async () => {
                 const [fonts, media] = await Promise.allSettled([
-                    this.loadFonts(neededFontFiles(document)),
+                    this.loadFonts(files),
                     images ? this.images.prepare(document) : Promise.resolve(),
                 ] as const);
                 if (fonts.status === 'rejected') throw fonts.reason;
