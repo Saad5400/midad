@@ -195,12 +195,7 @@ it.each(['MacRomanEncoding', 'MacExpertEncoding', 'StandardEncoding'])(
 
 it('preserves all byte-code advances and copy text for proportional, fixed and symbolic faces', async () => {
     const pdf = await PDFDocument.create();
-    for (const name of [
-        StandardFonts.Helvetica,
-        StandardFonts.Courier,
-        StandardFonts.Symbol,
-        StandardFonts.ZapfDingbats,
-    ]) {
+    for (const name of Object.values(StandardFonts)) {
         const page = pdf.addPage([500, 700]);
         const font = await pdf.embedFont(name);
         page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F0: font.ref } }));
@@ -215,6 +210,11 @@ it('preserves all byte-code advances and copy text for proportional, fixed and s
     const original = await pdf.save();
     const pinned = await embedPdfSourceFonts(original, resolve);
     expect(await textGeometry(pinned)).toEqual(await textGeometry(original));
+    if (process.env.NATIVE_FIDELITY_ARTIFACTS) {
+        await mkdir(process.env.NATIVE_FIDELITY_ARTIFACTS, { recursive: true });
+        await writeFile(join(process.env.NATIVE_FIDELITY_ARTIFACTS, 'all-bytes-original.pdf'), original);
+        await writeFile(join(process.env.NATIVE_FIDELITY_ARTIFACTS, 'all-bytes-embedded.pdf'), pinned);
+    }
 });
 it('preserves MissingWidth for codes outside an explicit widths array', async () => {
     const pdf = await PDFDocument.create();
@@ -244,6 +244,30 @@ it('preserves MissingWidth for codes outside an explicit widths array', async ()
         ),
     );
     const original = await source.save({ updateFieldAppearances: false });
+    const pinned = await embedPdfSourceFonts(original, resolve);
+    expect(await textGeometry(pinned)).toEqual(await textGeometry(original));
+});
+
+it.each(
+    [StandardFonts.Symbol, StandardFonts.ZapfDingbats].flatMap((name) =>
+        ['WinAnsiEncoding', 'MacRomanEncoding', 'MacExpertEncoding', 'StandardEncoding'].map((encoding) => [
+            name,
+            encoding,
+        ]),
+    ),
+)('retains the builtin symbolic interpretation for %s with %s', async (name, encoding) => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 300]);
+    const font = await pdf.embedFont(name as StandardFonts);
+    await font.embed();
+    const dictionary = pdf.context.lookup(font.ref, PDFDict);
+    dictionary.set(PDFName.of('Encoding'), PDFName.of(encoding));
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F0: font.ref } }));
+    page.node.set(
+        PDFName.of('Contents'),
+        pdf.context.register(pdf.context.flateStream('BT /F0 18 Tf 1 0 0 1 20 200 Tm <20414261627f809fa0f0ff> Tj ET')),
+    );
+    const original = await pdf.save();
     const pinned = await embedPdfSourceFonts(original, resolve);
     expect(await textGeometry(pinned)).toEqual(await textGeometry(original));
 });

@@ -63,7 +63,8 @@ function standardMetrics(name: string): StandardFontEmbedder | undefined {
 }
 
 function freezeWidths(font: PDFDict, metrics: StandardFontEmbedder | undefined): void {
-    if (font.has(PDFName.of('Widths')) && font.has(PDFName.of('Encoding'))) return;
+    const symbolic = metrics !== undefined && metrics.encoding.name !== 'WinAnsi';
+    if (font.has(PDFName.of('Widths')) && font.has(PDFName.of('Encoding')) && !symbolic) return;
     if (!metrics) throw new Error('The source font has no glyph widths');
     const names = sourceFontEncoding(font, metrics);
     if (!font.has(PDFName.of('Widths'))) {
@@ -75,15 +76,25 @@ function freezeWidths(font: PDFDict, metrics: StandardFontEmbedder | undefined):
                 names.map(
                     (name) =>
                         metrics.font.getWidthOfGlyph(name) ??
-                        (metrics.font.IsFixedPitch ? (metrics.font.getWidthOfGlyph('space') ?? 600) : 0),
+                        (metrics.fontName.startsWith('Courier') ? (metrics.font.getWidthOfGlyph('space') ?? 600) : 0),
                 ),
             ),
         );
     }
-    if (!font.has(PDFName.of('Encoding')))
+    if (!font.has(PDFName.of('Encoding')) || symbolic)
         font.set(
             PDFName.of('Encoding'),
-            font.context.obj({ Type: 'Encoding', Differences: [0, ...names.map(PDFName.of)] }),
+            font.context.obj({
+                Type: 'Encoding',
+                Differences: [
+                    0,
+                    ...names.map((name, code) =>
+                        PDFName.of(
+                            name === '.notdef' ? `uni${code.toString(16).padStart(4, '0').toUpperCase()}` : name,
+                        ),
+                    ),
+                ],
+            }),
         );
 }
 
@@ -127,7 +138,7 @@ function cffDescriptor(
             StemV: metrics!.font.StdVW,
             Flags:
                 (['Symbol', 'ZapfDingbats'].includes(metrics!.fontName) ? 4 : 32) |
-                (metrics!.font.IsFixedPitch ? 1 : 0) |
+                (metrics!.fontName.startsWith('Courier') ? 1 : 0) |
                 (metrics!.font.ItalicAngle ? 64 : 0),
         });
     descriptor.set(PDFName.of('FontName'), PDFName.of(cffName(bytes)));

@@ -9,6 +9,7 @@ function ansiNames(): string[] {
         names[entry.code] = entry.name;
     }
     for (const code of [127, 129, 141, 143, 144, 157]) names[code] = 'bullet';
+    names[159] = 'Ydieresis';
     names[160] = 'space';
     names[173] = 'hyphen';
     return names;
@@ -84,14 +85,14 @@ export function sourceFontEncoding(font: PDFDict, metrics: StandardFontEmbedder)
     const encoding = font.lookup(PDFName.of('Encoding'));
     const base = encoding instanceof PDFDict ? encoding.lookupMaybe(PDFName.of('BaseEncoding'), PDFName) : encoding;
     let names: string[];
-    if (base === PDFName.of('WinAnsiEncoding')) names = ansiNames();
-    else if (base === undefined && metrics.encoding.name !== 'WinAnsi') {
+    if (metrics.encoding.name !== 'WinAnsi') {
         names = new Array<string>(256).fill('.notdef');
         for (const point of metrics.encoding.supportedCodePoints) {
             const entry = metrics.encoding.encodeUnicodeCodePoint(point);
             names[entry.code] = entry.name;
         }
-    } else if (base === undefined || base === PDFName.of('StandardEncoding')) names = standardNames();
+    } else if (base === PDFName.of('WinAnsiEncoding')) names = ansiNames();
+    else if (base === undefined || base === PDFName.of('StandardEncoding')) names = standardNames();
     else {
         const predefined = base instanceof PDFName ? macSourceEncoding(base.decodeText(), ansiNames()) : undefined;
         if (!predefined) throw new Error('The source font encoding requires explicit glyph widths');
