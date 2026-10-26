@@ -1,5 +1,6 @@
 export * from './block-gutter.js';
 export * from './fragment-view.js';
+export * from './document-layout.js';
 export * from './page-canvas.js';
 export * from './page-view.js';
 export * from './pdf-print.js';
