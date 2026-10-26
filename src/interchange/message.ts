@@ -41,6 +41,7 @@ export function messageHtml(value: unknown, direction: 'rtl' | 'ltr' = 'rtl'): s
             { blocks: document.root.children ?? [] },
             document.root.attributes?.dir === 'ltr' ? 'ltr' : 'rtl',
             false,
+            documentTextStyle(document),
         );
         if (!document.root.attributes?.typography) return html;
         const family = JSON.stringify(documentTextStyle(document).family).replace(

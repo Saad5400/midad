@@ -2,6 +2,7 @@ import { exportDocument } from '../document/codec.js';
 import type { NativeDocument } from '../document/model.js';
 import type { NativeSelection } from '../editing/selection.js';
 import { inheritedDirection } from '../typography/direction.js';
+import { documentTextStyle } from '../typography/style.js';
 import { fragmentHtml } from './clipboard/html-writer.js';
 import { parseHtmlFragment } from './clipboard/html-reader.js';
 import { parseNativeFragment, plainTextFragment } from './clipboard/native-format.js';
@@ -25,11 +26,18 @@ export function clipboardPayload(document: NativeDocument, selection: NativeSele
     const fragment = selectionFragment(document, selection);
     const content = exportDocument({
         ...document,
-        root: { id: 'clipboard', kind: 'doc', children: fragment.blocks },
+        root: {
+            id: 'clipboard',
+            kind: 'doc',
+            ...(document.root.attributes?.typography
+                ? { attributes: { typography: document.root.attributes.typography } }
+                : {}),
+            children: fragment.blocks,
+        },
     });
     return {
         native: JSON.stringify({ version: 1, content }),
-        html: fragmentHtml(fragment, inheritedDirection(document.root, 'rtl')),
+        html: fragmentHtml(fragment, inheritedDirection(document.root, 'rtl'), true, documentTextStyle(document)),
         text: fragmentText(fragment),
     };
 }

@@ -30,7 +30,8 @@ describe('native saved messages', () => {
         });
         expect(html).toContain('font-family:&quot;Tajawal&quot;');
         expect(html).toContain('font-family:Arial');
-        expect(html).toContain('Default');
+        expect(html).toMatch(/<span style="font-family:Tajawal;[^"]*">Default<\/span>/);
+        expect(html).toMatch(/<span style="font-family:Arial;[^"]*">Explicit<\/span>/);
     });
     it('renders safe formatting, direction, indentation and lists for welcome messages', () => {
         const html = messageHtml({

@@ -20,6 +20,72 @@ const paragraph = (id: string, text: string) => ({
 });
 
 describe('native clipboard', () => {
+    it('exports the document font in HTML and keeps explicit local overrides', () => {
+        const document = importDocument(
+            {
+                type: 'doc',
+                attrs: { typography: { fontFamily: 'Tajawal' } },
+                content: [
+                    {
+                        type: 'paragraph',
+                        attrs: { id: 'p' },
+                        content: [
+                            { type: 'text', text: 'Default' },
+                            {
+                                type: 'text',
+                                text: 'Explicit',
+                                marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial' } }],
+                            },
+                        ],
+                    },
+                ],
+            },
+            'clipboard-font',
+        );
+        const payload = clipboardPayload(document, {
+            anchor: { blockId: 'p', offset: 0 },
+            focus: { blockId: 'p', offset: 15 },
+        });
+        expect(payload.html).toMatch(/<span style="font-family:Tajawal;[^"]*">Default<\/span>/);
+        expect(payload.html).toMatch(/<span style="font-family:Arial;[^"]*">Explicit<\/span>/);
+        expect(payload.text).toBe('DefaultExplicit');
+        const native = parseNativeFragment(payload.native);
+        const html = parseHtmlFragment(payload.html);
+        for (const fragment of [native, html]) {
+            expect(fragment.blocks[0].children!.map((node) => nodeTextStyle(node).family)).toEqual([
+                'Tajawal',
+                'Arial',
+            ]);
+        }
+        expect(document.root.children![0].children![0].marks).toBeUndefined();
+    });
+    it('preserves inherited fonts through nested native paste without accumulating marks', () => {
+        const source = importDocument(
+            {
+                type: 'doc',
+                attrs: { typography: { fontFamily: 'Tajawal' } },
+                content: [
+                    { type: 'blockquote', content: [paragraph('p', 'عربي')] },
+                    {
+                        type: 'codeBlock',
+                        attrs: { id: 'code' },
+                        content: [{ type: 'text', text: 'const x = 1;' }],
+                    },
+                ],
+            },
+            'nested-font',
+        );
+        const selection = selectNodeText(source.root)!;
+        const first = parseNativeFragment(clipboardPayload(source, selection).native);
+        expect(nodeTextStyle(first.blocks[0].children![0].children![0]).family).toBe('Tajawal');
+        expect(nodeTextStyle(first.blocks[1].children![0]).family).toBe('Courier New');
+        const repeated = {
+            ...source,
+            root: { ...source.root, children: first.blocks },
+        };
+        const second = parseNativeFragment(clipboardPayload(repeated, selectNodeText(repeated.root)!).native);
+        expect(second.blocks).toEqual(first.blocks);
+    });
     it('preserves paragraphs and explicit normal weight inside a Google Docs bold wrapper', () => {
         const fragment = parseHtmlFragment(
             '<b id="docs-internal-guid-fixture" style="font-weight:normal"><p dir="RTL">فقرة أولى</p><p><strong>Second</strong> paragraph</p></b>',
