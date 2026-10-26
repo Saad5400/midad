@@ -207,28 +207,39 @@ A worker module registers a handler after any startup preparation:
 ```ts
 import { serveTaskWorker } from '@saad5400/midad/node';
 
-serveTaskWorker(async (payload) => handleTask(payload));
+serveTaskWorker(async (payload) => ({ echo: payload }));
 ```
 
 Start the pool and socket in a private directory owned by the service user:
 
 ```ts
 import { TaskPool, TaskService, callTaskService } from '@saad5400/midad/node';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+const directory = await mkdtemp(join(tmpdir(), 'midad-runtime-'));
+const socketPath = join(directory, 'tasks.sock');
+const identity = 'example-v1';
 const pool = new TaskPool({ worker: new URL('./worker.mjs', import.meta.url), workers: 2 });
-const service = await TaskService.open({ path: socketPath, identity: runtimeIdentity, pool });
-const result = await callTaskService({
-    path: socketPath,
-    identity: runtimeIdentity,
-    affinity: documentId,
-    payload: task,
-    budgetMs: 5000,
-});
-await service.close();
-await pool.close();
+let service;
+try {
+    service = await TaskService.open({ path: socketPath, identity, pool });
+    console.log(await callTaskService({
+        path: socketPath,
+        identity,
+        affinity: 'document-1',
+        payload: { text: 'Hello · مرحبًا' },
+        budgetMs: 5000,
+    }));
+} finally {
+    await service?.close();
+    await pool.close();
+    await rm(directory, { recursive: true, force: true });
+}
 ```
 
-The host defines `handleTask`, `socketPath`, `runtimeIdentity`, `documentId` and `task`. Requests use JSON values with a four-byte big-endian length prefix and protocol version 1. The socket has mode 0600; its parent directory must be private and owned by the service user. Existing socket-path files are preserved and cause startup to fail. Close the service before its pool; graceful shutdown releases the socket for an explicit restart.
+Save the first snippet as `worker.mjs` and the second as `main.mjs`, then run `node main.mjs`. Replace the echo handler with your renderer or document task. Requests use JSON values with a four-byte big-endian length prefix and protocol version 1. The socket has mode 0600; its parent directory must be private and owned by the service user. Existing socket-path files are preserved and cause startup to fail. Close the service before its pool; graceful shutdown releases the socket for an explicit restart.
 
 Deadlines include queue time. Cancelling or timing out active work terminates and replaces its worker, preventing late task execution; cancelling queued work preserves the active worker. Handled application failures keep the worker, while crashes and invalid responses replace it. Queues, queued bytes, clients and input/output frame sizes are bounded. `affinity` prefers an idle worker that last handled the same key while other available workers can continue serving work. Workers recycle after a configurable number of jobs. `resourceLimits` controls V8 heap limits; applications must size and verify their renderer's additional native/WASM memory.
 
