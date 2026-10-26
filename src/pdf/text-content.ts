@@ -69,9 +69,7 @@ export class PdfTextContent {
                 const scale = this.scalar(command.size / face.font.font.unitsPerEm);
                 this.content.push(
                     `ET q ${scale} 0 0 ${scale} ${this.scalar(x)} ${this.scalar(y)} cm ${this.scalar(face.font.font.unitsPerEm / 35)} w`,
-                    ...face.font
-                        .outline(command.glyphs[index], !!command.fauxItalic)
-                        .map((operator) => operator.toString()),
+                    ...face.font.outlineContent(command.glyphs[index], !!command.fauxItalic),
                     `${command.fauxBold ? 'B' : 'f'} Q BT`,
                 );
             } else {

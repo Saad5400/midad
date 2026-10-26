@@ -1,5 +1,6 @@
 import { bindFloatingAnchors } from '../../content/floating-anchors.js';
 import type { NativeDocument } from '../../document/model.js';
+import { retainMeasurements } from '../../layout/measurement.js';
 import { layoutDocumentSurface, type DocumentSurface } from '../../layout/surface.js';
 import type { DocumentScene } from '../../layout/scene.js';
 import type { NativeTextKernel } from '../../rendering/kernel.js';
@@ -30,7 +31,10 @@ function identity(surface: DocumentSurface): string {
 }
 
 export class DocumentLayoutController {
-    private readonly origins = new WeakMap<DocumentScene, { kernel: NativeTextKernel; surface: string }>();
+    private readonly origins = new WeakMap<
+        DocumentScene,
+        { kernel: NativeTextKernel; surface: string; document: NativeDocument }
+    >();
     private displayed: RetainedLayout | undefined;
     private staged: RetainedLayout | undefined;
     private disposed = false;
@@ -50,7 +54,7 @@ export class DocumentLayoutController {
         const renderer = this.renderer(kernel),
             surface = this.surface(document);
         const scene = layoutDocumentSurface(document, renderer, surface);
-        this.origins.set(scene, { kernel: renderer, surface: identity(surface) });
+        this.origins.set(scene, { kernel: renderer, surface: identity(surface), document });
         return scene;
     }
     hydrate(document: NativeDocument, kernel = this.renderer()): DocumentLayout {
@@ -62,7 +66,7 @@ export class DocumentLayoutController {
             document: hydrated,
             scene: hydrated === document ? scene : layoutDocumentSurface(hydrated, renderer, surface),
         };
-        this.origins.set(result.scene, { kernel: renderer, surface: identity(surface) });
+        this.origins.set(result.scene, { kernel: renderer, surface: identity(surface), document: result.document });
         return result;
     }
     async prepare(document: NativeDocument): Promise<PreparedDocumentLayout> {
@@ -70,10 +74,17 @@ export class DocumentLayoutController {
         await kernel.prepare(document);
         if (kernel !== this.options.kernel()) throw new Error('The document renderer changed');
         const prepared = this.hydrate(document, kernel);
-        return { ...prepared, release: this.retain(prepared.scene, kernel) };
+        return { ...prepared, release: this.retain(prepared, kernel) };
     }
-    private retain(scene: DocumentScene, kernel: NativeTextKernel): () => void {
-        return kernel.retainParagraphs(scene.pages.flatMap((page) => page.lines.map((line) => line.shaped)));
+    private retain(layout: DocumentLayout, kernel: NativeTextKernel): () => void {
+        const paragraphs = kernel.retainParagraphs(
+            layout.scene.pages.flatMap((page) => page.lines.map((line) => line.shaped)),
+        );
+        const measurements = retainMeasurements(kernel, layout.document);
+        return () => {
+            paragraphs();
+            measurements();
+        };
     }
     private hold(source: NativeDocument, layout: DocumentLayout): RetainedLayout {
         const kernel = this.renderer();
@@ -92,7 +103,7 @@ export class DocumentLayoutController {
             layout,
             kernel,
             surface,
-            release: this.retain(layout.scene, kernel),
+            release: this.retain(layout, kernel),
         };
     }
     remember(source: NativeDocument, layout: DocumentLayout): void {
@@ -121,10 +132,13 @@ export class DocumentLayoutController {
             return;
         }
         const layout = this.cached(document);
-        const next = this.hold(document, layout?.scene === scene ? layout : { document, scene });
+        const next = this.hold(
+            document,
+            layout?.scene === scene ? layout : { document: this.origins.get(scene)?.document ?? document, scene },
+        );
         this.displayed?.release();
         this.displayed = next;
-        if (scene?.documentId === this.staged?.source.id && scene?.revision === this.staged?.source.revision) {
+        if (scene === this.staged?.layout.scene) {
             this.staged?.release();
             this.staged = undefined;
         }

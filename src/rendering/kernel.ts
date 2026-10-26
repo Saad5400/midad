@@ -24,6 +24,8 @@ export class NativeTextKernel {
     private readonly fonts: TextFonts;
     private preparing: Promise<void> = Promise.resolve();
     private disposed = false;
+    private destroyRequested = false;
+    private leases = 0;
     readonly provider;
     readonly images;
 
@@ -173,7 +175,24 @@ export class NativeTextKernel {
             }
     }
 
+    retain(): () => void {
+        if (this.disposed || this.destroyRequested) throw new Error('The document renderer is closing');
+        this.leases++;
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            this.leases--;
+            if (!this.leases && this.destroyRequested) this.dispose();
+        };
+    }
+
     destroy(): void {
+        this.destroyRequested = true;
+        if (!this.leases) this.dispose();
+    }
+
+    private dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
         void this.preparing

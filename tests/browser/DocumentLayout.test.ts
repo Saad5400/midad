@@ -90,6 +90,25 @@ it('retains staged and displayed native paragraphs until their actual owners rel
     expect(shape.paragraph.isDeleted()).toBe(true);
     expect(controller.cached(doc)).toBeUndefined();
 });
+
+it('preserves a displayed document’s measurement cache while another view uses the same renderer', async () => {
+    const source = document(),
+        doc = {
+            ...source,
+            root: { ...source.root, attributes: { ...source.root.attributes, pageLayout: { footer: false } } },
+        };
+    const first = open().controller,
+        prepared = await first.prepare(doc);
+    first.display(doc, prepared.scene);
+    prepared.release();
+    const second = open().controller,
+        other = await second.prepare(document());
+    second.display(other.document, other.scene);
+    other.release();
+    const shape = vi.spyOn(kernel, 'shapeRich');
+    first.layout(doc);
+    expect(shape).not.toHaveBeenCalled();
+});
 it('invalidates cached flow geometry when width changes while preserving the visible old scene until replacement', async () => {
     const { controller, setSurface } = open({ kind: 'flow', width: 230 }),
         doc = document(),
@@ -147,9 +166,32 @@ it('hydrates flow anchors and can reuse the staged layout through its hydrated d
     expect(prepared.document.root.attributes?.blockVariables).not.toEqual(doc.root.attributes?.blockVariables);
     controller.remember(doc, prepared);
     expect(controller.cached(prepared.document)?.scene).toBe(prepared.scene);
+    const preview = controller.layout(doc);
+    controller.display(doc, preview);
+    expect(controller.cached(doc)?.document).toBe(prepared.document);
     controller.display(prepared.document, prepared.scene);
     prepared.release();
     expect(controller.cached(prepared.document)?.scene).toBe(prepared.scene);
+});
+
+it('keeps hydrated model aliases when a freshly rendered scene is adopted without a staged edit', async () => {
+    const source = document();
+    const doc: NativeDocument = {
+        ...source,
+        root: {
+            ...source.root,
+            attributes: {
+                blockVariables: [
+                    { id: 'new-field', type: 'text', x: 160, y: 280, width: 120, height: 40, settings: {} },
+                ],
+            },
+        },
+    };
+    const { controller } = open();
+    await kernel.prepare(doc);
+    const prepared = controller.hydrate(doc);
+    controller.display(doc, prepared.scene);
+    expect(controller.cached(prepared.document)?.document).toBe(prepared.document);
 });
 it('never reuses a layout after replacing its kernel or invalidating its source', async () => {
     const { controller, setKernel, invalidate } = open(),

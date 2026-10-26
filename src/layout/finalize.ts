@@ -2,6 +2,8 @@ import { point } from '../typography/metrics.js';
 import type { PaintCommand, RectCommand, SceneCell, SceneColumn, ScenePage, SceneTableRow } from './scene.js';
 import { tableBorders } from './table-borders.js';
 
+const finalized = new WeakSet<PaintCommand>();
+
 export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
     return pages.map((entry) => {
         const cells = coalesceCells(entry.cells ?? []);
@@ -9,6 +11,7 @@ export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
             ...entry,
             commands: Object.freeze(
                 layerTableBackgrounds(tableBorders(entry.commands, cells)).map((command) => {
+                    if (finalized.has(command)) return command;
                     if ('glyphs' in command) {
                         Object.freeze(command.glyphs);
                         Object.freeze(command.text);
@@ -23,6 +26,7 @@ export function finalizePages(pages: readonly ScenePage[]): ScenePage[] {
                         }
                     }
                     if ('color' in command && command.color) Object.freeze(command.color);
+                    finalized.add(command);
                     return Object.freeze(command);
                 }),
             ),
