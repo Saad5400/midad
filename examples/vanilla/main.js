@@ -1,3 +1,10 @@
+import { NativeNavigation } from '@saad5400/midad/browser/input';
+import {
+    caretViewportRect,
+    EditingOverlayView,
+    PageView,
+    selectionViewportRectangles,
+} from '@saad5400/midad/browser/view';
 import { DocumentSession, findNode, importDocument } from '@saad5400/midad/document';
 import {
     blockText,
@@ -9,10 +16,8 @@ import {
     textDifference,
 } from '@saad5400/midad/editing';
 import { hitTest, layoutDocument } from '@saad5400/midad/layout';
-import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
-import { NativeNavigation } from '@saad5400/midad/browser/input';
-import { EditingOverlayView, PageView, searchRectangles, caretViewportRect } from '@saad5400/midad/browser/view';
+import { NativeTextKernel } from '@saad5400/midad/rendering';
 
 const pages = document.querySelector('main');
 const status = document.querySelector('#status');
@@ -85,15 +90,6 @@ function setSelection(blockId, from, to = from) {
     overlay.input.setSelectionRange(from, to);
     updateOverlay();
 }
-function viewportRect(pageIndex, box) {
-    const rect = hosts[pageIndex].getBoundingClientRect();
-    return {
-        left: rect.left + box.x * scale,
-        top: rect.top + box.y * scale,
-        width: box.width * scale,
-        height: box.height * scale,
-    };
-}
 function updateOverlay() {
     if (!overlay || !navigation || !activeBlock()) return;
     selection.from = overlay.input.selectionStart;
@@ -105,11 +101,15 @@ function updateOverlay() {
         (pageIndex) => hosts[pageIndex]?.getBoundingClientRect(),
         scale,
     );
-    const rectangles = searchRectangles(
+    const rectangles = selectionViewportRectangles(
+        session.document,
         scene,
-        [{ blockId: selection.blockId, from: selection.from, to: selection.to }],
-        kernel.ck,
-    ).map((box) => viewportRect(box.pageIndex, box));
+        {
+            anchor: { blockId: selection.blockId, offset: selection.from },
+            focus: { blockId: selection.blockId, offset: selection.to },
+        },
+        { canvasKit: kernel.ck, scale, pageOrigin: (index) => hosts[index]?.getBoundingClientRect() },
+    );
     overlay.update({
         input: {
             label: 'Edit document text',
