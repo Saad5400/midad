@@ -1,0 +1,14 @@
+.midad-editor .native-pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--midad-page-gap, 24px);
+}
+.midad-editor .native-page {
+    position: relative;
+    flex-shrink: 0;
+    background: var(--midad-page-background, white);
+}
+.midad-editor .native-page-canvas canvas {
+    display: block;
+}

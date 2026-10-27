@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -175,4 +175,34 @@ export function renderingIdentity(directory, entries) {
     };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) buildPackage();
+async function buildVueAdapter(directory = root) {
+    const { parse, compileScript } = await import('@vue/compiler-sfc');
+    const ts = require('typescript');
+    for (const path of files(join(directory, 'src/adapters/vue'))) {
+        if (path.endsWith('.css')) {
+            const output = join(directory, 'dist', relative(join(directory, 'src'), path));
+            mkdirSync(dirname(output), { recursive: true });
+            writeFileSync(output, readFileSync(path));
+            continue;
+        }
+        if (!/\.(vue|ts)$/.test(path)) continue;
+        let content = readFileSync(path, 'utf8');
+        if (path.endsWith('.vue')) {
+            const parsed = parse(content, { filename: path });
+            if (parsed.errors.length) throw parsed.errors[0];
+            content = compileScript(parsed.descriptor, {
+                id: relative(directory, path), inlineTemplate: true,
+                fs: { fileExists: existsSync, readFile: (file) => readFileSync(file, 'utf8') },
+            }).content;
+        }
+        content = content.replace(/(from\s*['"]|import\s*\(\s*['"])([^'"]+)\.vue(['"])/g, '$1$2.js$3');
+        const output = join(directory, 'dist', relative(join(directory, 'src'), path)).replace(/\.(vue|ts)$/, '.js');
+        mkdirSync(dirname(output), { recursive: true });
+        writeFileSync(output, ts.transpileModule(content, { compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext } }).outputText);
+    }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+    if (process.argv.includes('--vue')) await buildVueAdapter();
+    else buildPackage();
+}

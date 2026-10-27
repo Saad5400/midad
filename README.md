@@ -337,3 +337,17 @@ Rendering changes require review of `midad.layoutVersion` and the reference scen
 The compatibility corpus stores frozen input documents as well as scene hashes. Routine test-helper changes and new coverage elsewhere do not change the declared rendering contract. Keep these reference inputs fixed when reviewing renderer drift; extend independent regression/raster tests for new coverage.
 
 The layout fingerprint also covers the executable dependency closure of `midad.layoutEntries` (layout, shaping, canvas painting, document codecs and PDF output). Type-only imports, comments, UI/search/collaboration modules and generated version definitions are excluded. Rendering dependencies are resolved from the packages used by that closure. The Node-only `renderingIdentity` helper uses the existing TypeScript build dependency to identify host adapter code; it is not loaded by the browser or normal rendering runtime.
+
+
+### Optional Vue adapter
+
+The engine, document model, layout and PDF renderer remain framework independent. Vue is an optional peer dependency used only by `@saad5400/midad/vue`. Other frameworks can build adapters on the same document, editing and browser APIs.
+
+```ts
+import { DocumentEditor } from '@saad5400/midad/vue';
+import '@saad5400/midad/vue/style.css';
+```
+
+`DocumentEditor` provides the paginated editing surface. The application owns its UI: use the `editor-toolbar` and `before` slots, pass Vue components through `chrome`, and override styles or CSS variables. The slot's `editor` API exposes formatting, selection, history, tables and PDF export. Media loading, persistence, translation and review validation are supplied through props and `integration` callbacks; no application services are imported by Midad.
+
+`examples/vue` demonstrates a custom toolbar without CLM, Inertia, a component library or a Vue build plugin. `examples/vanilla` uses the same framework-independent engine without Vue.

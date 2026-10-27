@@ -1,5 +1,6 @@
 import { diffArrays } from 'diff';
-import { findNode, importDocument, type NativeDocument, type NativeNode } from '../document/index.js';
+import { findNode, type NativeDocument, type NativeNode } from '../document/model.js';
+import { importDocument } from '../document/codec.js';
 import { blockText, isTextBlock, replaceBlockNode, replaceInlineText, textBlocks, update } from './text.js';
 
 export interface ProposalInlineContent {
