@@ -1,9 +1,17 @@
+import type { Affinity } from 'canvaskit-wasm';
 import { findNode, type NativeDocument } from '../../document/model.js';
-import { selectNodeText, selectionRanges, selectionRegion, type NativeSelection } from '../../editing/selection.js';
+import {
+    selectNodeText,
+    selectionRanges,
+    selectionRegion,
+    wordRange,
+    type NativeSelection,
+} from '../../editing/selection.js';
 import { tableRectangle, type TableCellSelection } from '../../editing/table-grid.js';
-import { isTextBlock, type TextCaret } from '../../editing/text.js';
-import type { DocumentScene } from '../../layout/scene.js';
+import { blockText, isTextBlock, type TextCaret } from '../../editing/text.js';
+import { cellAt, hitTest, type DocumentScene } from '../../layout/scene.js';
 import type { CaretAffinity, NativeNavigation, NavigationCaret } from './navigation.js';
+import { emptyWritingPosition, type EmptyWritingPosition } from './writing-position.js';
 
 export interface NavigationKey {
     readonly key: string;
@@ -38,7 +46,56 @@ export function initialTextCaret(
         }
 }
 
+export interface PointSelectionRequest {
+    page: number;
+    x: number;
+    y: number;
+    extend?: boolean;
+    clicks?: number;
+    shift?: boolean;
+    pointerType?: string;
+    held?: boolean;
+}
+export interface PointSelectionOptions {
+    selection: NativeSelection | null;
+    selectingCells?: boolean;
+    allowEmpty?: boolean;
+    navigation?: NativeNavigation;
+    upstreamAffinity: Affinity;
+}
+export type PointSelectionResult =
+    | { kind: 'none'; selectingCells: boolean }
+    | { kind: 'empty'; position: EmptyWritingPosition; selectingCells: false }
+    | { kind: 'cells'; selection: NativeSelection; selectingCells: true }
+    | {
+          kind: 'text';
+          selection: NativeSelection;
+          hit: NonNullable<ReturnType<typeof hitTest>>;
+          clicks: number;
+          selectingCells: false;
+      };
+export interface SelectionPageBounds {
+    left: number;
+    top: number;
+    bottom: number;
+}
+export interface SelectionPointer {
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+}
+
 export class SelectionController {
+    anchor?: TextCaret;
+    private dragRange?: { from: number; to: number };
+    private lastTouchBlockClick?: { id: string; count: number };
+    private handleDrag?: SelectionPointer & {
+        endpoint: 'start' | 'end';
+        start: TextCaret;
+        end: TextCaret;
+        offsetX: number;
+        offsetY: number;
+    };
     affinity: CaretAffinity = 'downstream';
     column?: number;
     region?: string;
@@ -88,6 +145,152 @@ export class SelectionController {
             selection.cells?.anchorId,
             selection.cells?.focusId,
         ]);
+    }
+
+    point(
+        document: NativeDocument,
+        scene: DocumentScene,
+        request: PointSelectionRequest,
+        options: PointSelectionOptions,
+    ): PointSelectionResult {
+        const { page, x, y, extend = false, shift = false, pointerType = 'mouse', held = false } = request;
+        let { clicks = 1 } = request;
+        if (options.selectingCells) {
+            const cell = cellAt(scene, page, x, y);
+            if (cell) {
+                const current = options.selection?.cells;
+                const selected = this.cells(document, {
+                    tableId: cell.tableId,
+                    anchorId: (extend || shift) && current?.tableId === cell.tableId ? current.anchorId : cell.cellId,
+                    focusId: cell.cellId,
+                });
+                return selected
+                    ? { kind: 'cells', selection: selected, selectingCells: true }
+                    : { kind: 'none', selectingCells: true };
+            }
+            if (extend) return { kind: 'none', selectingCells: true };
+        }
+        const hit = hitTest(scene, page, x, y);
+        if (!hit) {
+            const position =
+                !extend && !shift && options.allowEmpty !== false
+                    ? emptyWritingPosition(document, scene, page, { x, y })
+                    : undefined;
+            return position
+                ? { kind: 'empty', position, selectingCells: false }
+                : { kind: 'none', selectingCells: false };
+        }
+        const originalHit = { ...hit };
+        if (pointerType === 'touch' && !extend && !shift) {
+            clicks = held
+                ? 2
+                : clicks > 1 && this.lastTouchBlockClick?.id === hit.blockId
+                  ? this.lastTouchBlockClick.count + 1
+                  : 1;
+            this.lastTouchBlockClick = { id: hit.blockId, count: clicks };
+        }
+        this.region = undefined;
+        this.column = undefined;
+        this.affinity = hit.affinity === options.upstreamAffinity ? 'upstream' : 'downstream';
+        hit.blockOffset =
+            options.navigation?.caret({ blockId: hit.blockId, offset: hit.blockOffset }, this.affinity)?.offset ??
+            hit.blockOffset;
+        if (extend || shift) {
+            this.anchor ??= options.selection?.anchor ?? { blockId: hit.blockId, offset: 0 };
+            let offset = hit.blockOffset;
+            if (extend && clicks > 1) {
+                const text = blockText(findNode(document, hit.blockId)!);
+                const range = clicks > 2 ? { from: 0, to: text.length } : wordRange(text, offset);
+                const backward =
+                    hit.blockId === this.anchor.blockId && offset < (this.dragRange?.from ?? this.anchor.offset);
+                offset = backward ? range.from : range.to;
+                if (hit.blockId === this.anchor.blockId && this.dragRange)
+                    this.anchor = { ...this.anchor, offset: backward ? this.dragRange.to : this.dragRange.from };
+            }
+            return {
+                kind: 'text',
+                selection: { anchor: this.anchor, focus: { blockId: hit.blockId, offset } },
+                hit: originalHit,
+                clicks,
+                selectingCells: false,
+            };
+        }
+        const text = blockText(findNode(document, hit.blockId)!);
+        const range =
+            clicks >= 3
+                ? { from: 0, to: text.length }
+                : clicks === 2
+                  ? wordRange(text, hit.blockOffset)
+                  : { from: hit.blockOffset, to: hit.blockOffset };
+        this.dragRange = clicks > 1 ? range : undefined;
+        this.anchor = { blockId: hit.blockId, offset: range.from };
+        return {
+            kind: 'text',
+            selection: { anchor: this.anchor, focus: { blockId: hit.blockId, offset: range.to } },
+            hit: originalHit,
+            clicks,
+            selectingCells: false,
+        };
+    }
+
+    startHandle(
+        document: NativeDocument,
+        selection: NativeSelection,
+        endpoint: 'start' | 'end',
+        pointer: SelectionPointer,
+        rectangle: (caret: TextCaret, affinity: CaretAffinity) => { left: number; top: number; height: number } | null,
+    ): boolean {
+        const ranges = selectionRanges(document, selection),
+            first = ranges[0],
+            last = ranges.at(-1)!;
+        const start = { blockId: first.blockId, offset: first.from },
+            end = { blockId: last.blockId, offset: last.to };
+        const rect = rectangle(endpoint === 'start' ? start : end, endpoint === 'end' ? 'upstream' : 'downstream');
+        if (!rect) return false;
+        this.handleDrag = {
+            pointerId: pointer.pointerId,
+            clientX: pointer.clientX,
+            clientY: pointer.clientY,
+            endpoint,
+            start,
+            end,
+            offsetX: pointer.clientX - rect.left,
+            offsetY: pointer.clientY - rect.top - rect.height / 2,
+        };
+        return true;
+    }
+
+    handleActive(pointerId: number): boolean {
+        return this.handleDrag?.pointerId === pointerId;
+    }
+
+    dragHandle(
+        scene: DocumentScene,
+        pointer: SelectionPointer,
+        pages: readonly SelectionPageBounds[],
+        scale: number,
+    ): NativeSelection | undefined {
+        const drag = this.handleDrag;
+        if (!drag || pointer.pointerId !== drag.pointerId) return;
+        const x = pointer.clientX - drag.offsetX,
+            y = pointer.clientY - drag.offsetY;
+        let nearest: { index: number; bounds: SelectionPageBounds; distance: number } | undefined;
+        pages.forEach((bounds, index) => {
+            const distance = Math.max(bounds.top - y, 0, y - bounds.bottom);
+            if (!nearest || distance < nearest.distance) nearest = { index, bounds, distance };
+        });
+        if (!nearest) return;
+        const hit = hitTest(scene, nearest.index, (x - nearest.bounds.left) / scale, (y - nearest.bounds.top) / scale);
+        if (!hit) return;
+        const target = { blockId: hit.blockId, offset: hit.blockOffset };
+        return {
+            anchor: drag.endpoint === 'start' ? target : drag.start,
+            focus: drag.endpoint === 'end' ? target : drag.end,
+        };
+    }
+
+    endHandle(): void {
+        this.handleDrag = undefined;
     }
 
     navigate(

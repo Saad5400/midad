@@ -1,8 +1,7 @@
+import { initialTextCaret, keyboardShortcut, NativeNavigation, SelectionController } from '@saad5400/midad/browser';
 import { exportDocument, importDocument } from '@saad5400/midad/document';
-import { initialTextCaret, keyboardShortcut, SelectionController } from '@saad5400/midad/browser';
-import type { DocumentScene } from '@saad5400/midad/layout';
-import { NativeNavigation } from '@saad5400/midad/browser';
 import { selectedText } from '@saad5400/midad/editing';
+import type { DocumentScene } from '@saad5400/midad/layout';
 import type { CanvasKit } from 'canvaskit-wasm';
 import { describe, expect, it } from 'vitest';
 
@@ -149,5 +148,51 @@ describe('standalone editor interaction state', () => {
         expect(keyboardShortcut({ key: 'لا', code: 'KeyB' })).toBe('b');
         expect(keyboardShortcut({ key: 'A' })).toBe('a');
         expect(keyboardShortcut({ key: 'Enter', code: 'Enter' })).toBe('enter');
+    });
+    it('extends pointer-selected cells and leaves cell mode only after a fresh outside click', () => {
+        const doc = document();
+        const controller = new SelectionController();
+        const scene = {
+            documentId: doc.id,
+            revision: doc.revision,
+            fontHash: '',
+            margin: 0,
+            glyphCount: 0,
+            pages: [
+                {
+                    width: 500,
+                    height: 700,
+                    lines: [],
+                    commands: [],
+                    cells: [
+                        { tableId: 'table', cellId: 'cell-a', x: 0, y: 0, width: 100, height: 30 },
+                        { tableId: 'table', cellId: 'cell-b', x: 100, y: 0, width: 100, height: 30 },
+                    ],
+                },
+            ],
+        } as unknown as DocumentScene;
+        const options = { selection: null, selectingCells: true, upstreamAffinity: {} as never };
+        const first = controller.point(doc, scene, { page: 0, x: 20, y: 10 }, options);
+        expect(first.kind).toBe('cells');
+        if (first.kind !== 'cells') throw new Error('Expected a cell selection');
+        expect(
+            controller.point(
+                doc,
+                scene,
+                { page: 0, x: 120, y: 10, extend: true },
+                { ...options, selection: first.selection },
+            ),
+        ).toMatchObject({
+            kind: 'cells',
+            selection: { cells: { tableId: 'table', anchorId: 'cell-a', focusId: 'cell-b' } },
+        });
+        expect(controller.point(doc, scene, { page: 0, x: 300, y: 300, extend: true }, options)).toEqual({
+            kind: 'none',
+            selectingCells: true,
+        });
+        expect(controller.point(doc, scene, { page: 0, x: 300, y: 300 }, options)).toEqual({
+            kind: 'none',
+            selectingCells: false,
+        });
     });
 });
