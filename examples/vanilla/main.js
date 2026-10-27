@@ -12,7 +12,7 @@ import { hitTest, layoutDocument } from '@saad5400/midad/layout';
 import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
 import { NativeNavigation } from '@saad5400/midad/browser/input';
-import { EditingOverlayView, PageView, searchRectangles } from '@saad5400/midad/browser/view';
+import { EditingOverlayView, PageView, searchRectangles, caretViewportRect } from '@saad5400/midad/browser/view';
 
 const pages = document.querySelector('main');
 const status = document.querySelector('#status');
@@ -99,15 +99,12 @@ function updateOverlay() {
     selection.from = overlay.input.selectionStart;
     selection.to = overlay.input.selectionEnd;
     const offset = overlay.input.selectionDirection === 'backward' ? selection.from : selection.to;
-    const caret = navigation.caret({ blockId: selection.blockId, offset });
-    const position =
-        caret &&
-        viewportRect(caret.row.pageIndex, {
-            x: (caret.row.placement.left ?? scene.margin) + caret.x,
-            y: caret.row.placement.top + caret.top - caret.row.placement.originalTop,
-            width: 1,
-            height: caret.bottom - caret.top,
-        });
+    const position = caretViewportRect(
+        navigation,
+        { blockId: selection.blockId, offset },
+        (pageIndex) => hosts[pageIndex]?.getBoundingClientRect(),
+        scale,
+    );
     const rectangles = searchRectangles(
         scene,
         [{ blockId: selection.blockId, from: selection.from, to: selection.to }],

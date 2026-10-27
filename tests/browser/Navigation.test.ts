@@ -2,6 +2,8 @@ import { importDocument } from '@saad5400/midad/document';
 import type { ShapedParagraph } from '@saad5400/midad/rendering';
 import type { DocumentScene, SceneLine } from '@saad5400/midad/layout';
 import { SelectionController } from '@saad5400/midad/browser';
+import { caretViewportRect } from '@saad5400/midad/browser/view';
+import { hitTest } from '@saad5400/midad/layout';
 import { NativeNavigation, wordBoundary } from '@saad5400/midad/browser';
 import type { CanvasKit } from 'canvaskit-wasm';
 import { describe, expect, it } from 'vitest';
@@ -215,5 +217,41 @@ describe('native text navigation', () => {
         ['', 0, 1, 0],
     ] as const)('finds word boundaries in %s', (text, offset, direction, expected) => {
         expect(wordBoundary(text, offset, direction)).toBe(expected);
+    });
+});
+
+describe('caret viewport geometry', () => {
+    it.each([0.5, 1.25, 2])('roundtrips a continued RTL paragraph through a scaled viewport at %s', (scale) => {
+        const base = navigation(shaped('أبجد', 'rtl', 2));
+        const page = base.scene.pages[0];
+        const scene = {
+            ...base.scene,
+            pages: [
+                { ...page, lines: [{ ...page.lines[0], top: 50, left: 12 }] },
+                { ...page, lines: [{ ...page.lines[1], top: 80, left: 35 }] },
+            ],
+        };
+        const nav = new NativeNavigation(base.document, scene, ck);
+        const origin = { left: 140, top: 300 };
+        const rect = caretViewportRect(
+            nav,
+            { blockId: 'p', offset: 3 },
+            (index) => (index === 1 ? origin : undefined),
+            scale,
+        );
+        expect(rect).not.toBeNull();
+        const hit = hitTest(
+            scene,
+            1,
+            (rect!.left - origin.left) / scale,
+            (rect!.top - origin.top + rect!.height / 2) / scale,
+        );
+        expect(hit).toMatchObject({ blockId: 'p', blockOffset: 3 });
+    });
+
+    it('does not draw a stale caret for an unmounted page or an unknown block', () => {
+        const nav = navigation(shaped('abc'));
+        expect(caretViewportRect(nav, { blockId: 'p', offset: 1 }, () => undefined, 1)).toBeNull();
+        expect(caretViewportRect(nav, { blockId: 'missing', offset: 0 }, () => ({ left: 0, top: 0 }), 1)).toBeNull();
     });
 });
