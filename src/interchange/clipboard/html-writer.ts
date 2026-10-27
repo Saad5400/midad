@@ -1,7 +1,7 @@
 import type { NativeNode } from '../../document/model.js';
 import { inheritedDirection } from '../../typography/direction.js';
 import { chooseFont } from '../../typography/fonts.js';
-import { DEFAULT_TEXT_STYLE, blockTextStyle, nodeTextStyle, type Color } from '../../typography/style.js';
+import { DEFAULT_TEXT_STYLE, blockTextStyle, nodeTextStyle, type Color, type TextStyle } from '../../typography/style.js';
 import { safeLink } from './html-policy.js';
 import { customBlocks, type NativeFragment } from './model.js';
 
@@ -10,7 +10,12 @@ const escape = (text: string): string =>
         /[&<>"']/g,
         (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!,
     );
-export function fragmentHtml(fragment: NativeFragment, direction: 'rtl' | 'ltr' = 'rtl', metadata = true): string {
+export function fragmentHtml(
+    fragment: NativeFragment,
+    direction: 'rtl' | 'ltr' = 'rtl',
+    metadata = true,
+    defaultStyle: TextStyle = DEFAULT_TEXT_STYLE,
+): string {
     const cssColor = (color: Color): string =>
         `rgba(${color
             .slice(0, 3)
@@ -92,5 +97,5 @@ export function fragmentHtml(fragment: NativeFragment, direction: 'rtl' | 'ltr' 
         }
         return `<${tag}${attributes.length ? ` ${attributes.join(' ')}` : ''}>${body}</${tag}>`;
     };
-    return fragment.blocks.map((node) => render(node)).join('');
+    return fragment.blocks.map((node) => render(node, defaultStyle)).join('');
 }

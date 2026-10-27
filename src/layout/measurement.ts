@@ -1,5 +1,5 @@
 import { rejectedClause } from '../content/clauses/numbering.js';
-import type { NativeNode } from '../document/model.js';
+import type { NativeDocument, NativeNode } from '../document/model.js';
 import { isTextBlock } from '../document/text.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
@@ -20,7 +20,7 @@ interface MeasuredBlock {
 }
 const measurements = new WeakMap<
     NativeTextKernel,
-    { nodes: WeakMap<NativeNode, MeasuredBlock>; active: ReadonlySet<NativeNode> }
+    { nodes: WeakMap<NativeNode, MeasuredBlock>; active: ReadonlySet<NativeNode>; retained: Map<NativeNode, number> }
 >();
 export function measureBlocks(
     nodes: readonly NativeNode[],
@@ -40,7 +40,7 @@ export function measureBlocks(
         );
     let state = measurements.get(parent.kernel);
     if (!state) {
-        state = { nodes: new WeakMap(), active: new Set() };
+        state = { nodes: new WeakMap(), active: new Set(), retained: new Map() };
         measurements.set(parent.kernel, state);
     }
     const cache = state.nodes;
@@ -55,6 +55,7 @@ export function measureBlocks(
             parent.tableDepth ?? 0,
             parent.fragments?.get(node.id)?.from ?? 0,
             Boolean(parent.completed),
+            parent.defaultStyle?.family ?? DEFAULT_TEXT_STYLE.family,
         ]);
         const cacheable = !parent.completed || isTextBlock(node);
         const previous = cacheable ? cache.get(node) : undefined;
@@ -95,22 +96,17 @@ export function measureBlocks(
 
 function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
     const output: Band[] = [];
+    const base = ctx.defaultStyle ?? DEFAULT_TEXT_STYLE;
     if (['paragraph', 'heading', 'clauseTitle', 'codeBlock'].includes(node.kind))
         output.push(
-            ...glyphBands(
-                node,
-                width,
-                ctx,
-                node.kind === 'codeBlock' ? { ...DEFAULT_TEXT_STYLE, family: 'Courier New' } : DEFAULT_TEXT_STYLE,
-            ),
+            ...glyphBands(node, width, ctx, node.kind === 'codeBlock' ? { ...base, family: 'Courier New' } : base),
         );
     else if (node.kind === 'clause') {
         if (rejectedClause(node)) return output;
         const number = node.attributes?.ordered !== false ? `${ctx.numbers.get(node.id)}. ` : '';
         for (const child of node.children ?? []) {
             if (child.kind === 'clauseTitle') {
-                if (!node.attributes?.isTitleHidden)
-                    output.push(...glyphBands(child, width, ctx, DEFAULT_TEXT_STYLE, number));
+                if (!node.attributes?.isTitleHidden) output.push(...glyphBands(child, width, ctx, base, number));
             } else output.push(...measureBlocks([child], width, ctx));
         }
     } else if (node.kind === 'parallelRow') output.push(...parallelBands(node, width, ctx, measureBlocks));
@@ -154,7 +150,7 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
                         first,
                         width - 18,
                         ctx,
-                        DEFAULT_TEXT_STYLE,
+                        base,
                         node.kind === 'orderedList' ? `${ctx.listNumbers?.get(item.id) ?? index++}. ` : '• ',
                     ).map((band) => shiftBand(band, 9)),
                 );
@@ -170,6 +166,35 @@ function measureBlock(node: NativeNode, width: number, ctx: Context): Band[] {
 export function pruneMeasurements(kernel: NativeTextKernel, measured: ReadonlySet<NativeNode>): void {
     const state = measurements.get(kernel);
     if (!state) return;
-    for (const node of state.active) if (!measured.has(node)) state.nodes.delete(node);
+    for (const node of state.active) if (!measured.has(node) && !state.retained.has(node)) state.nodes.delete(node);
     state.active = measured;
+}
+
+export function retainMeasurements(kernel: NativeTextKernel, document: NativeDocument): () => void {
+    const state = measurements.get(kernel);
+    if (!state) return () => {};
+    const nodes: NativeNode[] = [];
+    const visit = (node: NativeNode): void => {
+        nodes.push(node);
+        state.retained.set(node, (state.retained.get(node) ?? 0) + 1);
+        node.children?.forEach(visit);
+    };
+    visit(document.root);
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        for (const node of nodes) {
+            const count = state.retained.get(node) ?? 0;
+            if (count > 1) state.retained.set(node, count - 1);
+            else {
+                state.retained.delete(node);
+                if (!state.active.has(node)) state.nodes.delete(node);
+            }
+        }
+        if (!state.retained.size) {
+            state.nodes = new WeakMap();
+            state.active = new Set();
+        }
+    };
 }

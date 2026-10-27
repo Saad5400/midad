@@ -17,6 +17,17 @@ export class NativePdfFont extends CustomFontEmbedder {
     private readonly codes = new Map<number, Map<string, { value: number; hex: string }>>();
     private nextCode = 65535;
     private readonly paths = new Map<string, PDFOperator[]>();
+    private readonly encodedPaths = new Map<string, readonly string[]>();
+
+    outlineContent(glyph: number, italic: boolean): readonly string[] {
+        const key = `${glyph}:${italic}`;
+        let content = this.encodedPaths.get(key);
+        if (!content) {
+            content = this.outline(glyph, italic).map((operator) => operator.toString());
+            this.encodedPaths.set(key, content);
+        }
+        return content;
+    }
 
     outline(glyph: number, italic: boolean): PDFOperator[] {
         const key = `${glyph}:${italic}`;

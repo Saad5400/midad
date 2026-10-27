@@ -1,5 +1,7 @@
 import parseColor from 'color';
 import type { Attributes, NativeDocument, NativeNode } from '../document/model.js';
+import { isRecord } from '../document/model.js';
+import { chooseFont } from './fonts.js';
 
 export type Color = readonly [number, number, number, number];
 export interface TextStyle {
@@ -40,6 +42,20 @@ export const DEFAULT_TEXT_STYLE: TextStyle = Object.freeze({
     background: null,
     href: null,
 });
+
+export function documentTextStyle(document: NativeDocument): TextStyle {
+    const settings = document.root.attributes?.typography;
+    if (settings === undefined) return DEFAULT_TEXT_STYLE;
+    if (!isRecord(settings) || typeof settings.fontFamily !== 'string' || !settings.fontFamily.trim())
+        throw new Error('Invalid document typography');
+    const family = settings.fontFamily
+        .split(',')[0]
+        .replace(/^["']|["']$/g, '')
+        .trim();
+    const style = Object.freeze({ ...DEFAULT_TEXT_STYLE, family });
+    chooseFont(style, false);
+    return style;
+}
 
 const colors = new Map<string, Color>();
 export function color(value: unknown, fallback: Color = [0, 0, 0, 1]): Color {

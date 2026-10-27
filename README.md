@@ -6,7 +6,7 @@ Midad is a standalone TypeScript package with no framework, application server, 
 
 ## Status
 
-Early development. The engine is extracted and tested independently. Reusable browser UI and interaction controllers are still being extracted from the first integration. A complete embeddable editor UI is not released yet.
+Version 0.25 provides a framework-independent engine and reusable browser views/controllers. The vanilla example edits canvas-rendered paragraphs and exports the same scene to PDF. Hosts supply their application toolbar, persistence and workflows; a complete drop-in toolbar and framework adapters are not part of this release.
 
 Canvas and PDF use the same shaped glyphs and page scene. Tests compare the actual PDF glyph identities, positions, dimensions and page counts, including tightly filled pages and nested rich tables. These checks do not establish correctness for every possible document. The target is exact layout and main operations below five seconds.
 
@@ -25,6 +25,17 @@ With Poppler's `pdftocairo` available on `PATH`, run `npm run test:pdf-raster` f
 The raster checks cover marked Arabic, tight page boundaries, mixed bilingual tables, colored paint and scaled transparent images. Text coordinates and colors are checked directly in the PDF; visible glyph cores must overlap the other raster's antialiased edges within one pixel (0.25 pt). Non-text paint compares local colors with the same spatial limit and accounts for edge blending. Deliberately missing marks and a page number moved by one point must fail. These tolerances account for different rasterizers; this is not a claim of identical antialiasing, complete production-corpus coverage or universal fidelity.
 
 The package is not published to npm yet. Versioned tarballs are attached to [GitHub releases](https://github.com/Saad5400/midad/releases); install a release artifact URL or build and install a local tarball. Applications do not need to commit the binary package to their source repository.
+
+## Run the vanilla example from a package
+
+```sh
+npm pack
+cd examples/vanilla
+npm install ../../saad5400-midad-0.25.0.tgz
+npm run dev
+```
+
+Open the local URL printed by Vite. Click a paragraph to type in English or Arabic, use Enter for another paragraph, select text with the keyboard and apply Bold, undo/redo, then download the PDF. The example imports the installed package, without repository source aliases or any CLM service. Its deliberately small host demonstrates the document, canvas, input overlay and PDF APIs; applications can add the package’s table, field, collaboration and other controllers.
 
 ## Per-page setup
 
@@ -119,7 +130,13 @@ The functions/elements in this binding example are supplied by the host. The sou
 
 `PageView` in `@saad5400/midad/browser/view` owns a browser page's canvas, sizing, viewport observation, virtualization and repaint lifecycle. It can be mounted directly into an ordinary HTML element; no Vue or CLM component is needed. `ViewportReadiness` waits for current painted content in the actual visible viewport, including a restored scroll position on a later page.
 
+`EditingOverlayView` from `/browser/view` mounts the actual textarea, caret, text/cell selections, touch selection handles, search/review/template highlights, collaborator cursors and block-drop indicator. Its frame contains viewport-relative CSS-pixel rectangles and localized input/handle labels. Bind its synchronous input, composition, keyboard, clipboard, selection and pointer callbacks to your editing controller; `view.input` exposes the stable textarea for text and selection updates. `update(frame)` preserves the focused input, ongoing composition and keyed touch handles. The command input links its listbox and active item through ARIA; closing the palette clears those links. Default styles are included and can use `--midad-caret-color` / `--midad-selection-color`. Call `dispose()` on unmount. This UI view does not own document transactions or persistence; the full editor and toolbar are still being extracted.
+
 `TableResizeView` from the same entrypoint mounts the actual column/row resize controls with their default styles into a positioned page container. Pass the page's `cells`, `rows`, stored row heights, active `tableId`, labels and the page's scale (CSS pixels per scene point). Its `resize` and `resizeRow` callbacks receive scene-point values for the document commands. It supports mouse/pen/touch capture, physical RTL keyboard arrows, minimum column widths, row-height limits, Home for automatic row height and Escape/capture-loss cancellation. `update(frame)` preserves control focus while refreshing immutable scene snapshots; changed geometry cancels an unfinished drag. Call `dispose()` on unmount. Customize the highlight with `--midad-resize-fill` / `--midad-resize-color`. This is a reusable UI control, not the full embeddable editor UI.
+
+Document typography is optional and explicit: `attrs.typography.fontFamily` chooses a bundled family for unmarked document text and page numbers; local font marks keep their own family. Unconfigured documents retain the existing Arial behavior. `initializeDocumentTypography` from `/content/typography` initializes only a blank writing document with Tajawal, preserving its revision and existing settings. `setDocumentTypography` changes/reset defaults through a normal document revision. The same defaults drive measurement, font fingerprints, selection-style queries, PDF output and message HTML. This keeps existing/frozen sources unchanged while allowing new Arabic/Latin documents to avoid per-word fallback.
+
+`DocumentLayoutController` in `/browser/view` owns shared layout preparation, flow-anchor hydration, cached layout identity and native paragraph retention. Supply the current kernel and optional flow/PDF surface getters; `validate` can bind that surface to an authorized source. `prepare(document)` returns a layout with a `release()` lease. `remember(source, prepared)` retains one staged edit, while `display(document, scene)` retains the displayed scene. Release the preparation lease after adoption or rejection; dispose the controller before destroying the kernel. Borrowed views can call `kernel.retain()` and release that lease on unmount; destruction waits for the final borrower and rejects new borrowers once closing. Layout leases preserve the active document’s measurement cache while another view shares the renderer. Cache reuse checks document identity, kernel, fonts and physical writing geometry, so changing an embedded editor's width or PDF page boxes cannot reuse an incompatible scene. At most one staged and one displayed scene are retained. Cached layouts are borrowed; use the preparation lease when keeping one across asynchronous work. Displaying an independently measured scene preserves staged model hydration until that prepared scene is adopted. Host selection, transactions, persistence and controls remain separate. `layout(document, kernel)` also supports a separately owned export kernel without putting it in the display cache.
 
 ```ts
 import { PageView } from '@saad5400/midad/browser/view';
@@ -191,6 +208,53 @@ Table UI behavior is renderer-independent. `tableControlMenu` describes action g
 The PDF writer reuses compatible opaque text setup and exact binary-grid text moves. Font switches retain absolute anchors for consistent raster placement. Reading dictionaries keep every source span, text value and bounding box; Unicode boundary indexes are shared between shaping and review mapping.
 
 Independent raster checks still flag color differences at some translucent table intersections. Covered glyph positions, vector colors/opacities and live canvas content are verified separately; these results do not establish universal raster parity.
+
+## Node task runtime
+
+`@saad5400/midad/node` provides a Node.js 22 worker pool and private Unix-socket transport. Hosts supply their task handler, asset authorization and runtime identity. Browser entrypoints do not load these Node APIs.
+
+A worker module registers a handler after any startup preparation:
+
+```ts
+import { serveTaskWorker } from '@saad5400/midad/node';
+
+serveTaskWorker(async (payload) => ({ echo: payload }));
+```
+
+Start the pool and socket in a private directory owned by the service user:
+
+```ts
+import { TaskPool, TaskService, callTaskService } from '@saad5400/midad/node';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const directory = await mkdtemp(join(tmpdir(), 'midad-runtime-'));
+const socketPath = join(directory, 'tasks.sock');
+const identity = 'example-v1';
+const pool = new TaskPool({ worker: new URL('./worker.mjs', import.meta.url), workers: 2 });
+let service;
+try {
+    service = await TaskService.open({ path: socketPath, identity, pool });
+    console.log(await callTaskService({
+        path: socketPath,
+        identity,
+        affinity: 'document-1',
+        payload: { text: 'Hello · مرحبًا' },
+        budgetMs: 5000,
+    }));
+} finally {
+    await service?.close();
+    await pool.close();
+    await rm(directory, { recursive: true, force: true });
+}
+```
+
+Save the first snippet as `worker.mjs` and the second as `main.mjs`, then run `node main.mjs`. Replace the echo handler with your renderer or document task. Requests use JSON values with a four-byte big-endian length prefix and protocol version 1. The socket has mode 0600; its parent directory must be private and owned by the service user. Existing socket-path files are preserved and cause startup to fail. Close the service before its pool; graceful shutdown releases the socket for an explicit restart.
+
+Deadlines include queue time. Cancelling or timing out active work terminates and replaces its worker, preventing late task execution; cancelling queued work preserves the active worker. Handled application failures keep the worker, while crashes and invalid responses replace it. Queues, queued bytes, clients and input/output frame sizes are bounded. `affinity` prefers an idle worker that last handled the same key while other available workers can continue serving work. Workers recycle after a configurable number of jobs. `resourceLimits` controls V8 heap limits; applications must size and verify their renderer's additional native/WASM memory.
+
+`TaskError.code` distinguishes application failures, unavailable workers, overload, cancellation, deadlines and runtime-identity mismatches. A host should retain unsaved input when the runtime is unavailable. These primitives do not provide application authentication, persistence or a collaboration broadcast broker.
 
 ## Source organization
 

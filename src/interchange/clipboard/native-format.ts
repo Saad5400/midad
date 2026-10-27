@@ -1,4 +1,6 @@
 import { importDocument } from '../../document/codec.js';
+import type { NativeNode } from '../../document/model.js';
+import { blockTextStyle, documentTextStyle, nodeTextStyle, type TextStyle } from '../../typography/style.js';
 import { limit, type NativeFragment } from './model.js';
 
 export function parseNativeFragment(source: string): NativeFragment {
@@ -12,7 +14,27 @@ export function parseNativeFragment(source: string): NativeFragment {
         if (Array.isArray(node.content)) node.content.forEach((child) => check(child as typeof node, depth + 1));
     };
     check(value.content, 0);
-    return { blocks: importDocument(value.content, 'clipboard').root.children ?? [] };
+    const document = importDocument(value.content, 'clipboard');
+    const blocks = document.root.children ?? [];
+    if (!document.root.attributes?.typography) return { blocks };
+    const inherit = (node: NativeNode, style: TextStyle): NativeNode => {
+        if (node.kind === 'text') {
+            const family = nodeTextStyle(node, style).family;
+            if (nodeTextStyle(node).family === family) return node;
+            return {
+                ...node,
+                marks: [...(node.marks ?? []), { kind: 'textStyle', attributes: { fontFamily: family } }],
+            };
+        }
+        return node.children
+            ? {
+                  ...node,
+                  children: node.children.map((child) => inherit(child, blockTextStyle(node, style))),
+              }
+            : node;
+    };
+    const style = documentTextStyle(document);
+    return { blocks: blocks.map((node) => inherit(node, style)) };
 }
 
 export function plainTextFragment(text: string): NativeFragment {

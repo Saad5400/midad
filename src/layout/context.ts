@@ -2,6 +2,7 @@ import type { NativeNode } from '../document/model.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
 import { inheritedDirection } from '../typography/direction.js';
+import type { TextStyle } from '../typography/style.js';
 import type { Band } from './bands.js';
 
 export interface TextContinuation {
@@ -24,6 +25,7 @@ export interface LayoutContext {
     measured: Set<NativeNode>;
     availableHeight: number;
     tableDepth?: number;
+    defaultStyle?: TextStyle;
 }
 export type MeasureBlocks = (
     nodes: readonly NativeNode[],

@@ -6,6 +6,7 @@ import { documentPresentation, headerTile } from '../content/presentation/querie
 import { isRecord, type NativeDocument } from '../document/model.js';
 import type { NativeTextKernel } from '../rendering/kernel.js';
 import { point } from '../typography/metrics.js';
+import { documentTextStyle } from '../typography/style.js';
 import { isSpacing, shiftBand, type Band, type BandParts } from './bands.js';
 import type { LayoutContext as Context } from './context.js';
 import { coverCommands } from './cover.js';
@@ -50,6 +51,7 @@ export function createDocumentScene(
         measured: new Set(),
         direction: document.root.attributes?.dir === 'ltr' ? 'ltr' : 'rtl',
         availableHeight: point(height - top - bottom),
+        defaultStyle: documentTextStyle(document),
     };
     const pages: Array<{
         background?: readonly PaintCommand[];
@@ -217,7 +219,11 @@ export function createDocumentScene(
         if (pageLayoutForPage(document, index + coverPages + 1).footer === false) return;
         const geometry = pageGeometry(document, index + coverPages + 1, surfaceWidth);
         const { area, left, bottom, height } = geometry;
-        const footer = kernel.shape(String(index + 1), area, 8, 'ltr');
+        const footer = kernel.shapeRich(
+            [{ nodeId: '', text: String(index + 1), editable: false, style: { ...ctx.defaultStyle!, size: 8 } }],
+            area,
+            'ltr',
+        );
         ctx.used.add(footer);
         for (const line of footer.lines)
             for (const run of line.runs)

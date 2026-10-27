@@ -24,6 +24,8 @@ export class NativeTextKernel {
     private readonly fonts: TextFonts;
     private preparing: Promise<void> = Promise.resolve();
     private disposed = false;
+    private destroyRequested = false;
+    private leases = 0;
     readonly provider;
     readonly images;
 
@@ -81,11 +83,19 @@ export class NativeTextKernel {
 
     private async prepareAssets(document: NativeDocument, images: boolean): Promise<void> {
         if (this.disposed) throw new Error('The document renderer has been disposed');
+        const files = neededFontFiles(document);
+        try {
+            const fingerprint = this.fonts.preparedFingerprint(files);
+            if (!images || this.images.prepared(document)) {
+                this.documentFonts.set(document.root, fingerprint);
+                return;
+            }
+        } catch {}
         this.preparing = this.preparing
             .catch(() => undefined)
             .then(async () => {
                 const [fonts, media] = await Promise.allSettled([
-                    this.loadFonts(neededFontFiles(document)),
+                    this.loadFonts(files),
                     images ? this.images.prepare(document) : Promise.resolve(),
                 ] as const);
                 if (fonts.status === 'rejected') throw fonts.reason;
@@ -173,7 +183,24 @@ export class NativeTextKernel {
             }
     }
 
+    retain(): () => void {
+        if (this.disposed || this.destroyRequested) throw new Error('The document renderer is closing');
+        this.leases++;
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            this.leases--;
+            if (!this.leases && this.destroyRequested) this.dispose();
+        };
+    }
+
     destroy(): void {
+        this.destroyRequested = true;
+        if (!this.leases) this.dispose();
+    }
+
+    private dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
         void this.preparing

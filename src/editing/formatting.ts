@@ -1,6 +1,6 @@
 import { findNode, type Attributes, type NativeDocument, type NativeMark, type NativeNode } from '../document/model.js';
 import { chooseFont } from '../typography/fonts.js';
-import { blockTextStyle, DEFAULT_TEXT_STYLE, nodeTextStyle, type TextStyle } from '../typography/style.js';
+import { blockTextStyle, documentTextStyle, nodeTextStyle, type TextStyle } from '../typography/style.js';
 import { blockText, mapInlineSelection, replaceBlockNode, type InlineEdit } from './text.js';
 
 export type TextRange = Omit<InlineEdit, 'text' | 'marks'>;
@@ -131,8 +131,8 @@ export function selectionTextStyle(
     storedMarks?: readonly NativeMark[],
 ): SelectionStyle {
     const block = findNode(document, range.blockId);
-    if (!block) return DEFAULT_TEXT_STYLE;
-    const base = blockTextStyle(block);
+    if (!block) return documentTextStyle(document);
+    const base = blockTextStyle(block, documentTextStyle(document));
     if (range.from === range.to)
         return nodeTextStyle({ id: '', kind: 'text', marks: storedMarks ?? marksAtCaret(block, range.from) }, base);
     let position = 0;

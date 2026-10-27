@@ -8,6 +8,94 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 describe('text kernel resource lifetime', () => {
+    it('prepares already loaded resources without waiting for an unrelated font download', async () => {
+        const require = createRequire(import.meta.url),
+            ck = await CanvasKitInit({
+                wasmBinary: await readFile(require.resolve('canvaskit-wasm/bin/canvaskit.wasm')),
+            });
+        let release!: () => void, entered!: () => void;
+        const waiting = new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+            requested = new Promise<void>((resolve) => {
+                entered = resolve;
+            });
+        const kernel = await NativeTextKernel.withAssets(
+            ck,
+            async (file) => {
+                if (file === 'cairo') {
+                    entered();
+                    await waiting;
+                }
+                return new Uint8Array(await readFile(`assets/fonts/${file}.ttf`));
+            },
+            async () => {
+                throw new Error('No images');
+            },
+        );
+        const source = {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Already prepared' }] }],
+        };
+        await kernel.prepare(importDocument(source, 'base'));
+        const blocked = kernel.prepare(
+            importDocument(
+                {
+                    type: 'doc',
+                    content: [
+                        {
+                            type: 'paragraph',
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: 'Waiting',
+                                    marks: [{ type: 'textStyle', attrs: { fontFamily: 'Cairo' } }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+                'blocked',
+            ),
+        );
+        try {
+            await requested;
+            let completed = false;
+            const ready = kernel.prepare(importDocument(source, 'preview')).then(() => {
+                completed = true;
+            });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(completed).toBe(true);
+            await ready;
+        } finally {
+            release();
+            await blocked;
+            kernel.destroy();
+        }
+    });
+    it('keeps borrowed renderers alive until the final view releases its lease', async () => {
+        const require = createRequire(import.meta.url);
+        const ck = await CanvasKitInit({
+            wasmBinary: await readFile(require.resolve('canvaskit-wasm/bin/canvaskit.wasm')),
+        });
+        const kernel = await NativeTextKernel.withAssets(
+            ck,
+            async (file) => new Uint8Array(await readFile(`assets/fonts/${file}.ttf`)),
+            async () => {
+                throw new Error('No images');
+            },
+        );
+        const release = kernel.retain(),
+            shaped = kernel.shape('Borrowed renderer', 200, 12, 'ltr');
+        kernel.destroy();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(shaped.paragraph.isDeleted()).toBe(false);
+        expect(() => kernel.retain()).toThrow('closing');
+        release();
+        release();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(shaped.paragraph.isDeleted()).toBe(true);
+    });
     it('bounds native memory across many paragraphs and preserves existing shapes when loading another font', async () => {
         const require = createRequire(import.meta.url);
         const ck = await CanvasKitInit({

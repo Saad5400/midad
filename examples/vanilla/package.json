@@ -1,0 +1,15 @@
+{
+    "name": "midad-vanilla-example",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 0.0.0.0",
+        "build": "vite build"
+    },
+    "dependencies": {
+        "@saad5400/midad": "https://github.com/Saad5400/midad/releases/download/v0.25.0/saad5400-midad-0.25.0.tgz"
+    },
+    "devDependencies": {
+        "vite": "8.0.16"
+    }
+}
