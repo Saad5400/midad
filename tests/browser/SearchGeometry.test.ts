@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { searchRectangles, selectionViewportRectangles, textRangeRectangles } from '@saad5400/midad/browser/view';
+import { NativeNavigation } from '@saad5400/midad/browser/input';
+import {
+    searchRectangles,
+    selectionOverlayGeometry,
+    selectionViewportRectangles,
+    textRangeRectangles,
+} from '@saad5400/midad/browser/view';
 import { importDocument } from '@saad5400/midad/document';
 import { findText } from '@saad5400/midad/editing';
 import { layoutDocument } from '@saad5400/midad/layout';
@@ -99,6 +105,96 @@ it('reuses shaped-range measurements across search and selection views', async (
     }
 });
 afterAll(() => kernel.destroy());
+
+it('paints selected line and paragraph breaks with touch endpoints and restores a collapsed caret', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    attrs: { id: 'a' },
+                    content: [{ type: 'text', text: 'Alpha' }, { type: 'hardBreak' }, { type: 'text', text: 'Beta' }],
+                },
+                { type: 'paragraph', attrs: { id: 'b' }, content: [{ type: 'text', text: 'Next' }] },
+            ],
+        },
+        'breaks',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel),
+        navigation = new NativeNavigation(doc, scene, kernel.ck);
+    const options = { canvasKit: kernel.ck, scale: 1.5, pageOrigin: () => ({ left: 20, top: 70 }), touch: true };
+    const selected = { anchor: { blockId: 'a', offset: 5 }, focus: { blockId: 'b', offset: 0 } };
+    const geometry = selectionOverlayGeometry(navigation, selected, options);
+    expect(geometry.caret).toBeNull();
+    expect(geometry.rectangles.filter((rect) => rect.width === 6)).toHaveLength(2);
+    expect(geometry.handles.map((handle) => handle.endpoint)).toEqual(['start', 'end']);
+    const collapsed = selectionOverlayGeometry(navigation, { anchor: selected.focus, focus: selected.focus }, options);
+    expect(collapsed.rectangles).toEqual([]);
+    expect(collapsed.handles).toEqual([]);
+    expect(collapsed.caret).not.toBeNull();
+    expect(selectionOverlayGeometry(undefined, selected, options)).toEqual({
+        caret: null,
+        rectangles: [],
+        handles: [],
+    });
+});
+
+it('paints complete table cell selections and suppresses text carets and handles', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'table',
+                    attrs: { id: 'table' },
+                    content: [
+                        {
+                            type: 'tableRow',
+                            content: ['left', 'right'].map((id) => ({
+                                type: 'tableCell',
+                                attrs: { id },
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        attrs: { id: `${id}-p` },
+                                        content: [{ type: 'text', text: id }],
+                                    },
+                                ],
+                            })),
+                        },
+                    ],
+                },
+            ],
+        },
+        'cells',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel),
+        navigation = new NativeNavigation(doc, scene, kernel.ck);
+    const geometry = selectionOverlayGeometry(
+        navigation,
+        {
+            anchor: { blockId: 'left-p', offset: 0 },
+            focus: { blockId: 'right-p', offset: 5 },
+            cells: { tableId: 'table', anchorId: 'left', focusId: 'right' },
+        },
+        { canvasKit: kernel.ck, scale: 2, pageOrigin: () => ({ left: 11, top: 17 }), touch: true },
+    );
+    expect(geometry.caret).toBeNull();
+    expect(geometry.handles).toEqual([]);
+    expect(geometry.rectangles).toHaveLength(2);
+    for (const [index, rectangle] of geometry.rectangles.entries()) {
+        const cell = scene.pages[0].cells![index];
+        expect(rectangle).toEqual({
+            left: 11 + cell.x * 2,
+            top: 17 + cell.y * 2,
+            width: cell.width * 2,
+            height: cell.height * 2,
+        });
+    }
+});
 it('maps mixed-script search hits onto real wrapped/paginated text without changing scene geometry', async () => {
     const doc = importDocument(
         {

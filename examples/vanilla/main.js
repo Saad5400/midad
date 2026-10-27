@@ -3,7 +3,7 @@ import {
     caretViewportRect,
     EditingOverlayView,
     PageView,
-    selectionViewportRectangles,
+    selectionOverlayGeometry,
 } from '@saad5400/midad/browser/view';
 import { DocumentSession, findNode, importDocument } from '@saad5400/midad/document';
 import {
@@ -101,9 +101,8 @@ function updateOverlay() {
         (pageIndex) => hosts[pageIndex]?.getBoundingClientRect(),
         scale,
     );
-    const rectangles = selectionViewportRectangles(
-        session.document,
-        scene,
+    const geometry = selectionOverlayGeometry(
+        navigation,
         {
             anchor: { blockId: selection.blockId, offset: selection.from },
             focus: { blockId: selection.blockId, offset: selection.to },
@@ -117,14 +116,14 @@ function updateOverlay() {
             direction: activeBlock().attributes?.dir === 'rtl' ? 'rtl' : 'ltr',
             position,
         },
-        selection: rectangles,
+        selection: geometry.rectangles,
         find: [],
         peers: [],
         reviews: [],
         templates: [],
         handles: [],
         handleLabels: { start: 'Selection start', end: 'Selection end' },
-        caret: document.activeElement === overlay.input ? position : null,
+        caret: document.activeElement === overlay.input ? geometry.caret : null,
     });
 }
 async function render(request = generation) {
