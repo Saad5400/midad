@@ -7,10 +7,12 @@ import {
 } from '@saad5400/midad/document';
 import {
     blockText,
+    createProposalEngine,
     joinPreviousTextBlock,
     replaceInlineText,
     splitTextBlock,
     textDifference,
+    type ProposalInlineContent,
 } from '@saad5400/midad/editing';
 import { describe, expect, it } from 'vitest';
 
@@ -191,5 +193,51 @@ describe('native paragraph editing', () => {
         expect(textDifference('aaa', 'aaaa', { from: 1, to: 1 })).toEqual({ from: 1, to: 1, text: 'a' });
         expect(textDifference('aaa', 'aa', { from: 1, to: 1 })).toEqual({ from: 1, to: 2, text: '' });
         expect(textDifference('aba', 'a', { from: 0, to: 3 })).toEqual({ from: 0, to: 3, text: 'a' });
+    });
+});
+
+describe('configurable proposal engine', () => {
+    const contentKey = (content: ProposalInlineContent[] | null) => JSON.stringify(content);
+    const fieldsKey = (content: ProposalInlineContent[] | null) =>
+        JSON.stringify(content?.filter((node) => node.type === 'variable'));
+    const engine = createProposalEngine({
+        sameContent: (a, b) => contentKey(a) === contentKey(b),
+        sameFields: (a, b) => fieldsKey(a) === fieldsKey(b),
+        fixedFieldAttributes: (node) => node.attributes,
+    });
+
+    it('records and replays text without modifying its base document', () => {
+        const base = source();
+        const candidate = edit(base, 0, 2, 'New');
+        const changes = engine.proposalChanges(base, candidate);
+        const replay = engine.replayProposals(base, changes);
+        expect(changes).toHaveLength(1);
+        expect(replay.conflicts).toEqual([]);
+        expect(exportDocument(replay.document)).toEqual(exportDocument(candidate));
+        expect(blockText(findNode(base, 'p')!)).toBe('نص عادي\uFFFC نهاية');
+    });
+
+    it('reports an incompatible replay and observes caller locks', () => {
+        const base = source();
+        const candidate = edit(base, 0, 2, 'New');
+        const changes = engine.proposalChanges(base, candidate);
+        const incompatible = edit(base, 0, 2, 'Other');
+        const replay = engine.replayProposals(incompatible, changes);
+        expect(replay.document).toBe(incompatible);
+        expect(replay.conflicts).toEqual(changes);
+        expect(() => engine.proposalChanges(base, candidate, { locked: new Set(['p']) })).toThrow();
+    });
+
+    it('applies host limits without imposing them on other integrations', () => {
+        const base = source();
+        const candidate = edit(base, 0, 2, 'New');
+        const limited = createProposalEngine({
+            sameContent: (a, b) => contentKey(a) === contentKey(b),
+            sameFields: (a, b) => fieldsKey(a) === fieldsKey(b),
+            fixedFieldAttributes: (node) => node.attributes,
+            limits: { text: 2 },
+        });
+        expect(() => limited.proposalChanges(base, candidate)).toThrow('review limit');
+        expect(engine.proposalChanges(base, candidate)).toHaveLength(1);
     });
 });

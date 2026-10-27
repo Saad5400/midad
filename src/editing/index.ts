@@ -9,3 +9,4 @@ export * from './table-grid.js';
 export * from './tables.js';
 export * from './text.js';
 export * from './writing-position.js';
+export * from './proposals.js';

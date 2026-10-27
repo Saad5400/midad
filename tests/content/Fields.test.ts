@@ -1,24 +1,24 @@
-import { DocumentSession, exportDocument, findNode, importDocument } from '@saad5400/midad/document';
-import { blockText, pasteBlocks } from '@saad5400/midad/editing';
 import {
+    FieldEditQueue,
+    NATIVE_FIELD_TYPES,
+    fieldDetailsPatch,
+    fieldDisplayValue,
+    fieldStyle,
     floatingFieldPlacement,
     inlineNativeField,
     insertFloatingNativeField,
-    placeNativeField,
-    transformField,
-} from '@saad5400/midad/content/fields';
-import {
-    NATIVE_FIELD_TYPES,
-    fieldDisplayValue,
-    fieldStyle,
     insertNativeField,
     nativeFields,
+    placeNativeField,
     removeNativeField,
     stampNativeFields,
+    transformField,
     updateNativeField,
 } from '@saad5400/midad/content/fields';
+import { DocumentSession, exportDocument, findNode, importDocument } from '@saad5400/midad/document';
+import { blockText, pasteBlocks } from '@saad5400/midad/editing';
 import type { DocumentScene } from '@saad5400/midad/layout';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const source = () =>
     importDocument(
@@ -510,5 +510,81 @@ describe('native contract fields', () => {
             expect(() =>
                 insertNativeField(doc, { blockId: 'p', from: 0, to: 0, expectedRevision: 0 }, { ...draft, ...patch }),
             ).toThrow();
+    });
+    it.each(['', '  '])('keeps the existing unnamed-field authoring behavior (%j)', (name) => {
+        const inserted = insertNativeField(
+            source(),
+            { blockId: 'p', from: 4, to: 4, expectedRevision: 0 },
+            { type: 'text', name },
+        );
+        expect(nativeFields(inserted.document)[0].attributes.name).toBe('');
+        expect(nativeFields(inserted.document)[0].attributes.type).toBe('text');
+    });
+});
+
+describe('live field details edits', () => {
+    it('serializes preparation and retains newer edits across a delayed font load', async () => {
+        let release!: () => void;
+        const apply = vi
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>((resolve) => {
+                        release = resolve;
+                    }),
+            )
+            .mockResolvedValue(undefined);
+        const queue = new FieldEditQueue(apply, vi.fn());
+        queue.enqueue('a', { name: 'First', settings: { fontFamily: 'Amiri' } });
+        const work = queue.flush();
+        queue.enqueue('a', { name: 'Latest', settings: { fontSize: '20px' } });
+        queue.enqueue('a', { description: 'Retained', settings: { color: '#ff0000' } });
+        expect(queue.patch('a')).toEqual({
+            name: 'Latest',
+            description: 'Retained',
+            settings: { fontFamily: 'Amiri', fontSize: '20px', color: '#ff0000' },
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        release();
+        await work;
+        expect(apply).toHaveBeenLastCalledWith('a', {
+            name: 'Latest',
+            description: 'Retained',
+            settings: { fontSize: '20px', color: '#ff0000' },
+        });
+        expect(queue.dirty).toBe(false);
+    });
+    it('retains failed drafts, merges a correction and retries without losing other fields', async () => {
+        const apply = vi.fn().mockRejectedValueOnce(new Error('Invalid name')).mockResolvedValue(undefined);
+        const queue = new FieldEditQueue(apply, vi.fn());
+        queue.enqueue('a', { name: '', description: 'Do not lose' });
+        await expect(queue.flush()).rejects.toThrow('Invalid name');
+        queue.enqueue('a', { name: 'Corrected' });
+        queue.enqueue('b', { value: 'Second field' });
+        await queue.flush();
+        expect(apply.mock.calls.slice(1)).toEqual([
+            ['a', { name: 'Corrected', description: 'Do not lose' }],
+            ['b', { value: 'Second field' }],
+        ]);
+        expect(queue.dirty).toBe(false);
+    });
+    it('takes only changed settings and retains false/empty values', () => {
+        const previous = {
+            id: 'a',
+            type: 'text' as const,
+            name: 'Before',
+            description: 'Hint',
+            value: 'Value',
+            participant_id: '',
+            settings: { fontFamily: 'Arial', multiline: true, color: '#000000' },
+        };
+        expect(
+            fieldDetailsPatch(previous, {
+                ...previous,
+                description: '',
+                settings: { ...previous.settings, multiline: false },
+            }),
+        ).toEqual({ description: '', settings: { multiline: false } });
+        expect(fieldDetailsPatch(previous, { ...previous })).toEqual({});
     });
 });
