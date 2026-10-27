@@ -31,7 +31,7 @@ The package is not published to npm yet. Versioned tarballs are attached to [Git
 ```sh
 npm pack
 cd examples/vanilla
-npm install ../../saad5400-midad-0.25.0.tgz
+npm install ../../saad5400-midad-0.25.1-checkpoint.1.tgz
 npm run dev
 ```
 
