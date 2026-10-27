@@ -1,6 +1,6 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.25.1-checkpoint.3",
+    "version": "0.25.1",
     "type": "module",
     "sideEffects": [
         "**/*.css"
@@ -411,7 +411,9 @@
             "types": "./dist/adapters/vue/index.d.ts",
             "import": "./dist/adapters/vue/index.js"
         },
-        "./vue/style.css": "./dist/adapters/vue/editor.css"
+        "./vue/style.css": "./dist/adapters/vue/editor.css",
+        "./vue/native-editor.css": "./dist/adapters/vue/native-editor.css",
+        "./vue/native-pdf.css": "./dist/adapters/vue/native-pdf.css"
     },
     "scripts": {
         "build": "node build.mjs && tsc -p tsconfig.json && node build.mjs --vue && vue-tsc -p tsconfig.vue.json",

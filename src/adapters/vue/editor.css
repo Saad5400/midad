@@ -1,3 +1,6 @@
+@import './native-editor.css';
+@import './native-pdf.css';
+
 .midad-editor .native-pages {
     display: flex;
     flex-direction: column;

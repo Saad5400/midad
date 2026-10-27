@@ -1,0 +1,842 @@
+.midad-editor {
+    --native-border: var(--border, #d4deea);
+    background: var(--editor-workbench, #edf2f7);
+    color: var(--foreground, #17355b);
+}
+.midad-editor .native-find-panel {
+    position: sticky;
+    z-index: 9;
+    display: grid;
+    gap: 6px;
+    padding: 8px 12px;
+    border-block-end: 1px solid var(--native-border);
+    background: var(--background, white);
+}
+.midad-editor .native-find-row,
+.midad-editor .native-find-options {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.midad-editor .native-find-row input {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    border: 1px solid var(--native-border);
+    border-radius: 5px;
+    padding-inline: 8px;
+    background: var(--background, white);
+    color: inherit;
+    font-size: 16px;
+}
+.midad-editor .native-find-row button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 34px;
+    flex-shrink: 0;
+    border: 1px solid var(--native-border);
+    border-radius: 5px;
+}
+.midad-editor .native-find-row output {
+    max-width: 30%;
+    font-size: 12px;
+}
+.midad-editor .native-find-options {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 12px;
+}
+.midad-editor .native-find-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.midad-editor .native-find-panel button:focus-visible,
+.midad-editor .native-find-panel input:focus-visible {
+    outline: 2px solid var(--primary, #1264a3);
+    outline-offset: 2px;
+}
+.midad-editor .native-history-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    gap: 20px;
+}
+.midad-editor .native-history-list,
+.midad-editor .native-history-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+.midad-editor .native-history-list {
+    max-height: 65vh;
+    overflow: auto;
+}
+.midad-editor .native-history-previews {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+.midad-editor .native-history-preview-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.midad-editor .native-history-previews.has-comparison {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.midad-editor .native-history-previews > section {
+    min-width: 0;
+    max-height: 58vh;
+    overflow: auto;
+    border: 1px solid var(--native-border);
+}
+.midad-editor .native-history-previews h3 {
+    padding: 12px;
+    background: var(--background, white);
+}
+.midad-editor .native-history-changes {
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid var(--native-border);
+    padding: 12px;
+}
+.midad-editor .native-history-changes li {
+    padding-block: 8px;
+    border-block-end: 1px solid var(--native-border);
+}
+.midad-editor .native-history-changes p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.midad-editor .native-history-changes ins {
+    background: #dcfce7;
+    color: #14532d;
+    text-decoration: none;
+}
+.midad-editor .native-history-changes del {
+    background: #fee2e2;
+    color: #7f1d1d;
+}
+.midad-editor .native-history-highlights {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.midad-editor .native-history-highlights span {
+    position: absolute;
+    background: #f59e0b30;
+    outline: 1px solid #a1620740;
+}
+.midad-editor [data-history-change='added'] {
+    background: #22c55e30;
+}
+.midad-editor [data-history-change='removed'] {
+    background: #ef444430;
+}
+.midad-editor [data-history-change='moved'] {
+    background: #3b82f630;
+}
+@media (max-width: 760px) {
+    .midad-editor .native-history-layout,
+    .midad-editor .native-history-previews.has-comparison {
+        grid-template-columns: 1fr;
+    }
+    .midad-editor .native-history-list {
+        max-height: 180px;
+    }
+}
+.midad-editor .native-controls {
+    position: sticky;
+    top: var(--native-toolbar-offset, 0px);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 24px;
+    background: var(--background, white);
+}
+.midad-editor .native-controls button,
+.midad-editor .native-controls select {
+    padding: 7px 12px;
+    border: 1px solid var(--native-border);
+    border-radius: 6px;
+    background: var(--background, white);
+    color: inherit;
+}
+.midad-editor .native-zoom-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.midad-editor .native-controls button:disabled {
+    opacity: 0.5;
+}
+.midad-editor .native-pages {
+    display: flex;
+    flex-direction: column;
+    align-items: safe center;
+    gap: 28px;
+    padding: 28px;
+    overflow-x: auto;
+}
+.midad-editor .native-pages.has-block-handles {
+    padding-inline: 48px;
+}
+.midad-editor .native-block-handles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.midad-editor .native-block-handle {
+    position: absolute;
+    z-index: 2;
+    width: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #526781;
+    font-size: 22px;
+    opacity: 0;
+    cursor: grab;
+    touch-action: none;
+    pointer-events: auto;
+}
+.midad-editor .native-page:hover .native-block-handle {
+    opacity: 0.45;
+}
+.midad-editor .native-block-handle:hover,
+.midad-editor .native-block-handle:focus-visible,
+.midad-editor .native-block-handle.is-dragging {
+    opacity: 1;
+    background: #dceafb;
+    outline: 2px solid #1264a3;
+}
+.midad-editor .native-block-handle.is-dragging {
+    cursor: grabbing;
+}
+@media (hover: none) {
+    .midad-editor .native-block-handle {
+        opacity: 0.6;
+    }
+}
+.midad-editor .native-page {
+    position: relative;
+    flex-shrink: 0;
+    background: white;
+    box-shadow: 0 2px 8px #17355b18;
+    cursor: text;
+    touch-action: manipulation;
+    user-select: none;
+}
+.midad-editor .native-format-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: end;
+    gap: 10px;
+    padding: 12px 24px;
+    border-block: 1px solid var(--native-border);
+    background: var(--background, white);
+}
+.midad-editor .native-format-fields,
+.midad-editor .native-link-form {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 8px;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+.midad-editor .native-format-fields {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    padding-block: 4px;
+}
+.midad-editor .native-format-fields > * {
+    flex-shrink: 0;
+}
+.midad-editor .native-link-form {
+    grid-column: 1 / -1;
+}
+@media (max-width: 700px) {
+    .midad-editor .native-format-toolbar {
+        gap: 6px;
+        padding: 8px 12px;
+    }
+}
+.midad-editor .native-format-toolbar label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+}
+.midad-editor .native-format-toolbar button,
+.midad-editor .native-format-toolbar input,
+.midad-editor .native-format-toolbar select {
+    min-height: 32px;
+    padding: 4px 8px;
+    border: 1px solid var(--native-border);
+    border-radius: 5px;
+    background: var(--background, white);
+    color: inherit;
+    font: inherit;
+}
+.midad-editor .native-format-toolbar button {
+    font-size: 12px;
+    cursor: pointer;
+}
+.midad-editor .native-format-toolbar input[type='number'] {
+    width: 80px;
+}
+.midad-editor .native-format-toolbar input[type='color'] {
+    width: 48px;
+    padding: 2px;
+}
+.midad-editor .native-format-toolbar button[aria-pressed='true'] {
+    background: #dceafb;
+    color: #0d426f;
+    border-color: #1264a3;
+}
+.midad-editor .native-format-toolbar button[aria-pressed='mixed'] {
+    border-style: dashed;
+}
+.midad-editor .native-format-toolbar :disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.midad-editor .native-link-form input {
+    min-width: 240px;
+}
+.midad-editor .native-link-form [role='alert'] {
+    color: #a0182c;
+    font-size: 12px;
+}
+.midad-editor .native-fail {
+    color: #a0182c;
+    padding: 12px 24px;
+}
+.midad-editor .native-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: min(700px, 90%);
+    min-height: 800px;
+    margin: 28px auto;
+    padding: 48px;
+    background: white;
+}
+.midad-editor .native-skeleton span {
+    height: 16px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #edf2f7 25%, #dce5ef 50%, #edf2f7 75%);
+    background-size: 200% 100%;
+    animation: native-loading 1.4s linear infinite;
+}
+@keyframes native-loading {
+    to {
+        background-position: -200% 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .midad-editor .native-skeleton span {
+        animation: none;
+    }
+}
+
+.midad-editor .native-selection-menu {
+    position: fixed;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 208px;
+    max-width: calc(100vw - 16px);
+    padding: 4px 0;
+    border: 1px solid var(--native-border);
+    border-radius: 6px;
+    background: var(--popover, white);
+    color: var(--popover-foreground);
+    box-shadow:
+        0 4px 6px -1px #0000001a,
+        0 2px 4px -2px #0000001a;
+}
+.midad-editor .native-block-actions {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--native-border);
+}
+.midad-editor .native-block-actions.is-only {
+    border-top: 0;
+}
+.midad-editor .native-selection-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 4px;
+    white-space: nowrap;
+    text-align: start;
+    font-size: 12px;
+    cursor: pointer;
+}
+.midad-editor .native-selection-menu button:hover,
+.midad-editor .native-selection-menu button:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    outline: none;
+}
+@media (pointer: coarse) {
+    .midad-editor .native-selection-menu button {
+        min-height: 44px;
+    }
+}
+.midad-editor .native-selection-menu button:disabled {
+    opacity: 0.5;
+}
+.midad-editor .native-selection-menu.is-horizontal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: max-content;
+    padding: 4px;
+}
+.midad-editor .native-selection-menu.is-horizontal button {
+    min-height: 44px;
+    padding: 4px 10px;
+}
+.midad-editor .native-selection-menu.is-horizontal button > svg,
+.midad-editor .native-selection-menu.is-horizontal button > span[aria-hidden] {
+    display: none;
+}
+.midad-editor .native-selection-menu.is-horizontal .native-block-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+}
+.midad-editor .native-page {
+    position: relative;
+}
+.midad-editor .native-page.is-selecting-cells {
+    touch-action: none;
+    cursor: cell;
+}
+.midad-editor .native-cell-selection {
+    outline: 1px solid #2563eb88;
+}
+.midad-editor .native-field-box {
+    position: absolute;
+    z-index: 3;
+    padding: 0;
+    border: 1px dashed #64748b77;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.midad-editor .native-field-box:hover,
+.midad-editor .native-field-box:focus-visible,
+.midad-editor .native-field-box.is-active {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+.midad-editor .native-field-dialog {
+    position: fixed;
+    inset: 0;
+    width: min(680px, 92vw);
+    max-height: 85vh;
+    margin: auto;
+    padding: 24px;
+    border: 1px solid var(--native-border);
+    border-radius: 12px;
+    background: var(--background, white);
+    color: var(--foreground, #111827);
+}
+.midad-editor .native-field-box.is-floating,
+.midad-editor .native-field-move {
+    cursor: move;
+    touch-action: none;
+}
+.midad-editor .native-field-resize,
+.midad-editor .native-field-move {
+    position: absolute;
+    z-index: 5;
+    background: white;
+    color: #1d4ed8;
+    border: 1px solid #2563eb;
+    touch-action: none;
+    padding: 0;
+}
+.midad-editor .native-field-move {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted-foreground, #64748b);
+}
+.midad-editor .native-field-move:hover {
+    background: var(--muted, #f3f4f6);
+}
+.midad-editor .native-field-resize {
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.midad-editor .native-field-resize::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border: 0 solid var(--brand-500, var(--color-brand-500, #2563eb));
+    filter: drop-shadow(0 0 1px var(--background, white));
+}
+.midad-editor .native-field-resize[data-field-handle='nw']::after {
+    top: calc(50% + 8px);
+    left: calc(50% + 8px);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-top-left-radius: 5px;
+}
+.midad-editor .native-field-resize[data-field-handle='ne']::after {
+    top: calc(50% + 8px);
+    right: calc(50% + 8px);
+    border-top-width: 2px;
+    border-right-width: 2px;
+    border-top-right-radius: 5px;
+}
+.midad-editor .native-field-resize[data-field-handle='sw']::after {
+    bottom: calc(50% + 8px);
+    left: calc(50% + 8px);
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+    border-bottom-left-radius: 5px;
+}
+.midad-editor .native-field-resize[data-field-handle='se']::after {
+    bottom: calc(50% + 8px);
+    right: calc(50% + 8px);
+    border-bottom-width: 2px;
+    border-right-width: 2px;
+    border-bottom-right-radius: 5px;
+}
+.midad-editor
+    .native-field-resize:is(
+        [data-field-handle='n'],
+        [data-field-handle='s'],
+        [data-field-handle='e'],
+        [data-field-handle='w']
+    )::after {
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 3px;
+    transform: translate(-50%, -50%);
+    border-radius: 2px;
+    background: var(--brand-500, var(--color-brand-500, #2563eb));
+}
+.midad-editor .native-field-resize:is([data-field-handle='e'], [data-field-handle='w'])::after {
+    width: 3px;
+    height: 10px;
+}
+.midad-editor .native-field-resize:focus-visible {
+    outline: 2px solid var(--brand-500, var(--color-brand-500, #2563eb));
+    outline-offset: 1px;
+}
+.midad-editor .native-field-resize[data-field-handle='n']::after {
+    top: calc(50% + 10px);
+}
+.midad-editor .native-field-resize[data-field-handle='s']::after {
+    top: calc(50% - 10px);
+}
+.midad-editor .native-field-resize[data-field-handle='w']::after {
+    left: calc(50% + 10px);
+}
+.midad-editor .native-field-resize[data-field-handle='e']::after {
+    left: calc(50% - 10px);
+}
+.midad-editor .native-field-preview {
+    position: absolute;
+    z-index: 6;
+    outline: 2px solid #2563eb;
+    background: #2563eb22;
+    pointer-events: none;
+}
+.midad-editor .native-field-dialog::backdrop {
+    background: #0006;
+}
+.midad-editor .native-field-dialog form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+.midad-editor .native-field-dialog h2,
+.midad-editor .native-field-dialog footer,
+.midad-editor .native-field-dialog [role='alert'] {
+    grid-column: 1 / -1;
+}
+.midad-editor .native-field-dialog label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+}
+.midad-editor .native-field-dialog input:not([type='checkbox']),
+.midad-editor .native-field-dialog textarea:not(.native-input),
+.midad-editor .native-field-dialog select {
+    width: 100%;
+    border: 1px solid var(--native-border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: inherit;
+}
+.midad-editor .native-field-dialog .native-field-checkbox {
+    flex-direction: row;
+    align-items: center;
+}
+.midad-editor .native-field-dialog footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.midad-editor .native-field-dialog button {
+    border: 1px solid var(--native-border);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+.midad-editor .native-bilingual-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    gap: 16px;
+}
+.midad-editor .native-clause-dialog {
+    width: min(920px, 94vw);
+}
+.midad-editor .native-clause-content,
+.midad-editor .native-clause-settings,
+.midad-editor .native-clause-library,
+.midad-editor .native-clause-variant-tools {
+    display: grid;
+    gap: 16px;
+}
+.midad-editor .native-clause-content header,
+.midad-editor .native-clause-content nav,
+.midad-editor .native-clause-actions,
+.midad-editor .native-clause-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+.midad-editor .native-clause-content header {
+    justify-content: space-between;
+}
+.midad-editor .native-clause-flags label {
+    flex-direction: row;
+    align-items: center;
+}
+.midad-editor .native-clause-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--native-border);
+    border-radius: 8px;
+    padding: 12px;
+}
+.midad-editor .native-clause-card h3 {
+    flex: 1;
+}
+.midad-editor .native-clause-preview,
+.midad-editor .native-clause-explanation {
+    max-height: 460px;
+    overflow: auto;
+    border: 1px solid var(--native-border);
+}
+.midad-editor.is-embedded > .native-format-toolbar {
+    position: relative;
+    top: auto;
+}
+.midad-editor .native-bilingual-fields > [role='status'],
+.midad-editor .native-bilingual-fields > .native-field-checkbox {
+    grid-column: 1 / -1;
+}
+@media (max-width: 600px) {
+    .midad-editor .native-bilingual-fields {
+        grid-template-columns: 1fr;
+    }
+}
+.midad-editor .native-image-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+.midad-editor .native-image-preview,
+.midad-editor .native-image-actions {
+    grid-column: 1 / -1;
+}
+.midad-editor .native-image-preview {
+    min-height: 120px;
+    max-height: 360px;
+    overflow: hidden;
+    background: #e5e7eb;
+}
+.midad-editor .native-image-preview > img {
+    display: block;
+    max-width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    margin: auto;
+}
+.midad-editor .native-image-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.midad-editor .native-file-picker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    border: 1px solid var(--native-border);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+.midad-editor .native-file-picker input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+.midad-editor .native-file-picker:focus-within {
+    outline: 2px solid #2563eb;
+}
+@media (max-width: 600px) {
+    .midad-editor .native-field-dialog form,
+    .midad-editor .native-image-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.midad-editor .native-workbench-tools {
+    top: var(--native-toolbar-offset, 0px);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 57px;
+    padding: 12px 24px;
+    border-color: var(--border);
+}
+.native-tool-number,
+.native-tool-select {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 12px;
+    color: var(--foreground);
+    background: var(--background);
+}
+.midad-editor .native-workbench-tools .native-tool-number,
+.midad-editor .native-workbench-tools .native-tool-select {
+    border: 0;
+    padding: 2px 4px;
+    font-size: 12px;
+    background: transparent;
+}
+.midad-editor .native-workbench-tools button:not([role='combobox']) {
+    padding: 4px;
+    border: 0;
+    font-size: 12px;
+    background: transparent;
+}
+@media (max-width: 640px) {
+    .midad-editor .native-workbench-tools {
+        gap: 8px;
+        padding-inline: 12px;
+    }
+}
+
+.midad-editor .native-bilingual-preview {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.midad-editor .native-bilingual-preview span {
+    position: absolute;
+    background: #2563eb12;
+    outline: 1px solid #2563eb40;
+}
+
+@media (min-width: 1024px) {
+    .midad-editor.has-outline .native-pages {
+        margin-inline-end: 204px;
+    }
+}
+
+.midad-editor .native-block-controls {
+    position: absolute;
+    z-index: 30;
+    display: flex;
+    overflow: hidden;
+    border-radius: 8px;
+    color: #9ca3af;
+    background: color-mix(in srgb, var(--popover, white) 95%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border, #e5e7eb) 70%, transparent);
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 120ms ease;
+}
+.midad-editor .native-block-controls.is-active,
+.midad-editor .native-block-controls:hover,
+.midad-editor .native-block-controls:focus-within {
+    opacity: 1;
+}
+.midad-editor .native-block-controls.is-vertical {
+    flex-direction: column;
+}
+.midad-editor .native-block-controls > button {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: inherit;
+    background: transparent;
+    opacity: 1;
+}
+.midad-editor .native-block-controls.is-vertical > button {
+    width: 30px;
+    height: 26px;
+}
+.midad-editor .native-block-controls > button:hover,
+.midad-editor .native-block-controls > button:focus-visible {
+    background: var(--accent, #f3f4f6);
+    outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .midad-editor .native-block-controls {
+        transition: none;
+    }
+}

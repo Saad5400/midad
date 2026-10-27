@@ -350,4 +350,6 @@ import '@saad5400/midad/vue/style.css';
 
 `DocumentEditor` provides the paginated editing surface. The application owns its UI: use the `editor-toolbar` and `before` slots, pass Vue components through `chrome`, and override styles or CSS variables. The slot's `editor` API exposes formatting, selection, history, tables and PDF export. Media loading, persistence, translation and review validation are supplied through props and `integration` callbacks; no application services are imported by Midad.
 
+Optional controls such as `Toolbar`, `ClausePanel`, `HistoryPanel` and `PdfDocument` use `provideEditorUi` for application-provided widgets, icons, fonts, labels, field styling and PDF/media callbacks. Their `EditorUiBindings` belong to each Vue component tree. Applications can replace complete controls through `chrome` or customize their widgets and styling; no component-library dependency is imposed on the engine. Import `@saad5400/midad/vue/style.css` for the default surface styles and include the adapter's compiled files in your utility-CSS scanner if you use the supplied controls.
+
 `examples/vue` demonstrates a custom toolbar without CLM, Inertia, a component library or a Vue build plugin. `examples/vanilla` uses the same framework-independent engine without Vue.

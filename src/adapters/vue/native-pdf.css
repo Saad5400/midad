@@ -1,0 +1,263 @@
+.native-pdf-document {
+    display: flex;
+    flex-direction: column;
+    min-height: 240px;
+    color: var(--foreground, #1f2937);
+    background: var(--background, white);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.native-pdf-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.native-pdf-controls > *,
+.native-pdf-controls label {
+    flex-shrink: 0;
+}
+.native-pdf-controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.native-pdf-controls input {
+    width: 64px;
+}
+.native-pdf-controls input,
+.native-pdf-controls select,
+.native-pdf-controls button,
+.native-pdf-error button,
+.native-pdf-page-error button {
+    padding: 6px 10px;
+    border: 1px solid var(--border, #d1d5db);
+    border-radius: 6px;
+    background: var(--background, white);
+    color: inherit;
+}
+.native-pdf-controls :disabled {
+    opacity: 0.45;
+}
+.native-pdf-viewport {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: var(--muted, #f3f4f6);
+    overscroll-behavior: contain;
+}
+.native-pdf-pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 24px;
+    width: 100%;
+}
+.native-pdf-page {
+    position: relative;
+    flex-shrink: 0;
+    background: white;
+    color: black;
+    box-shadow: 0 1px 5px #0002;
+    overflow: hidden;
+}
+.native-pdf-raster,
+.native-pdf-text {
+    position: absolute;
+    inset: 0;
+}
+.native-pdf-raster canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.native-pdf-text {
+    transform-origin: top left;
+}
+.native-pdf-text .textLayer {
+    z-index: 1;
+}
+.native-pdf-page .native-pdf-link,
+.native-pdf-page .native-pdf-widget {
+    position: absolute;
+    z-index: 2;
+    background: transparent;
+}
+.native-pdf-widget {
+    border: 1px dashed #3b82f6;
+    cursor: pointer;
+}
+.native-pdf-page-skeleton,
+.native-pdf-loading > div {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, #fafafa 30%, #f0f0f0 50%, #fafafa 70%);
+    background-size: 200% 100%;
+    animation: native-pdf-loading 1.2s ease-in-out infinite;
+}
+.native-pdf-loading {
+    position: relative;
+    margin: 24px auto;
+    width: min(600px, 85%);
+    height: 600px;
+    padding: 24px;
+}
+.native-pdf-loading > div {
+    inset: 64px 24px 24px;
+}
+.native-pdf-error,
+.native-pdf-page-error {
+    padding: 24px;
+    text-align: center;
+}
+.native-pdf-page-error {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    background: white;
+}
+@keyframes native-pdf-loading {
+    to {
+        background-position: -200% 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .native-pdf-page-skeleton,
+    .native-pdf-loading > div {
+        animation: none;
+    }
+}
+
+.native-pdf-text .textLayer {
+    --scale-round-x: 1px;
+    --scale-round-y: 1px;
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    line-height: 1;
+    text-align: initial;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+}
+.native-pdf-text .textLayer :is(span, br) {
+    position: absolute;
+    color: transparent;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0 0;
+}
+.native-pdf-text .textLayer > :not(.markedContent),
+.native-pdf-text .textLayer .markedContent span:not(.markedContent) {
+    --font-height: 0;
+    --scale-x: 1;
+    --rotate: 0deg;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.native-pdf-text .markedContent {
+    display: contents;
+}
+.native-pdf-text .textLayer ::selection {
+    background: #3b82f64d;
+}
+.native-pdf-text .textLayer br::selection {
+    background: transparent;
+}
+.native-pdf-text .textLayer[data-main-rotation='90'] {
+    transform: rotate(90deg) translateY(-100%);
+}
+.native-pdf-text .textLayer[data-main-rotation='180'] {
+    transform: rotate(180deg) translate(-100%, -100%);
+}
+.native-pdf-text .textLayer[data-main-rotation='270'] {
+    transform: rotate(270deg) translateX(-100%);
+}
+.native-pdf-document.is-pdf-all-selected .textLayer span {
+    background: #3b82f64d;
+}
+.native-pdf-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.native-pdf-overlay,
+.native-frozen-fields {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+.native-field-appearance {
+    position: absolute;
+    pointer-events: none;
+}
+.native-frozen-field-target {
+    position: absolute;
+    pointer-events: auto;
+    background: transparent;
+    border: 1px dashed;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.native-frozen-field-target[aria-pressed='true'] {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+.native-frozen-field-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+
+.native-pdf-review-hit {
+    position: absolute;
+    pointer-events: none;
+    background: rgb(245 158 11 / 28%);
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgb(217 119 6 / 22%);
+}
+
+.native-pdf-review-controls {
+    height: 56px;
+    min-height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.native-pdf-review-controls span[role='status'] {
+    min-width: 0;
+    max-height: 40px;
+    overflow: auto;
+    flex: 1;
+}
+.native-pdf-review-controls button {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #d1d5db);
+}
+.native-pdf-review-controls button:disabled {
+    opacity: 0.45;
+}
