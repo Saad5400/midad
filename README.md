@@ -6,7 +6,7 @@ Midad is a standalone TypeScript package with no framework, application server, 
 
 ## Status
 
-Early development. The engine is extracted and tested independently. Reusable browser UI and interaction controllers are still being extracted from the first integration. A complete embeddable editor UI is not released yet.
+Version 0.25 provides a framework-independent engine and reusable browser views/controllers. The vanilla example edits canvas-rendered paragraphs and exports the same scene to PDF. Hosts supply their application toolbar, persistence and workflows; a complete drop-in toolbar and framework adapters are not part of this release.
 
 Canvas and PDF use the same shaped glyphs and page scene. Tests compare the actual PDF glyph identities, positions, dimensions and page counts, including tightly filled pages and nested rich tables. These checks do not establish correctness for every possible document. The target is exact layout and main operations below five seconds.
 
@@ -25,6 +25,17 @@ With Poppler's `pdftocairo` available on `PATH`, run `npm run test:pdf-raster` f
 The raster checks cover marked Arabic, tight page boundaries, mixed bilingual tables, colored paint and scaled transparent images. Text coordinates and colors are checked directly in the PDF; visible glyph cores must overlap the other raster's antialiased edges within one pixel (0.25 pt). Non-text paint compares local colors with the same spatial limit and accounts for edge blending. Deliberately missing marks and a page number moved by one point must fail. These tolerances account for different rasterizers; this is not a claim of identical antialiasing, complete production-corpus coverage or universal fidelity.
 
 The package is not published to npm yet. Versioned tarballs are attached to [GitHub releases](https://github.com/Saad5400/midad/releases); install a release artifact URL or build and install a local tarball. Applications do not need to commit the binary package to their source repository.
+
+## Run the vanilla example from a package
+
+```sh
+npm pack
+cd examples/vanilla
+npm install ../../saad5400-midad-0.25.0.tgz
+npm run dev
+```
+
+Open the local URL printed by Vite. Click a paragraph to type in English or Arabic, use Enter for another paragraph, select text with the keyboard and apply Bold, undo/redo, then download the PDF. The example imports the installed package, without repository source aliases or any CLM service. Its deliberately small host demonstrates the document, canvas, input overlay and PDF APIs; applications can add the package’s table, field, collaboration and other controllers.
 
 ## Per-page setup
 
