@@ -1866,7 +1866,7 @@ async function render(): Promise<void> {
     const start = performance.now();
     const prepared = layoutController.cached(snapshot, kernel.value) ?? hydratedScene(snapshot, kernel.value);
     scene.value = prepared.scene;
-    if (prepared.document !== snapshot && !props.reviewPolicy) {
+    if (prepared.document.root !== snapshot.root && !props.reviewPolicy) {
         session.document = prepared.document;
         if (readyMs.value !== null && !props.readonly) emit('change', prepared.document);
     }
