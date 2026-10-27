@@ -1,6 +1,7 @@
 import type { CanvasKit } from 'canvaskit-wasm';
 import type { TextMatch } from '../../editing/search.js';
 import type { DocumentScene } from '../../layout/scene.js';
+import { textRangeRectangles } from './text-range.js';
 
 export interface SearchRectangle {
     readonly pageIndex: number;
@@ -55,12 +56,7 @@ export function searchRectangles(
                 const from = Math.max(row.start, match.from + prefix),
                     to = Math.min(row.end, match.to + prefix);
                 if (from >= to) continue;
-                for (const { rect } of shaped.paragraph.getRectsForRange(
-                    from,
-                    to,
-                    ck.RectHeightStyle.Max,
-                    ck.RectWidthStyle.Tight,
-                ))
+                for (const rect of textRangeRectangles(shaped, from, to, ck))
                     rectangles.push({
                         pageIndex,
                         matchIndex: index,

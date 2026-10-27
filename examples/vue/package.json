@@ -1,0 +1,16 @@
+{
+    "name": "midad-vue-example",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 0.0.0.0",
+        "build": "vite build"
+    },
+    "dependencies": {
+        "@saad5400/midad": "https://github.com/Saad5400/midad/releases/download/v0.25.1/saad5400-midad-0.25.1.tgz",
+        "vue": "3.5.27"
+    },
+    "devDependencies": {
+        "vite": "8.0.16"
+    }
+}

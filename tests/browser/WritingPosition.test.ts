@@ -1,4 +1,4 @@
-import { emptyWritingPosition } from '@saad5400/midad/browser';
+import { emptyWritingPosition, SelectionController } from '@saad5400/midad/browser';
 import { importDocument } from '@saad5400/midad/document';
 import type { DocumentScene } from '@saad5400/midad/layout';
 import { describe, expect, it } from 'vitest';
@@ -77,5 +77,21 @@ describe('empty writing geometry', () => {
         expect(position?.pageIndex).toBe(1);
         const occupied = importDocument({ type: 'doc', content: [{ type: 'paragraph' }] }, 'occupied');
         expect(emptyWritingPosition(occupied, scene(occupied.id))).toBeUndefined();
+    });
+});
+
+it('offers a pointer writing position only when the host allows empty-body editing', () => {
+    const document = importDocument({ type: 'doc' }, 'empty-pointer');
+    const controller = new SelectionController();
+    const options = { selection: null, upstreamAffinity: {} as never };
+    const point = { page: 0, x: 80, y: 80 };
+    expect(controller.point(document, scene(document.id), point, options)).toMatchObject({ kind: 'empty' });
+    expect(controller.point(document, scene(document.id), point, { ...options, allowEmpty: false })).toEqual({
+        kind: 'none',
+        selectingCells: false,
+    });
+    expect(controller.point(document, scene(document.id), { ...point, extend: true }, options)).toEqual({
+        kind: 'none',
+        selectingCells: false,
     });
 });

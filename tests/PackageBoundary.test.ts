@@ -13,6 +13,8 @@ describe('standalone package entrypoints', () => {
     it('ships explicit entrypoints and keeps implementation files private', async () => {
         const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
         expect(packageJson.exports['./*']).toBeUndefined();
+        expect(packageJson.dependencies.vue).toBeUndefined();
+        expect(packageJson.peerDependenciesMeta.vue.optional).toBe(true);
         for (const entry of Object.values(packageJson.exports)) {
             if (typeof entry === 'string') continue;
             const target = entry as { types: string; import: string };

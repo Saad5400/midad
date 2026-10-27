@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { searchRectangles } from '@saad5400/midad/browser/view';
+import { NativeNavigation } from '@saad5400/midad/browser/input';
+import {
+    searchRectangles,
+    selectionOverlayGeometry,
+    selectionViewportRectangles,
+    textRangeRectangles,
+} from '@saad5400/midad/browser/view';
 import { importDocument } from '@saad5400/midad/document';
 import { findText } from '@saad5400/midad/editing';
 import { layoutDocument } from '@saad5400/midad/layout';
@@ -7,7 +13,7 @@ import { NativeTextKernel } from '@saad5400/midad/rendering';
 import CanvasKitInit from 'canvaskit-wasm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 let kernel: NativeTextKernel;
@@ -20,7 +26,175 @@ beforeAll(async () => {
         async (font) => new Uint8Array(await readFile(`assets/fonts/${font}.ttf`)),
     );
 });
+
+it('projects reversed selections across wrapped numbered paragraphs and skips unmounted pages', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: Array.from({ length: 80 }, (_, index) => ({
+                type: 'orderedList',
+                content: [
+                    {
+                        type: 'listItem',
+                        content: [
+                            {
+                                type: 'paragraph',
+                                attrs: { id: `selection-${index}`, dir: index % 2 ? 'rtl' : 'ltr' },
+                                content: [{ type: 'text', text: 'Selected text العربية '.repeat(12) }],
+                            },
+                        ],
+                    },
+                ],
+            })),
+        },
+        'selection',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel);
+    expect(scene.pages.length).toBeGreaterThan(2);
+    const selected = {
+        anchor: { blockId: 'selection-0', offset: 9 },
+        focus: { blockId: 'selection-79', offset: 25 },
+    };
+    const pageOrigin = vi.fn((index: number) => (index === 1 ? { left: 37, top: -90 } : undefined));
+    const options = { canvasKit: kernel.ck, scale: 1.5, pageOrigin, pages: new Set([1]) };
+    const rectangles = selectionViewportRectangles(doc, scene, selected, options);
+    expect(rectangles.length).toBeGreaterThan(0);
+    expect(pageOrigin).toHaveBeenCalledExactlyOnceWith(1);
+    expect(
+        selectionViewportRectangles(doc, scene, { anchor: selected.focus, focus: selected.anchor }, options),
+    ).toEqual(rectangles);
+    for (const rectangle of rectangles) {
+        expect(rectangle.left).toBeGreaterThanOrEqual(37);
+        expect(rectangle.top).toBeGreaterThanOrEqual(-90);
+        expect(rectangle.left + rectangle.width).toBeLessThanOrEqual(37 + scene.pages[1].width * 1.5);
+        expect(rectangle.top + rectangle.height).toBeLessThanOrEqual(-90 + scene.pages[1].height * 1.5);
+    }
+    expect(selectionViewportRectangles(doc, scene, selected, { ...options, pageOrigin: () => undefined })).toEqual([]);
+    expect(selectionViewportRectangles(doc, scene, selected, { ...options, scale: 0 })).toEqual([]);
+});
+
+it('reuses shaped-range measurements across search and selection views', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    attrs: { id: 'cached' },
+                    content: [{ type: 'text', text: 'Reusable selected text' }],
+                },
+            ],
+        },
+        'cached',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel),
+        shaped = scene.pages[0].lines[0].shaped;
+    const measure = vi.spyOn(shaped.paragraph, 'getRectsForRange');
+    try {
+        const matches = [{ blockId: 'cached', from: 0, to: 8 }];
+        const searched = searchRectangles(scene, matches, kernel.ck);
+        expect(textRangeRectangles(shaped, 0, 8, kernel.ck)).toHaveLength(searched.length);
+        expect(measure).toHaveBeenCalledOnce();
+        const expanded = textRangeRectangles(shaped, 0, 12, kernel.ck);
+        expect(expanded[0][2] - expanded[0][0]).toBeGreaterThan(searched[0].width);
+        expect(measure).toHaveBeenCalledTimes(2);
+    } finally {
+        measure.mockRestore();
+    }
+});
 afterAll(() => kernel.destroy());
+
+it('paints selected line and paragraph breaks with touch endpoints and restores a collapsed caret', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    attrs: { id: 'a' },
+                    content: [{ type: 'text', text: 'Alpha' }, { type: 'hardBreak' }, { type: 'text', text: 'Beta' }],
+                },
+                { type: 'paragraph', attrs: { id: 'b' }, content: [{ type: 'text', text: 'Next' }] },
+            ],
+        },
+        'breaks',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel),
+        navigation = new NativeNavigation(doc, scene, kernel.ck);
+    const options = { canvasKit: kernel.ck, scale: 1.5, pageOrigin: () => ({ left: 20, top: 70 }), touch: true };
+    const selected = { anchor: { blockId: 'a', offset: 5 }, focus: { blockId: 'b', offset: 0 } };
+    const geometry = selectionOverlayGeometry(navigation, selected, options);
+    expect(geometry.caret).toBeNull();
+    expect(geometry.rectangles.filter((rect) => rect.width === 6)).toHaveLength(2);
+    expect(geometry.handles.map((handle) => handle.endpoint)).toEqual(['start', 'end']);
+    const collapsed = selectionOverlayGeometry(navigation, { anchor: selected.focus, focus: selected.focus }, options);
+    expect(collapsed.rectangles).toEqual([]);
+    expect(collapsed.handles).toEqual([]);
+    expect(collapsed.caret).not.toBeNull();
+    expect(selectionOverlayGeometry(undefined, selected, options)).toEqual({
+        caret: null,
+        rectangles: [],
+        handles: [],
+    });
+});
+
+it('paints complete table cell selections and suppresses text carets and handles', async () => {
+    const doc = importDocument(
+        {
+            type: 'doc',
+            content: [
+                {
+                    type: 'table',
+                    attrs: { id: 'table' },
+                    content: [
+                        {
+                            type: 'tableRow',
+                            content: ['left', 'right'].map((id) => ({
+                                type: 'tableCell',
+                                attrs: { id },
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        attrs: { id: `${id}-p` },
+                                        content: [{ type: 'text', text: id }],
+                                    },
+                                ],
+                            })),
+                        },
+                    ],
+                },
+            ],
+        },
+        'cells',
+    );
+    await kernel.prepare(doc);
+    const scene = layoutDocument(doc, kernel),
+        navigation = new NativeNavigation(doc, scene, kernel.ck);
+    const geometry = selectionOverlayGeometry(
+        navigation,
+        {
+            anchor: { blockId: 'left-p', offset: 0 },
+            focus: { blockId: 'right-p', offset: 5 },
+            cells: { tableId: 'table', anchorId: 'left', focusId: 'right' },
+        },
+        { canvasKit: kernel.ck, scale: 2, pageOrigin: () => ({ left: 11, top: 17 }), touch: true },
+    );
+    expect(geometry.caret).toBeNull();
+    expect(geometry.handles).toEqual([]);
+    expect(geometry.rectangles).toHaveLength(2);
+    for (const [index, rectangle] of geometry.rectangles.entries()) {
+        const cell = scene.pages[0].cells![index];
+        expect(rectangle).toEqual({
+            left: 11 + cell.x * 2,
+            top: 17 + cell.y * 2,
+            width: cell.width * 2,
+            height: cell.height * 2,
+        });
+    }
+});
 it('maps mixed-script search hits onto real wrapped/paginated text without changing scene geometry', async () => {
     const doc = importDocument(
         {

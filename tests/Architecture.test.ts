@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { parse } from '@vue/compiler-sfc';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import ts from 'typescript';
@@ -8,7 +9,7 @@ const root = resolve('src');
 const files = (directory: string): string[] =>
     readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         const path = resolve(directory, entry.name);
-        return entry.isDirectory() ? files(path) : path.endsWith('.ts') ? [path] : [];
+        return entry.isDirectory() ? files(path) : /\.(ts|vue)$/.test(path) ? [path] : [];
     });
 const sources = files(root);
 const sourceSet = new Set(sources);
@@ -26,10 +27,38 @@ const allowed: Record<string, readonly string[]> = {
     collaboration: ['document', 'editing', 'content'],
     interchange: ['document', 'typography', 'editing', 'content'],
     compat: ['typography', 'rendering'],
+    node: [
+        'document',
+        'typography',
+        'editing',
+        'content',
+        'rendering',
+        'layout',
+        'pdf',
+        'collaboration',
+        'interchange',
+    ],
+    adapters: [
+        'document',
+        'typography',
+        'editing',
+        'content',
+        'rendering',
+        'layout',
+        'pdf',
+        'browser',
+        'collaboration',
+        'interchange',
+    ],
 };
 
 function dependencies(path: string): { specifier: string; runtime: boolean }[] {
-    const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+    const code = readFileSync(path, 'utf8');
+    const descriptor = path.endsWith('.vue') ? parse(code).descriptor : undefined;
+    const script = descriptor
+        ? [descriptor.script?.content ?? '', descriptor.scriptSetup?.content ?? ''].join('\n')
+        : code;
+    const source = ts.createSourceFile(path, script, ts.ScriptTarget.Latest, true);
     const result: { specifier: string; runtime: boolean }[] = [];
     const visit = (node: ts.Node): void => {
         if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
@@ -83,6 +112,23 @@ describe('source architecture', () => {
                 if (dependency.specifier.startsWith('.') && !sourceSet.has(target(path, dependency.specifier)))
                     failures.push(`${name(path)} → ${dependency.specifier}`);
             }
+        expect(failures).toEqual([]);
+    });
+
+    it('keeps frontend frameworks and application bindings outside the core', () => {
+        const failures: string[] = [];
+        for (const [path, imports] of graph) {
+            for (const dependency of imports) {
+                if (/^(@modules\/|@\/|laravel|@inertiajs\/)/.test(dependency.specifier)) failures.push(name(path));
+                if (
+                    layer(path) !== 'adapters' &&
+                    (dependency.specifier === 'vue' ||
+                        (dependency.specifier.startsWith('.') &&
+                            layer(target(path, dependency.specifier)) === 'adapters'))
+                )
+                    failures.push(name(path));
+            }
+        }
         expect(failures).toEqual([]);
     });
 
@@ -248,10 +294,15 @@ describe('source architecture', () => {
         expect(failures).toEqual([]);
     });
 
-    it('keeps internal dependencies away from public barrels', () => {
+    it('keeps core internals away from public barrels while adapters consume public contracts', () => {
         const failures: string[] = [];
         for (const [path, imports] of graph) {
-            if (name(path) === 'index.ts' || name(path).endsWith('/index.ts')) continue;
+            if (
+                name(path) === 'index.ts' ||
+                name(path).endsWith('/index.ts') ||
+                ['adapters', 'node'].includes(layer(path))
+            )
+                continue;
             for (const dependency of imports) {
                 if (
                     dependency.specifier.startsWith('.') &&

@@ -1,3 +1,7 @@
+export * from './caret-geometry.js';
+export * from './selection-geometry.js';
+export * from './selection-overlay.js';
+export * from './text-range.js';
 export * from './block-gutter.js';
 export * from './fragment-view.js';
 export * from './document-layout.js';

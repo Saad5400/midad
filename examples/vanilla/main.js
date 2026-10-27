@@ -1,3 +1,10 @@
+import { NativeNavigation } from '@saad5400/midad/browser/input';
+import {
+    caretViewportRect,
+    EditingOverlayView,
+    PageView,
+    selectionOverlayGeometry,
+} from '@saad5400/midad/browser/view';
 import { DocumentSession, findNode, importDocument } from '@saad5400/midad/document';
 import {
     blockText,
@@ -9,10 +16,8 @@ import {
     textDifference,
 } from '@saad5400/midad/editing';
 import { hitTest, layoutDocument } from '@saad5400/midad/layout';
-import { NativeTextKernel } from '@saad5400/midad/rendering';
 import { writeScenePdf } from '@saad5400/midad/pdf';
-import { NativeNavigation } from '@saad5400/midad/browser/input';
-import { EditingOverlayView, PageView, searchRectangles } from '@saad5400/midad/browser/view';
+import { NativeTextKernel } from '@saad5400/midad/rendering';
 
 const pages = document.querySelector('main');
 const status = document.querySelector('#status');
@@ -85,34 +90,25 @@ function setSelection(blockId, from, to = from) {
     overlay.input.setSelectionRange(from, to);
     updateOverlay();
 }
-function viewportRect(pageIndex, box) {
-    const rect = hosts[pageIndex].getBoundingClientRect();
-    return {
-        left: rect.left + box.x * scale,
-        top: rect.top + box.y * scale,
-        width: box.width * scale,
-        height: box.height * scale,
-    };
-}
 function updateOverlay() {
     if (!overlay || !navigation || !activeBlock()) return;
     selection.from = overlay.input.selectionStart;
     selection.to = overlay.input.selectionEnd;
     const offset = overlay.input.selectionDirection === 'backward' ? selection.from : selection.to;
-    const caret = navigation.caret({ blockId: selection.blockId, offset });
-    const position =
-        caret &&
-        viewportRect(caret.row.pageIndex, {
-            x: (caret.row.placement.left ?? scene.margin) + caret.x,
-            y: caret.row.placement.top + caret.top - caret.row.placement.originalTop,
-            width: 1,
-            height: caret.bottom - caret.top,
-        });
-    const rectangles = searchRectangles(
-        scene,
-        [{ blockId: selection.blockId, from: selection.from, to: selection.to }],
-        kernel.ck,
-    ).map((box) => viewportRect(box.pageIndex, box));
+    const position = caretViewportRect(
+        navigation,
+        { blockId: selection.blockId, offset },
+        (pageIndex) => hosts[pageIndex]?.getBoundingClientRect(),
+        scale,
+    );
+    const geometry = selectionOverlayGeometry(
+        navigation,
+        {
+            anchor: { blockId: selection.blockId, offset: selection.from },
+            focus: { blockId: selection.blockId, offset: selection.to },
+        },
+        { canvasKit: kernel.ck, scale, pageOrigin: (index) => hosts[index]?.getBoundingClientRect() },
+    );
     overlay.update({
         input: {
             label: 'Edit document text',
@@ -120,14 +116,14 @@ function updateOverlay() {
             direction: activeBlock().attributes?.dir === 'rtl' ? 'rtl' : 'ltr',
             position,
         },
-        selection: rectangles,
+        selection: geometry.rectangles,
         find: [],
         peers: [],
         reviews: [],
         templates: [],
         handles: [],
         handleLabels: { start: 'Selection start', end: 'Selection end' },
-        caret: document.activeElement === overlay.input ? position : null,
+        caret: document.activeElement === overlay.input ? geometry.caret : null,
     });
 }
 async function render(request = generation) {

@@ -1,8 +1,10 @@
 {
     "name": "@saad5400/midad",
-    "version": "0.25.0",
+    "version": "0.25.1",
     "type": "module",
-    "sideEffects": false,
+    "sideEffects": [
+        "**/*.css"
+    ],
     "description": "Framework-independent rich document editing, shared canvas layout and PDF rendering",
     "files": [
         "dist",
@@ -11,7 +13,8 @@
         "README.md",
         "build.mjs",
         "build.d.mts",
-        "examples/vanilla"
+        "examples/vanilla",
+        "examples/vue"
     ],
     "exports": {
         "./content/typography": {
@@ -375,28 +378,67 @@
         "./node": {
             "types": "./dist/node/index.d.ts",
             "import": "./dist/node/index.js"
-        }
+        },
+        "./node/renderer": {
+            "types": "./dist/node/runtime/renderer.d.ts",
+            "import": "./dist/node/runtime/renderer.js"
+        },
+        "./node/collaboration": {
+            "types": "./dist/node/runtime/collaboration.d.ts",
+            "import": "./dist/node/runtime/collaboration.js"
+        },
+        "./node/html": {
+            "types": "./dist/node/runtime/html.d.ts",
+            "import": "./dist/node/runtime/html.js"
+        },
+        "./node/input": {
+            "types": "./dist/node/runtime/input.d.ts",
+            "import": "./dist/node/runtime/input.js"
+        },
+        "./node/handler": {
+            "types": "./dist/node/runtime/handler.d.ts",
+            "import": "./dist/node/runtime/handler.js"
+        },
+        "./node/runtime-service": {
+            "types": "./dist/node/runtime/service.d.ts",
+            "import": "./dist/node/runtime/service.js"
+        },
+        "./pdf/reading": {
+            "types": "./dist/pdf/reading/index.d.ts",
+            "import": "./dist/pdf/reading/index.js"
+        },
+        "./vue": {
+            "types": "./dist/adapters/vue/index.d.ts",
+            "import": "./dist/adapters/vue/index.js"
+        },
+        "./vue/style.css": "./dist/adapters/vue/editor.css",
+        "./vue/native-editor.css": "./dist/adapters/vue/native-editor.css",
+        "./vue/native-pdf.css": "./dist/adapters/vue/native-pdf.css"
     },
     "scripts": {
-        "build": "node build.mjs && tsc -p tsconfig.json",
+        "build": "node build.mjs && tsc -p tsconfig.json && node build.mjs --vue && vue-tsc -p tsconfig.vue.json",
         "test": "npm run build && vitest run --no-file-parallelism",
         "test:pdf-raster": "npm run build && NATIVE_PDF_RASTER=1 vitest run tests/layout/NestedLayout.test.ts tests/layout/PdfOverlays.test.ts tests/pdf/PdfRaster.test.ts tests/pdf/PdfFidelity.test.ts tests/rendering/DocumentFonts.test.ts --testTimeout 60000 --no-file-parallelism",
         "prepack": "npm run build && vitest run tests/rendering/LayoutCompatibility.test.ts --no-file-parallelism"
     },
     "dependencies": {
-        "canvaskit-wasm": "0.42.0",
-        "pdf-lib": "1.17.1",
         "@pdf-lib/fontkit": "1.1.1",
+        "canvaskit-wasm": "0.42.0",
         "color": "5.0.3",
         "diff": "9.0.0",
+        "happy-dom": "20.11.6",
+        "pdf-lib": "1.17.1",
+        "pdfjs-dist": "5.7.284",
         "yjs": "13.6.29"
     },
     "devDependencies": {
+        "@types/node": "22.19.8",
+        "@vue/compiler-sfc": "3.5.27",
+        "@vue/test-utils": "2.4.11",
         "typescript": "5.9.3",
         "vitest": "4.1.11",
-        "happy-dom": "20.11.6",
-        "@types/node": "22.19.8",
-        "pdfjs-dist": "5.7.284"
+        "vue": "3.5.27",
+        "vue-tsc": "3.3.8"
     },
     "engines": {
         "node": ">=22"
@@ -421,7 +463,16 @@
             "src/pdf/document.ts",
             "src/pdf/field-appearance.ts",
             "src/pdf/fill.ts",
-            "src/pdf/frozen-fields.ts"
+            "src/pdf/frozen-fields.ts",
+            "src/node/runtime/renderer.ts"
         ]
+    },
+    "peerDependencies": {
+        "vue": "^3.5.0"
+    },
+    "peerDependenciesMeta": {
+        "vue": {
+            "optional": true
+        }
     }
 }

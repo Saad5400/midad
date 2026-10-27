@@ -1884,11 +1884,17 @@ describe('our shared native document', () => {
     });
     it('rejects updates that replace protocol identity and retains a recoverable document', () => {
         const { a, b } = peers(),
-            before = a.document();
-        b.ydoc.getMap('native').set('schema', 999);
+            before = a.document(),
+            state = a.state();
+        b.ydoc.getMap('native').set('schema', 2);
         expect(() => a.receive(b.state(a.vector()))).toThrow('identity');
         expect(a.document()).toBe(before);
         expect(() => a.publish(before)).not.toThrow();
+        expect(a.state()).toEqual(state);
+        edit(a, 0, 0, 'Recovered ');
+        expect(text(a)).toContain('Recovered ');
+        a.undo();
+        expect(text(a)).toBe(textBlocks(before.root).map(blockText).join('\n'));
         a.destroy();
         b.destroy();
     });

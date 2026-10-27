@@ -1,8 +1,9 @@
+import { NativeNavigation, SelectionController, wordBoundary } from '@saad5400/midad/browser';
+import { caretViewportRect } from '@saad5400/midad/browser/view';
 import { importDocument } from '@saad5400/midad/document';
-import type { ShapedParagraph } from '@saad5400/midad/rendering';
 import type { DocumentScene, SceneLine } from '@saad5400/midad/layout';
-import { SelectionController } from '@saad5400/midad/browser';
-import { NativeNavigation, wordBoundary } from '@saad5400/midad/browser';
+import { hitTest } from '@saad5400/midad/layout';
+import type { ShapedParagraph } from '@saad5400/midad/rendering';
 import type { CanvasKit } from 'canvaskit-wasm';
 import { describe, expect, it } from 'vitest';
 
@@ -215,5 +216,122 @@ describe('native text navigation', () => {
         ['', 0, 1, 0],
     ] as const)('finds word boundaries in %s', (text, offset, direction, expected) => {
         expect(wordBoundary(text, offset, direction)).toBe(expected);
+    });
+});
+
+describe('caret viewport geometry', () => {
+    it.each([0.5, 1.25, 2])('roundtrips a continued RTL paragraph through a scaled viewport at %s', (scale) => {
+        const base = navigation(shaped('أبجد', 'rtl', 2));
+        const page = base.scene.pages[0];
+        const scene = {
+            ...base.scene,
+            pages: [
+                { ...page, lines: [{ ...page.lines[0], top: 50, left: 12 }] },
+                { ...page, lines: [{ ...page.lines[1], top: 80, left: 35 }] },
+            ],
+        };
+        const nav = new NativeNavigation(base.document, scene, ck);
+        const origin = { left: 140, top: 300 };
+        const rect = caretViewportRect(
+            nav,
+            { blockId: 'p', offset: 3 },
+            (index) => (index === 1 ? origin : undefined),
+            scale,
+        );
+        expect(rect).not.toBeNull();
+        const hit = hitTest(
+            scene,
+            1,
+            (rect!.left - origin.left) / scale,
+            (rect!.top - origin.top + rect!.height / 2) / scale,
+        );
+        expect(hit).toMatchObject({ blockId: 'p', blockOffset: 3 });
+    });
+
+    it('does not draw a stale caret for an unmounted page or an unknown block', () => {
+        const nav = navigation(shaped('abc'));
+        expect(caretViewportRect(nav, { blockId: 'p', offset: 1 }, () => undefined, 1)).toBeNull();
+        expect(caretViewportRect(nav, { blockId: 'missing', offset: 0 }, () => ({ left: 0, top: 0 }), 1)).toBeNull();
+    });
+});
+
+describe('document pointer selection', () => {
+    const upstreamAffinity = {} as never;
+    function point(
+        controller: SelectionController,
+        nav: NativeNavigation,
+        x: number,
+        options: { clicks?: number; extend?: boolean; shift?: boolean; pointerType?: string; held?: boolean } = {},
+    ) {
+        return controller.point(
+            nav.document,
+            nav.scene,
+            { page: 0, x, y: 6, ...options },
+            { selection: null, upstreamAffinity },
+        );
+    }
+    it('selects words and paragraphs without mutating source content', () => {
+        const nav = navigation(shaped('Hello world'));
+        const before = nav.document;
+        const controller = new SelectionController();
+        expect(point(controller, nav, 22, { clicks: 2 })).toMatchObject({
+            kind: 'text',
+            selection: { anchor: { blockId: 'p', offset: 0 }, focus: { blockId: 'p', offset: 5 } },
+        });
+        expect(point(controller, nav, 22, { clicks: 3 })).toMatchObject({
+            kind: 'text',
+            selection: { anchor: { blockId: 'p', offset: 0 }, focus: { blockId: 'p', offset: 11 } },
+        });
+        expect(nav.document).toBe(before);
+    });
+    it('extends word drags in either direction and uses the existing anchor for shift clicks', () => {
+        const nav = navigation(shaped('Hello world'));
+        const controller = new SelectionController();
+        point(controller, nav, 82, { clicks: 2 });
+        expect(point(controller, nav, 22, { clicks: 2, extend: true })).toMatchObject({
+            selection: { anchor: { blockId: 'p', offset: 11 }, focus: { blockId: 'p', offset: 0 } },
+        });
+        expect(point(controller, nav, 82, { clicks: 2, extend: true })).toMatchObject({
+            selection: { anchor: { blockId: 'p', offset: 6 }, focus: { blockId: 'p', offset: 11 } },
+        });
+        point(controller, nav, 22);
+        expect(point(controller, nav, 82, { shift: true })).toMatchObject({
+            selection: { anchor: { blockId: 'p', offset: 2 }, focus: { blockId: 'p', offset: 8 } },
+        });
+    });
+    it('keeps touch tap counts local to each block and supports long-press selection', () => {
+        const nav = navigation(shaped('Hello world'));
+        const controller = new SelectionController();
+        expect(point(controller, nav, 22, { clicks: 2, pointerType: 'touch' })).toMatchObject({ clicks: 1 });
+        expect(point(controller, nav, 22, { clicks: 2, pointerType: 'touch' })).toMatchObject({ clicks: 2 });
+        expect(point(controller, nav, 22, { clicks: 3, pointerType: 'touch' })).toMatchObject({ clicks: 3 });
+        expect(point(controller, nav, 22, { pointerType: 'touch', held: true })).toMatchObject({
+            clicks: 2,
+            selection: { anchor: { offset: 0 }, focus: { offset: 5 } },
+        });
+    });
+    it('tracks native event getters while dragging a touch handle through scaled page coordinates', () => {
+        const nav = navigation(shaped('Hello world'));
+        const controller = new SelectionController();
+        const pointer = Object.create(null, {
+            pointerId: { get: () => 7 },
+            clientX: { get: () => 145 },
+            clientY: { get: () => 220 },
+        });
+        const selected = { anchor: { blockId: 'p', offset: 0 }, focus: { blockId: 'p', offset: 2 } };
+        expect(
+            controller.startHandle(nav.document, selected, 'end', pointer, () => ({ left: 140, top: 200, height: 24 })),
+        ).toBe(true);
+        expect(controller.handleActive(7)).toBe(true);
+        const pages = [{ left: 100, top: 200, bottom: 600 }];
+        const moved = { pointerId: 7, clientX: 165, clientY: 228 };
+        expect(controller.dragHandle(nav.scene, { ...moved, pointerId: 8 }, pages, 2)).toBeUndefined();
+        expect(controller.dragHandle(nav.scene, moved, pages, 2)).toEqual({
+            anchor: selected.anchor,
+            focus: { blockId: 'p', offset: 3 },
+        });
+        controller.endHandle();
+        expect(controller.handleActive(7)).toBe(false);
+        expect(controller.dragHandle(nav.scene, moved, pages, 2)).toBeUndefined();
     });
 });

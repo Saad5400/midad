@@ -31,7 +31,7 @@ The package is not published to npm yet. Versioned tarballs are attached to [Git
 ```sh
 npm pack
 cd examples/vanilla
-npm install ../../saad5400-midad-0.25.0.tgz
+npm install ../../saad5400-midad-0.25.1-checkpoint.2.tgz
 npm run dev
 ```
 
@@ -191,7 +191,7 @@ view.dispose();
 
 `composeCommandMenu` merges the built-in `documentCommandMenu` preset with application-provided groups and actions. It preserves callbacks and group order, applies group/item exclusions and availability rules, and rejects duplicate IDs within a group. Application-specific commands and network requests stay in host adapters; both controllers remain independent of a UI framework.
 
-`findText` and `DocumentSearch` in `/editing` search literal text across rich runs and nested blocks, preserve UTF-16 selection offsets, support case and whole-word options, and navigate matches with wrapping. Hosts can pass rendered block IDs to scope results to visible document content. `matchSelection` turns a result into a native selection. `searchRectangles` in `/browser/view` maps matches onto page geometry; pass visible page indices to avoid painting offscreen results. `FindShortcut` in `/browser/input` routes Ctrl/Cmd+F to the focused available editor and releases its listener on disposal. These APIs do not change document content or PDF output.
+`findText` and `DocumentSearch` in `/editing` search literal text across rich runs and nested blocks, preserve UTF-16 selection offsets, support case and whole-word options, and navigate matches with wrapping. Hosts can pass rendered block IDs to scope results to visible document content. `matchSelection` turns a result into a native selection. `searchRectangles` in `/browser/view` maps matches onto page geometry; pass visible page indices to avoid painting offscreen results. `FindShortcut` in `/browser/input` routes Ctrl/Cmd+F to the focused available editor and releases its listener on disposal. These APIs do not change document content or PDF output. `selectionViewportRectangles(document, scene, selection, { canvasKit, scale, pageOrigin, pages })` projects selections into viewport coordinates for highlights, reviews and peer cursors. Return `undefined` from `pageOrigin` for unmounted pages. `selectionOverlayGeometry` additionally paints selected table cells, line/paragraph breaks and touch handles. The vanilla example uses the same selection and caret geometry as application adapters.
 
 `NativeSyncClient` in `/collaboration` pauses automatic retries after a rejected draft or malformed sync reply while retaining the local document and undo history. `flush()` explicitly retries the retained request; background focus/reconnect handlers should use `flush(false)`. A corrected rejected draft creates a new request, while retrying unchanged content retains its request ID so an accepted save is not duplicated. Hosts should expose retry and draft-backup actions for error states.
 
@@ -337,3 +337,19 @@ Rendering changes require review of `midad.layoutVersion` and the reference scen
 The compatibility corpus stores frozen input documents as well as scene hashes. Routine test-helper changes and new coverage elsewhere do not change the declared rendering contract. Keep these reference inputs fixed when reviewing renderer drift; extend independent regression/raster tests for new coverage.
 
 The layout fingerprint also covers the executable dependency closure of `midad.layoutEntries` (layout, shaping, canvas painting, document codecs and PDF output). Type-only imports, comments, UI/search/collaboration modules and generated version definitions are excluded. Rendering dependencies are resolved from the packages used by that closure. The Node-only `renderingIdentity` helper uses the existing TypeScript build dependency to identify host adapter code; it is not loaded by the browser or normal rendering runtime.
+
+
+### Optional Vue adapter
+
+The engine, document model, layout and PDF renderer remain framework independent. Vue is an optional peer dependency used only by `@saad5400/midad/vue`. Other frameworks can build adapters on the same document, editing and browser APIs.
+
+```ts
+import { DocumentEditor } from '@saad5400/midad/vue';
+import '@saad5400/midad/vue/style.css';
+```
+
+`DocumentEditor` provides the paginated editing surface. The application owns its UI: use the `editor-toolbar` and `before` slots, pass Vue components through `chrome`, and override styles or CSS variables. The slot's `editor` API exposes formatting, selection, history, tables and PDF export. Media loading, persistence, translation and review validation are supplied through props and `integration` callbacks; no application services are imported by Midad.
+
+Optional controls such as `Toolbar`, `ClausePanel`, `HistoryPanel` and `PdfDocument` use `provideEditorUi` for application-provided widgets, icons, fonts, labels, field styling and PDF/media callbacks. Their `EditorUiBindings` belong to each Vue component tree. Applications can replace complete controls through `chrome` or customize their widgets and styling; no component-library dependency is imposed on the engine. Import `@saad5400/midad/vue/style.css` for the default surface styles and include the adapter's compiled files in your utility-CSS scanner if you use the supplied controls.
+
+`examples/vue` demonstrates a custom toolbar without CLM, Inertia, a component library or a Vue build plugin. `examples/vanilla` uses the same framework-independent engine without Vue.
