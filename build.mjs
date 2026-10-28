@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -97,6 +97,9 @@ function buildPackage(directory = root) {
         artifact.update(readFileSync(file));
     }
     rmSync(join(directory, 'dist'), { recursive: true, force: true });
+    const worker = join(directory, 'dist/pdf/reading/pdf.worker.min.mjs');
+    mkdirSync(dirname(worker), { recursive: true });
+    copyFileSync(createRequire(join(directory, 'package.json')).resolve('pdfjs-dist/legacy/build/pdf.worker.min.mjs'), worker);
     mkdirSync(join(directory, 'src/rendering'), { recursive: true });
     writeFileSync(
         join(directory, 'src/rendering/build-version.ts'),

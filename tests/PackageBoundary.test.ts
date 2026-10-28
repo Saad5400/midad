@@ -5,6 +5,7 @@ import { NATIVE_RENDERER_VERSION } from '@saad5400/midad/rendering';
 import { fontAssets } from '@saad5400/midad/typography';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +40,12 @@ describe('standalone package entrypoints', () => {
         );
         expect(resolution[0]).toContain('/dist/document/index.js');
         expect(resolution.slice(1)).toEqual(Array(6).fill('ERR_PACKAGE_PATH_NOT_EXPORTED'));
+    });
+
+    it('ships the worker from its own PDF reader dependency', async () => {
+        const require = createRequire(import.meta.url);
+        const worker = new URL(import.meta.resolve('@saad5400/midad/pdf/worker'));
+        expect((await readFile(worker)).equals(await readFile(require.resolve('pdfjs-dist/legacy/build/pdf.worker.min.mjs')))).toBe(true);
     });
 
     it('preserves existing integration entrypoints through the same implementations', async () => {
