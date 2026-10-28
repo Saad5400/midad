@@ -6,13 +6,13 @@ Midad is a standalone TypeScript package with no framework, application server, 
 
 ## Status
 
-Version 0.25 provides a framework-independent engine and reusable browser views/controllers. The vanilla example edits canvas-rendered paragraphs and exports the same scene to PDF. Hosts supply their application toolbar, persistence and workflows; a complete drop-in toolbar and framework adapters are not part of this release.
+Version 0.25 provides a framework-independent engine, reusable browser views/controllers and an optional Vue adapter with customizable editor controls. Hosts own their toolbar, styling, persistence and workflows. The vanilla example edits canvas-rendered paragraphs and exports the same scene to PDF without a framework.
 
 Canvas and PDF use the same shaped glyphs and page scene. Tests compare the actual PDF glyph identities, positions, dimensions and page counts, including tightly filled pages and nested rich tables. These checks do not establish correctness for every possible document. The target is exact layout and main operations below five seconds.
 
 ## Build and test
 
-Node.js 22 or newer:
+From a source checkout, with Node.js 22 or newer:
 
 ```sh
 npm ci
@@ -31,7 +31,7 @@ The package is not published to npm yet. Versioned tarballs are attached to [Git
 ```sh
 npm pack
 cd examples/vanilla
-npm install ../../saad5400-midad-0.25.1-checkpoint.2.tgz
+npm install ../../saad5400-midad-0.25.4.tgz
 npm run dev
 ```
 
@@ -120,7 +120,7 @@ reader.navigate(2);
 reader.dispose();
 ```
 
-The functions/elements in this binding example are supplied by the host. The source adapter implements `PdfDocumentSource` (`pages`, `bytes`, `plainText`, `destroy`); existing PDF engines can be used without coupling the controller to their worker or authentication setup. This API is the reusable controller layer, not a complete HTML editor or a built-in PDF decoder. The full embeddable editor UI is still being extracted.
+The functions/elements in this binding example are supplied by the host. The source adapter implements `PdfDocumentSource` (`pages`, `bytes`, `plainText`, `destroy`); existing PDF engines can be used without coupling the controller to their worker or authentication setup. These framework-independent controllers can be paired with the bundled PDF reader or a host-provided source adapter. The optional Vue adapter provides an embeddable editor surface and replaceable controls.
 
 `PdfPrintController` in `/browser/view` prints validated, complete PDF bytes through a same-origin PDF frame. Hosts supply the PDF producer, a stable identity that changes with the PDF, readiness and optional callbacks for flushing edits, busy state and errors. It rejects stale responses, coalesces preparation requests, preserves editing focus and aborts stalled preparation after five seconds. The default 60 MiB byte limit is configurable. Each request refreshes its producer by default, since server-owned appearances can change without an editor revision. The optional `reuse` predicate is only for immutable bytes whose identity covers every change. Dispose the controller when its host unmounts to release pending work and owned frame/blob resources. Browsers may retain the loaded frame until a later print request or disposal when they do not emit `afterprint`.
 
