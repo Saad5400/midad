@@ -1,4 +1,5 @@
 import CanvasKitInit from 'canvaskit-wasm';
+import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -10,9 +11,10 @@ import { nativeFields } from '../../content/fields/commands.js';
 import { persistNativeIdentities } from '../../document/identities.js';
 import { exportDocument, importDocument, type NativeDocument } from '../../document/index.js';
 import { DocumentLayoutController, type DocumentSurface } from '../../layout/index.js';
-import { fillNativePdf } from '../../pdf/fill.js';
+import { fillNativePdf, type FrozenPdfLayout } from '../../pdf/fill.js';
 import {
     pdfSourceFieldBoxes,
+    sourceWidgetBoxes,
     pdfSourcePages,
     preparePdfSourceForms,
     sceneManifest,
@@ -32,6 +34,7 @@ export interface RenderInput {
     validateOnly?: boolean;
     includeContent?: boolean;
     fillFields?: string[];
+    frozenLayout?: FrozenPdfLayout;
     pdfSurface?: boolean;
     storedFields?: boolean;
     prepareSource?: boolean;
@@ -188,6 +191,8 @@ export async function createRendererRuntime(options: RendererRuntimeOptions = {}
         const kernel = await renderer(input, directory);
         let document = cached?.keys.has(key) ? cached.document : importDocument(input.content, input.id);
         try {
+            if (input.frozenLayout !== undefined && input.fillFields === undefined)
+                throw new Error('Frozen PDF fields require a fill operation');
             if (input.pdfSurface !== undefined && (input.pdfSurface !== true || input.fillFields !== undefined))
                 throw new Error('Invalid PDF surface operation');
             if (input.fillFields !== undefined) await kernel.prepareFonts(document);
@@ -195,7 +200,7 @@ export async function createRendererRuntime(options: RendererRuntimeOptions = {}
             if (input.fillFields !== undefined) {
                 if (!Array.isArray(input.fillFields) || input.fillFields.some((id) => typeof id !== 'string'))
                     throw new Error('Invalid native fields');
-                const result = await fillNativePdf(inputPdf!, document, kernel, input.fillFields);
+                const result = await fillNativePdf(inputPdf!, document, kernel, input.fillFields, input.frozenLayout);
                 await writeFile(join(directory, 'document.pdf'), result.bytes, { flag: 'wx' });
                 return { version: identity, fields: result.fields, elapsedMs: performance.now() - started };
             }
@@ -203,7 +208,7 @@ export async function createRendererRuntime(options: RendererRuntimeOptions = {}
             const sourcePages = source
                 ? await pdfSourcePages(
                       source,
-                      nativeFields(document).map((field) => field.id),
+                      input.storedFields ? [] : nativeFields(document).map((field) => field.id),
                   )
                 : undefined;
             if (input.storedFields) {
@@ -212,22 +217,28 @@ export async function createRendererRuntime(options: RendererRuntimeOptions = {}
                 const content = input.content as { attrs?: Record<string, unknown> };
                 const fields = content.attrs?.blockVariables;
                 if (!Array.isArray(fields)) throw new Error('Invalid stored PDF fields');
+                const widgets = sourceWidgetBoxes(
+                    await PDFDocument.load(inputPdf!, { updateMetadata: false }),
+                    fields.map((field) => field.id),
+                );
                 document = importDocument(
                     {
                         ...content,
                         attrs: {
                             ...content.attrs,
                             blockVariables: fields.map((field) => {
-                                const page = sourcePages[Number(field.settings?.page) - 1];
+                                const widget = widgets.get(field.id);
+                                const page = sourcePages[(widget?.page ?? Number(field.settings?.page)) - 1];
                                 if (!page) throw new Error('The stored field page is unavailable');
                                 return {
                                     ...field,
                                     settings: {
                                         ...field.settings,
-                                        relativeXPct: (Number(field.x) * 0.75) / page.width,
-                                        relativeYPct: (Number(field.y) * 0.75) / page.height,
-                                        widthPct: (Number(field.width) * 0.75) / page.width,
-                                        heightPct: (Number(field.height) * 0.75) / page.height,
+                                        page: page.number,
+                                        relativeXPct: (widget?.x ?? Number(field.x) * 0.75) / page.width,
+                                        relativeYPct: (widget?.y ?? Number(field.y) * 0.75) / page.height,
+                                        widthPct: (widget?.width ?? Number(field.width) * 0.75) / page.width,
+                                        heightPct: (widget?.height ?? Number(field.height) * 0.75) / page.height,
                                     },
                                 };
                             }),

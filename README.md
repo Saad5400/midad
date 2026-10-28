@@ -211,6 +211,8 @@ Independent raster checks still flag color differences at some translucent table
 
 ## Node task runtime
 
+For a stored PDF created by another renderer, `fillNativePdf` accepts an optional frozen layout with `fields` (IDs and viewport rectangles) and `pages` (width and height). The host must authorize those field IDs and bind the layout to the displayed PDF. Existing native PDFs retain their renderer, font and field-definition checks. Stored fills append a revision and retain the original bytes; existing widget rectangles can be read with `sourceWidgetBoxes`.
+
 `@saad5400/midad/node` provides a Node.js 22 worker pool and private Unix-socket transport. Hosts supply their task handler, asset authorization and runtime identity. Browser entrypoints do not load these Node APIs.
 
 A worker module registers a handler after any startup preparation:

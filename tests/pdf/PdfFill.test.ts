@@ -95,6 +95,63 @@ describe('native incremental field filling', () => {
         );
     });
     afterAll(() => kernel?.destroy());
+    it.each([false, true])(
+        'fills a stored PDF without an editor marker (widget=%s) and retains every source byte',
+        async (widget) => {
+            const pdf = await PDFDocument.create();
+            const page = pdf.addPage([600, 800]);
+            const box = { id: 'english', page: 1, x: 60, y: 200, width: 240, height: 32 };
+            if (widget)
+                pdf.getForm()
+                    .createTextField('english')
+                    .addToPage(page, { x: 60, y: 568, width: 240, height: 32, borderWidth: 0 });
+            const original = await pdf.save();
+            const document = content({ english: 'Stored source value' });
+            await kernel.prepare(document);
+            const filled = await fillNativePdf(original, document, kernel, ['english'], {
+                fields: [box],
+                pages: [{ width: 600, height: 800 }],
+            });
+            expect(filled.bytes.subarray(0, original.length)).toEqual(original);
+            const parsed = await PDFDocument.load(filled.bytes);
+            const field = parsed.getForm().getTextField('english');
+            expect(field.getText()).toBe('Stored source value');
+            expect(field.isReadOnly()).toBe(true);
+            expect(field.acroField.getWidgets()).toHaveLength(1);
+            expect(field.acroField.getWidgets()[0].getRectangle()).toEqual({ x: 60, y: 568, width: 240, height: 32 });
+        },
+    );
+
+    it('requires an explicit stored layout for a PDF without a native identity', async () => {
+        const pdf = await PDFDocument.create();
+        pdf.addPage([600, 800]);
+        const document = content({ english: 'Changed' });
+        await kernel.prepare(document);
+        await expect(fillNativePdf(await pdf.save(), document, kernel, ['english'])).rejects.toThrow('stored PDF layout');
+    });
+    it('does not use a stored layout to bypass an existing native document identity', async () => {
+        const original = await source();
+        const document = { ...content({ english: 'Changed' }), id: 'different-document' };
+        await kernel.prepare(document);
+        await expect(fillNativePdf(original, document, kernel, ['english'], { fields: [], pages: [] })).rejects.toThrow(
+            'does not match',
+        );
+    });
+    it('rejects a changed stored field box before filling', async () => {
+        const pdf = await PDFDocument.create();
+        const page = pdf.addPage([600, 800]);
+        pdf.getForm()
+            .createTextField('english')
+            .addToPage(page, { x: 60, y: 568, width: 240, height: 32, borderWidth: 0 });
+        const document = content({ english: 'Changed' });
+        await kernel.prepare(document);
+        await expect(
+            fillNativePdf(await pdf.save(), document, kernel, ['english'], {
+                fields: [{ id: 'english', page: 1, x: 70, y: 200, width: 240, height: 32 }],
+                pages: [{ width: 600, height: 800 }],
+            }),
+        ).rejects.toThrow('frozen geometry');
+    });
     async function source(useObjectStreams = true): Promise<Uint8Array> {
         const doc = content();
         await kernel.prepare(doc);

@@ -7,7 +7,7 @@
         "build": "vite build"
     },
     "dependencies": {
-        "@saad5400/midad": "https://github.com/Saad5400/midad/releases/download/v0.25.3/saad5400-midad-0.25.3.tgz"
+        "@saad5400/midad": "https://github.com/Saad5400/midad/releases/download/v0.25.4/saad5400-midad-0.25.4.tgz"
     },
     "devDependencies": {
         "vite": "8.0.16"

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { importDocument } from '@saad5400/midad/document';
 import { assertPdfSurface, layoutDocumentSurface } from '@saad5400/midad/layout';
-import { pdfSourcePages } from '@saad5400/midad/pdf';
+import { pdfSourcePages, sourceWidgetBoxes } from '@saad5400/midad/pdf';
 import type { NativeTextKernel } from '@saad5400/midad/rendering';
 import { PDFDocument, PDFName, PDFNumber, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -89,4 +89,22 @@ it.each([
     } finally {
         await reader.destroy();
     }
+});
+
+it.each([0, 90, 180, 270])('reads existing field geometry on a rotated source page (%s)', async (rotation) => {
+    const source = await PDFDocument.create();
+    const page = source.addPage([300, 400]);
+    page.setRotation(degrees(rotation));
+    source.getForm().createTextField('field').addToPage(page, { x: 30, y: 50, width: 120, height: 24, borderWidth: 0 });
+    const boxes = sourceWidgetBoxes(source, ['field']);
+    const box = boxes.get('field')!;
+    const expected = {
+        0: [30, 326, 120, 24],
+        90: [50, 30, 24, 120],
+        180: [150, 50, 120, 24],
+        270: [326, 150, 24, 120],
+    }[rotation]!;
+    expect([box.x, box.y, box.width, box.height]).toEqual(expected);
+    expect(box.page).toBe(1);
+    expect(sourceWidgetBoxes(source, ['other']).size).toBe(0);
 });

@@ -1,3 +1,6 @@
+import { PDFName, type PDFDocument } from 'pdf-lib';
+import type { FrozenFieldBox } from './field-appearance.js';
+import { sourcePageViewports } from './source-pages.js';
 import type { DocumentScene } from '../layout/scene.js';
 import type { PdfOverlayViewport } from './source-pages.js';
 
@@ -41,6 +44,35 @@ export function pdfSourceFieldBoxes(scene: DocumentScene, viewports: readonly Pd
             ];
         });
     });
+}
+
+export function sourceWidgetBoxes(source: PDFDocument, ids: readonly string[]): ReadonlyMap<string, FrozenFieldBox> {
+    const found = new Map<string, FrozenFieldBox>();
+    if (!source.catalog.has(PDFName.of('AcroForm'))) return found;
+    const allowed = new Set(ids),
+        pages = source.getPages(),
+        viewports = sourcePageViewports(source);
+    for (const field of source.getForm().getFields()) {
+        const id = field.getName();
+        if (!allowed.has(id)) continue;
+        const widgets = field.acroField.getWidgets();
+        if (found.has(id) || widgets.length !== 1) throw new Error('The stored PDF field is ambiguous');
+        const widget = widgets[0];
+        const indices = pages.flatMap((page, index) =>
+            (page.node.Annots()?.asArray() ?? []).flatMap((ref) =>
+                source.context.lookup(ref) === widget.dict ? [index] : [],
+            ),
+        );
+        if (indices.length !== 1 || widget.P() !== pages[indices[0]].ref)
+            throw new Error('The stored PDF field page is ambiguous');
+        const index = indices[0];
+        found.set(id, {
+            id,
+            page: index + 1,
+            ...transformRectangle(widget.getRectangle(), viewports[index].transform),
+        });
+    }
+    return found;
 }
 
 export function overlayMatrix(viewport: PdfOverlayViewport): readonly number[] {

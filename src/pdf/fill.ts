@@ -18,7 +18,8 @@ import type { NativeTextKernel } from '../rendering/kernel.js';
 import type { ShapedParagraph } from '../rendering/text/model.js';
 import { NATIVE_RENDERER_VERSION } from '../rendering/version.js';
 import { writeScenePdf } from './document.js';
-import { fieldAppearancePage } from './field-appearance.js';
+import { fieldAppearancePage, type FrozenFieldBox } from './field-appearance.js';
+import { FrozenFieldSession } from './frozen-fields.js';
 import { appendPdfRevision, loadIncrementalPdf, snapshotPdfObjects } from './incremental.js';
 import { overlayMatrix, transformRectangle } from './source-geometry.js';
 import { sourcePageViewports } from './source-pages.js';
@@ -30,26 +31,51 @@ function storedValue(value: PDFObject | undefined): string {
     throw new Error('The native field has an unsupported stored value');
 }
 
+export interface FrozenPdfLayout {
+    readonly fields: readonly FrozenFieldBox[];
+    readonly pages: readonly { width: number; height: number }[];
+}
+
 export async function fillNativePdf(
     original: Uint8Array,
     document: NativeDocument,
     kernel: NativeTextKernel,
     ids: readonly string[],
+    frozen?: FrozenPdfLayout,
 ): Promise<{ bytes: Uint8Array; fields: readonly string[] }> {
     if (!ids.length || ids.length > 10000 || new Set(ids).size !== ids.length)
         throw new Error('Choose unique native fields to fill');
     const pdf = await loadIncrementalPdf(original);
-    const identity = JSON.parse(storedValue(pdf.catalog.lookup(PDFName.of('CLMNative'))));
+    const storedIdentity = pdf.catalog.lookup(PDFName.of('CLMNative'));
+    const identity = storedIdentity === undefined ? undefined : JSON.parse(storedValue(storedIdentity));
     const marker = document.root.attributes?.nativeEditor;
     if (
-        identity.schema !== 1 ||
-        (isRecord(marker) && marker.schema !== 1) ||
-        identity.document !== document.id ||
-        identity.renderer !== (isRecord(marker) ? marker.renderer : NATIVE_RENDERER_VERSION)
+        storedIdentity !== undefined &&
+        (identity.schema !== 1 ||
+            (isRecord(marker) && marker.schema !== 1) ||
+            identity.document !== document.id ||
+            identity.renderer !== (isRecord(marker) ? marker.renderer : NATIVE_RENDERER_VERSION))
     )
         throw new Error('The native PDF does not match the current document renderer');
     const before = snapshotPdfObjects(pdf);
     const viewports = sourcePageViewports(pdf);
+    const storedBoxes = new Map<string, FrozenFieldBox>();
+    if (storedIdentity === undefined) {
+        if (
+            !frozen ||
+            frozen.pages.length !== viewports.length ||
+            frozen.pages.some(
+                (page, index) =>
+                    Math.abs(page.width - viewports[index].width) > 0.002 ||
+                    Math.abs(page.height - viewports[index].height) > 0.002,
+            )
+        )
+            throw new Error('The stored PDF layout does not match its source pages');
+        const frame = new FrozenFieldSession(document, frozen.fields, frozen.pages, ids);
+        for (const { box } of frame.fields) storedBoxes.set(box.id, box);
+        if (ids.some((id) => !storedBoxes.has(id))) throw new Error('The requested stored PDF field is unavailable');
+    }
+
     const existing = new Map<string, PDFField>();
     for (const field of pdf.getForm().getFields()) {
         if (existing.has(field.getName())) throw new Error('The native PDF contains duplicate field names');
@@ -74,14 +100,26 @@ export async function fillNativePdf(
         };
     };
     const fingerprint = await kernel.fontFingerprint({ ...document, root: originalFonts(document.root) });
-    if (identity.fontHash !== fingerprint)
+    if (storedIdentity !== undefined && identity.fontHash !== fingerprint)
         throw new Error('The native PDF does not match the current document renderer');
     const sourceFields = nativeFields(document);
     const source = new Map(sourceFields.map((field) => [field.id, field]));
     if (source.size !== sourceFields.length) throw new Error('The native document contains duplicate field names');
     const targets = ids.map((id) => {
-        const node = source.get(id),
-            field = existing.get(id);
+        const node = source.get(id);
+        let field = existing.get(id);
+        const box = storedBoxes.get(id);
+        if (node && !field && box) {
+            const viewport = viewports[box.page - 1];
+            const rectangle = transformRectangle(
+                { x: box.x, y: viewport.height - box.y - box.height, width: box.width, height: box.height },
+                overlayMatrix(viewport),
+            );
+            const created = pdf.getForm().createTextField(id);
+            created.addToPage(pdf.getPages()[box.page - 1], { ...rectangle, borderWidth: 0 });
+            field = created;
+            existing.set(id, field);
+        }
         if (!node || !field || IMAGE_FIELD_TYPES.has(String(node.attributes.type)))
             throw new Error('The requested native text field is missing or unsupported');
         const value = fieldDisplayValue(node.attributes);
@@ -106,15 +144,23 @@ export async function fillNativePdf(
         );
         if (occurrences !== 1 || widget.P() !== pages[0]?.ref)
             throw new Error('Native fields require one unambiguous page annotation');
-        const definition = JSON.parse(storedValue(widget.dict.lookup(PDFName.of('PdfEngineMeta')))).clm;
-        if (
-            !definition ||
-            JSON.stringify(fieldDefinition({ ...definition, settings: definition.settings })) !==
-                JSON.stringify(fieldDefinition(node.attributes))
-        )
-            throw new Error('The native field definition changed after the PDF was prepared');
+        if (storedIdentity !== undefined) {
+            const definition = JSON.parse(storedValue(widget.dict.lookup(PDFName.of('PdfEngineMeta')))).clm;
+            if (
+                !definition ||
+                JSON.stringify(fieldDefinition({ ...definition, settings: definition.settings })) !==
+                    JSON.stringify(fieldDefinition(node.attributes))
+            )
+                throw new Error('The native field definition changed after the PDF was prepared');
+        }
         const pageIndex = pdf.getPages().indexOf(pages[0]);
         const rect = transformRectangle(widgets[0].getRectangle(), viewports[pageIndex].transform);
+        if (
+            box &&
+            (box.page !== pageIndex + 1 ||
+                (['x', 'y', 'width', 'height'] as const).some((key) => Math.abs(rect[key] - box[key]) > 0.002))
+        )
+            throw new Error('The stored PDF field does not match its frozen geometry');
         if (!(rect.width > 0 && rect.height > 0 && rect.width <= 3000 && rect.height <= 3000))
             throw new Error('The native field has invalid geometry');
         const locked = field.isReadOnly();
