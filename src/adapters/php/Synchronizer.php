@@ -21,7 +21,8 @@ final class Synchronizer
         $basis = StateEnvelope::hash($snapshot['content']);
         $shared = $snapshot['shared'];
         $number = $snapshot['number'];
-        $identity = [...$context, 'renderer' => $input['renderer_version'], 'protocol' => $protocol];
+        $identity = [...array_diff_key($context, array_flip(['id', 'initializeTypography'])),
+            'document' => $context['document'] ?? $context['id'], 'renderer' => $input['renderer_version'], 'protocol' => $protocol];
         if (! is_array($shared) || ! is_string($shared['state'] ?? null) || ! is_string($shared['epoch'] ?? null)
             || ($shared['basis'] ?? null) !== $basis || StateEnvelope::canonical(array_intersect_key($shared, $identity)) !== StateEnvelope::canonical($identity)) {
             $content = $initialize($snapshot['content'], $remaining());

@@ -29,6 +29,11 @@ final class AgentContentConverter
 
     public function toTipTapArray(mixed $content): array
     {
+        return $this->toDocument($content);
+    }
+
+    public function toDocument(mixed $content): array
+    {
         if (is_array($content)) {
             return $this->arrayToDocument($content);
         }
@@ -541,7 +546,7 @@ final class AgentContentConverter
         if (in_array($type, ['choice', 'single', 'multi'], true) && isset($attrs['options'])) {
             $options = json_decode($attrs['options'], true);
             if (is_array($options) && array_is_list($options) && count($options) <= 100
-                && collect($options)->every(fn ($option) => is_string($option))) {
+                && count(array_filter($options, 'is_string')) === count($options)) {
                 $node['attrs']['settings']['options'] = $options;
             }
         }

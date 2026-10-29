@@ -36,9 +36,16 @@ final class Runtime
 
     public function run(string $kind, array $input, ?string $directory = null, float $budget = 5): array
     {
-        $result = (new TaskClient($this->socket, $this->version()))->request(
-            ['kind' => $kind, 'directory' => $directory, 'input' => $input], $budget, $input['id'] ?? $kind,
-        );
+        try {
+            $result = (new TaskClient($this->socket, $this->version()))->request(
+                ['kind' => $kind, 'directory' => $directory, 'input' => $input], $budget, $input['id'] ?? $kind,
+            );
+        } catch (TaskException $error) {
+            if ($error->reason === 'failed') {
+                throw new DocumentException($error->getMessage(), 'invalid_content', 422);
+            }
+            throw $error;
+        }
         if (! is_array($result)) {
             throw new TaskException('The editor task returned an invalid result.', 'invalid_response');
         }

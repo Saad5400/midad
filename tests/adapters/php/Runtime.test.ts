@@ -81,7 +81,7 @@ unlink($result['path']);`,
         const result = await php(
             runtime +
                 String.raw`
-$imported = (new Midad\Php\AgentContentConverter($runtime))->toTipTapArray('<p><strong>عقد</strong> Independent</p>');
+$imported = (new Midad\Php\AgentContentConverter($runtime))->toDocument('<p><strong>عقد</strong> Independent</p>');
 $shared = $runtime->collaborate(['id' => 'shared', 'content' => $imported, 'includeContent' => true]);
 echo json_encode($shared, JSON_THROW_ON_ERROR);`,
             options,
@@ -116,6 +116,29 @@ echo json_encode(['same' => $one['epoch'] === $two['epoch'], 'stored' => $stored
             options,
         );
         expect(result).toEqual({ same: true, stored: 1, reason: 'content_changed' });
+    }, 10000);
+    it('keeps existing persisted epochs when runtime hints or editability change', async () => {
+        const options = await open();
+        const result = await php(
+            runtime +
+                String.raw`
+$content = ['type' => 'doc', 'content' => [['type' => 'paragraph']]];
+$seed = $runtime->collaborate(['id' => 'existing', 'content' => $content]);
+$snapshot = ['content' => $content, 'number' => 1, 'shared' => [
+    ...array_intersect_key($seed, array_flip(['state', 'epoch', 'vector'])), 'document' => 'existing',
+    'renderer' => str_repeat('a', 64), 'protocol' => 3, 'basis' => Midad\Php\StateEnvelope::hash($content),
+]];
+$stores = 0;
+$store = function () use (&$stores): int { $stores++; return 1; };
+$sync = new Midad\Php\Synchronizer($runtime);
+$context = ['document' => 'existing', 'id' => 'existing', 'initializeTypography' => true];
+$input = ['renderer_version' => str_repeat('a', 64)];
+$one = $sync->synchronize($snapshot, $context, $input, false, fn ($value) => $value, fn () => [], $store);
+$two = $sync->synchronize($snapshot, [...$context, 'initializeTypography' => false], $input, false, fn ($value) => $value, fn () => [], $store);
+echo json_encode(['same' => $one['epoch'] === $seed['epoch'] && $two['epoch'] === $seed['epoch'], 'stores' => $stores]);`,
+            options,
+        );
+        expect(result).toEqual({ same: true, stores: 0 });
     }, 10000);
     it('persists an edit once, replays its receipt and rejects a reused request id', async () => {
         const options = await open();

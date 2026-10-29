@@ -355,3 +355,20 @@ import '@saad5400/midad/vue/style.css';
 Optional controls such as `Toolbar`, `ClausePanel`, `HistoryPanel` and `PdfDocument` use `provideEditorUi` for application-provided widgets, icons, fonts, labels, field styling and PDF/media callbacks. Their `EditorUiBindings` belong to each Vue component tree. Applications can replace complete controls through `chrome` or customize their widgets and styling; no component-library dependency is imposed on the engine. Import `@saad5400/midad/vue/style.css` for the default surface styles and include the adapter's compiled files in your utility-CSS scanner if you use the supplied controls.
 
 `examples/vue` demonstrates a custom toolbar without CLM, Inertia, a component library or a Vue build plugin. `examples/vanilla` uses the same framework-independent engine without Vue.
+
+## Optional PHP integration
+
+The npm archive includes `php.php` for PHP 8.3+ projects. It exposes the same Node renderer through `Midad\Php\Runtime`, plus `AgentContentConverter`, `AgentBlocks`, `InlineReview`, and `StateEnvelope`. The PHP helpers do not depend on Laravel. PHP and the Node task service share a private socket and filesystem under the same runtime user.
+
+```php
+require_once '/path/to/node_modules/@saad5400/midad/php.php';
+
+$fonts = new Midad\Php\FontArchive('/private/font-archive', $fontManifest);
+$runtime = new Midad\Php\Runtime('/private/build.json', '/private/editor.sock', $fonts);
+$document = (new Midad\Php\AgentContentConverter($runtime))->toDocument($agentContent);
+$result = $runtime->render($document, 'document-1', 'Example');
+```
+
+`build.json` supplies the task service's SHA-256 `version` and integer `protocol`. Hosts keep authorization, model persistence, asset ownership and URL resolution. Historical fonts can be restored through `FontArchive`'s optional callback.
+
+Laravel hosts may additionally load `laravel.php` for validation rules, presence, and a generic iframe field view. `FrameContext` accepts a host callback for extra document metadata; the package does not register application routes or models.
