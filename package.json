@@ -14,7 +14,9 @@
         "build.mjs",
         "build.d.mts",
         "examples/vanilla",
-        "examples/vue"
+        "examples/vue",
+        "php.php",
+        "src/adapters/php"
     ],
     "exports": {
         "./content/typography": {
