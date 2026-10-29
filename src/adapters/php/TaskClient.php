@@ -64,7 +64,7 @@ final class TaskClient
             if (! $reply['ok']) {
                 throw new TaskException(
                     is_string($reply['error']['message'] ?? null) ? $reply['error']['message'] : 'The task failed.',
-                    is_string($reply['error']['code'] ?? null) ? $reply['error']['code'] : 'invalid_response',
+                    ($reply['error']['code'] ?? null) === 'timeout' ? 'deadline' : (is_string($reply['error']['code'] ?? null) ? $reply['error']['code'] : 'invalid_response'),
                 );
             }
             if (! array_key_exists('result', $reply)) {

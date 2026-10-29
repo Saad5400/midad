@@ -16,7 +16,9 @@
         "examples/vanilla",
         "examples/vue",
         "php.php",
-        "src/adapters/php"
+        "src/adapters/php",
+        "laravel.php",
+        "src/adapters/laravel"
     ],
     "exports": {
         "./content/typography": {
